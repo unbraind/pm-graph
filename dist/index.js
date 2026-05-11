@@ -5,8 +5,14 @@ const execFileAsync = promisify(execFile);
 function getWorkspace(context) {
     return context.workspaceRoot ?? context.cwd ?? process.cwd();
 }
+function projectKeyForWorkspace(workspace) {
+    return process.env.PM_GRAPH_PROJECT_KEY || workspace;
+}
 async function runPmJson(context, args) {
-    const { stdout } = await execFileAsync("pm", [...args, "--json"], {
+    const cliEntry = process.argv[1];
+    const command = cliEntry ? process.execPath : "pm";
+    const commandArgs = cliEntry ? [cliEntry, ...args, "--json"] : [...args, "--json"];
+    const { stdout } = await execFileAsync(command, commandArgs, {
         cwd: getWorkspace(context),
         timeout: 30_000,
         maxBuffer: 20 * 1024 * 1024,
@@ -132,6 +138,7 @@ function graphFromItems(items, workspace, depsByItem) {
     return {
         generatedAt: new Date().toISOString(),
         workspace,
+        projectKey: projectKeyForWorkspace(workspace),
         nodes: Array.from(nodesById.values()),
         relationships: relationships.filter((relationship, index, all) => all.findIndex((candidate) => candidate.from === relationship.from &&
             candidate.to === relationship.to &&
@@ -154,18 +161,24 @@ async function loadGraph(context) {
     return graphFromItems(items, getWorkspace(context), depsByItem);
 }
 function cypherStatements(graph) {
-    const statements = graph.nodes.map((node) => ({
-        statement: "MERGE (n:PmGraphNode {id: $id}) SET n += $properties, n.labels = $labels RETURN n.id",
+    const statements = [{
+            statement: "MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n",
+            parameters: { projectKey: graph.projectKey },
+        }];
+    statements.push(...graph.nodes.map((node) => ({
+        statement: "MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id",
         parameters: {
+            projectKey: graph.projectKey,
             id: node.id,
             labels: node.labels,
-            properties: node.properties,
+            properties: { ...node.properties, projectKey: graph.projectKey },
         },
-    }));
+    })));
     for (const relationship of graph.relationships) {
         statements.push({
-            statement: `MATCH (from:PmGraphNode {id: $from}), (to:PmGraphNode {id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
+            statement: `MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
             parameters: {
+                projectKey: graph.projectKey,
                 from: relationship.from,
                 to: relationship.to,
                 properties: relationship.properties,
@@ -184,15 +197,18 @@ async function syncNeo4j(graph) {
     const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
     const session = driver.session({ database: process.env.NEO4J_DATABASE });
     try {
+        await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n", { projectKey: graph.projectKey }));
         for (const node of graph.nodes) {
-            await session.executeWrite((tx) => tx.run("MERGE (n:PmGraphNode {id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
+            await session.executeWrite((tx) => tx.run("MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
+                projectKey: graph.projectKey,
                 id: node.id,
                 labels: node.labels,
-                properties: node.properties,
+                properties: { ...node.properties, projectKey: graph.projectKey },
             }));
         }
         for (const relationship of graph.relationships) {
-            await session.executeWrite((tx) => tx.run(`MATCH (from:PmGraphNode {id: $from}), (to:PmGraphNode {id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`, {
+            await session.executeWrite((tx) => tx.run(`MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`, {
+                projectKey: graph.projectKey,
                 from: relationship.from,
                 to: relationship.to,
                 properties: relationship.properties,
