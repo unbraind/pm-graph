@@ -86,75 +86,156 @@ function relationshipTarget(dep: Record<string, unknown>): string | null {
   return null;
 }
 
-function graphFromItems(items: PmItem[], workspace: string): Graph {
-  const nodes: GraphNode[] = items.map((item) => ({
-    id: item.id,
-    labels: ["PmItem", item.type ?? "Item"].filter(Boolean),
-    properties: {
-      id: item.id,
-      title: item.title ?? "",
-      type: item.type ?? "Item",
-      status: item.status ?? "unknown",
-      priority: item.priority ?? null,
-      tags: item.tags ?? [],
-      assignee: item.assignee ?? null,
-      sprint: item.sprint ?? null,
-      release: item.release ?? null,
-      deadline: item.deadline ?? null,
-      created_at: item.created_at ?? null,
-      updated_at: item.updated_at ?? null,
-    },
-  }));
+function dependencyRows(raw: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(raw)) {
+    return raw.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object");
+  }
+  if (!raw || typeof raw !== "object") return [];
+  const data = raw as Record<string, unknown>;
+  for (const key of ["deps", "dependencies", "items", "relationships"]) {
+    const value = data[key];
+    if (Array.isArray(value)) {
+      return value.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object");
+    }
+  }
+  return [];
+}
 
+function facetNodeId(kind: string, value: string): string {
+  return `${kind}:${value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-")}`;
+}
+
+function graphFromItems(items: PmItem[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>): Graph {
+  const nodesById = new Map<string, GraphNode>();
   const relationships: GraphRelationship[] = [];
-  for (const item of items) {
-    if (item.parent) {
-      relationships.push({
-        from: item.id,
-        to: item.parent,
-        type: "CHILD_OF",
-        properties: { source: "parent" },
+
+  const addNode = (node: GraphNode) => {
+    if (!nodesById.has(node.id)) nodesById.set(node.id, node);
+  };
+
+  const addRelationship = (from: string, to: string, type: string, properties: Record<string, unknown>) => {
+    if (!nodesById.has(to) && !items.some((item) => item.id === to)) {
+      addNode({
+        id: to,
+        labels: ["ExternalPmItem"],
+        properties: { id: to, title: to, type: "ExternalPmItem" },
       });
     }
+    relationships.push({ from, to, type, properties });
+  };
 
-    for (const dep of [...(item.deps ?? []), ...(item.dependencies ?? [])]) {
+  for (const item of items) {
+    addNode({
+      id: item.id,
+      labels: ["PmItem", item.type ?? "Item"].filter(Boolean),
+      properties: {
+        id: item.id,
+        title: item.title ?? "",
+        type: item.type ?? "Item",
+        status: item.status ?? "unknown",
+        priority: item.priority ?? null,
+        tags: item.tags ?? [],
+        assignee: item.assignee ?? null,
+        sprint: item.sprint ?? null,
+        release: item.release ?? null,
+        deadline: item.deadline ?? null,
+        created_at: item.created_at ?? null,
+        updated_at: item.updated_at ?? null,
+      },
+    });
+
+    if (item.parent) {
+      addRelationship(item.id, item.parent, "CHILD_OF", { source: "parent" });
+    }
+
+    const deps = [
+      ...(item.deps ?? []),
+      ...(item.dependencies ?? []),
+      ...(depsByItem.get(item.id) ?? []),
+    ];
+    const seenDeps = new Set<string>();
+    for (const dep of deps) {
       const target = relationshipTarget(dep);
       if (!target) continue;
-      relationships.push({
-        from: item.id,
-        to: target,
-        type: relationshipType(dep.type ?? dep.kind ?? dep.relation),
-        properties: { ...dep },
+      const type = relationshipType(dep.type ?? dep.kind ?? dep.relation ?? dep.rel ?? dep.relationship);
+      const key = `${item.id}->${target}:${type}`;
+      if (seenDeps.has(key)) continue;
+      seenDeps.add(key);
+      addRelationship(item.id, target, type, { ...dep });
+    }
+
+    const facets: Array<{ kind: string; value?: unknown; label: string; rel: string }> = [
+      { kind: "type", value: item.type, label: "ItemType", rel: "HAS_TYPE" },
+      { kind: "status", value: item.status, label: "Status", rel: "HAS_STATUS" },
+      { kind: "assignee", value: item.assignee, label: "Person", rel: "ASSIGNED_TO" },
+      { kind: "sprint", value: item.sprint, label: "Sprint", rel: "IN_SPRINT" },
+      { kind: "release", value: item.release, label: "Release", rel: "IN_RELEASE" },
+    ];
+    for (const facet of facets) {
+      if (typeof facet.value !== "string" || facet.value.trim().length === 0) continue;
+      const id = facetNodeId(facet.kind, facet.value);
+      addNode({
+        id,
+        labels: ["PmFacet", facet.label],
+        properties: { id, title: facet.value, kind: facet.kind, value: facet.value },
       });
+      addRelationship(item.id, id, facet.rel, { source: facet.kind });
+    }
+
+    for (const tag of item.tags ?? []) {
+      if (!tag.trim()) continue;
+      const id = facetNodeId("tag", tag);
+      addNode({
+        id,
+        labels: ["PmFacet", "Tag"],
+        properties: { id, title: tag, kind: "tag", value: tag },
+      });
+      addRelationship(item.id, id, "TAGGED_WITH", { source: "tags" });
     }
   }
 
   return {
     generatedAt: new Date().toISOString(),
     workspace,
-    nodes,
-    relationships,
+    nodes: Array.from(nodesById.values()),
+    relationships: relationships.filter((relationship, index, all) =>
+      all.findIndex((candidate) =>
+        candidate.from === relationship.from &&
+        candidate.to === relationship.to &&
+        candidate.type === relationship.type
+      ) === index
+    ),
   };
 }
 
 async function loadGraph(context: CommandContext): Promise<Graph> {
   const result = await runPmJson<{ items?: PmItem[] }>(context, ["list-all"]);
-  return graphFromItems(result.items ?? [], getWorkspace(context));
+  const items = result.items ?? [];
+  const depsByItem = new Map<string, Array<Record<string, unknown>>>();
+  await Promise.all(items.map(async (item) => {
+    try {
+      const deps = await runPmJson<unknown>(context, ["deps", item.id]);
+      depsByItem.set(item.id, dependencyRows(deps));
+    } catch {
+      depsByItem.set(item.id, []);
+    }
+  }));
+  return graphFromItems(items, getWorkspace(context), depsByItem);
 }
 
 function cypherStatements(graph: Graph): Array<{ statement: string; parameters: Record<string, unknown> }> {
   const statements: Array<{ statement: string; parameters: Record<string, unknown> }> = graph.nodes.map((node) => ({
-    statement: "MERGE (n:PmItem {id: $id}) SET n += $properties WITH n CALL apoc.create.addLabels(n, $labels) YIELD node RETURN node.id",
+    statement: "MERGE (n:PmGraphNode {id: $id}) SET n += $properties, n.labels = $labels RETURN n.id",
     parameters: {
       id: node.id,
-      labels: node.labels.filter((label) => label !== "PmItem"),
+      labels: node.labels,
       properties: node.properties,
     },
   }));
 
   for (const relationship of graph.relationships) {
     statements.push({
-      statement: `MATCH (from:PmItem {id: $from}), (to:PmItem {id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
+      statement: `MATCH (from:PmGraphNode {id: $from}), (to:PmGraphNode {id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
       parameters: {
         from: relationship.from,
         to: relationship.to,
@@ -179,8 +260,9 @@ async function syncNeo4j(graph: Graph): Promise<{ syncedNodes: number; syncedRel
   try {
     for (const node of graph.nodes) {
       await session.executeWrite((tx) =>
-        tx.run("MERGE (n:PmItem {id: $id}) SET n += $properties RETURN n.id", {
+        tx.run("MERGE (n:PmGraphNode {id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
           id: node.id,
+          labels: node.labels,
           properties: node.properties,
         })
       );
@@ -189,7 +271,7 @@ async function syncNeo4j(graph: Graph): Promise<{ syncedNodes: number; syncedRel
     for (const relationship of graph.relationships) {
       await session.executeWrite((tx) =>
         tx.run(
-          `MATCH (from:PmItem {id: $from}), (to:PmItem {id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
+          `MATCH (from:PmGraphNode {id: $from}), (to:PmGraphNode {id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
           {
             from: relationship.from,
             to: relationship.to,
