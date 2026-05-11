@@ -9,7 +9,7 @@ The extension is scaffolded with the latest `pm extension init` flow, then imple
 ```bash
 pm extension install github.com/unbraind/pm-graph --project
 pm pm-graph ping
-pm extension --doctor --project --detail summary
+pm extension doctor --project --detail summary
 ```
 
 ## Commands
@@ -21,7 +21,7 @@ pm pm-graph cypher --json
 pm pm-graph sync --json
 ```
 
-`pm-graph export` returns JSON with `nodes` and `relationships`. `pm-graph cypher` returns parameterized Cypher statements using the `PmGraphNode` label. `pm-graph sync` writes directly to Neo4j.
+`pm-graph export` returns JSON with `nodes`, `relationships`, and a project key. `pm-graph cypher` returns parameterized Cypher statements using the `PmGraphNode` label. `pm-graph sync` writes directly to Neo4j, replacing stale `PmGraphNode` rows only for the current project key before writing fresh graph data.
 
 The graph model includes:
 
@@ -39,7 +39,10 @@ export NEO4J_URI=bolt://localhost:7687
 export NEO4J_USER=neo4j
 export NEO4J_PASSWORD=change-me
 export NEO4J_DATABASE=neo4j
+export PM_GRAPH_PROJECT_KEY=my-project
 ```
+
+`PM_GRAPH_PROJECT_KEY` is optional. When it is not set, the extension uses the current workspace path as the project key so separate pm workspaces do not overwrite each other in Neo4j.
 
 ## Development
 
