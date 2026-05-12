@@ -35,6 +35,10 @@ type PmItem = {
   deadline?: string;
   deps?: Array<Record<string, unknown>>;
   dependencies?: Array<Record<string, unknown>>;
+  blocked_by?: string;
+  blockedBy?: string;
+  blocked_reason?: string;
+  blockedReason?: string;
   metadata?: Record<string, unknown>;
   updated_at?: string;
   created_at?: string;
@@ -154,6 +158,14 @@ function graphFromItems(items: PmItem[], workspace: string, depsByItem: Map<stri
 
     if (item.parent) {
       addRelationship(item.id, item.parent, "CHILD_OF", { source: "parent" });
+    }
+
+    const blockedBy = item.blocked_by ?? item.blockedBy;
+    if (typeof blockedBy === "string" && blockedBy.trim().length > 0) {
+      addRelationship(item.id, blockedBy.trim(), "BLOCKED_BY", {
+        source: "blocked_by",
+        reason: item.blocked_reason ?? item.blockedReason ?? null,
+      });
     }
 
     const deps = [
