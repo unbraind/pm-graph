@@ -2,7 +2,7 @@
 
 Knowledge graph and dependency graph extension for pm CLI workspaces.
 
-The extension is scaffolded with the latest `pm extension init` flow, then implemented in TypeScript. It reads the current workspace through real `pm list-all --json` and `pm deps <id> --json` commands, then turns items, parent links, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
+The extension is scaffolded with the latest `pm extension init` flow, then implemented in TypeScript. It reads the current workspace through real `pm list-all --json` and `pm deps <id> --json` commands, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
 
 ## Install
 
@@ -28,7 +28,7 @@ The graph model includes:
 - `PmItem` nodes for real pm items.
 - `ExternalPmItem` nodes for dependency targets that are referenced but not present in the current workspace export.
 - `PmFacet` nodes for metadata such as type, status, assignee, sprint, release, and tags.
-- Relationships such as `CHILD_OF`, dependency relationship types from `pm deps`, `HAS_TYPE`, `HAS_STATUS`, `ASSIGNED_TO`, `IN_SPRINT`, `IN_RELEASE`, and `TAGGED_WITH`.
+- Relationships such as `CHILD_OF`, `BLOCKED_BY` from pm item metadata, dependency relationship types from `pm deps`, `HAS_TYPE`, `HAS_STATUS`, `ASSIGNED_TO`, `IN_SPRINT`, `IN_RELEASE`, and `TAGGED_WITH`.
 
 ## Neo4j
 

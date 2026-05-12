@@ -88,6 +88,13 @@ function graphFromItems(items, workspace, depsByItem) {
         if (item.parent) {
             addRelationship(item.id, item.parent, "CHILD_OF", { source: "parent" });
         }
+        const blockedBy = item.blocked_by ?? item.blockedBy;
+        if (typeof blockedBy === "string" && blockedBy.trim().length > 0) {
+            addRelationship(item.id, blockedBy.trim(), "BLOCKED_BY", {
+                source: "blocked_by",
+                reason: item.blocked_reason ?? item.blockedReason ?? null,
+            });
+        }
         const deps = [
             ...(item.deps ?? []),
             ...(item.dependencies ?? []),
