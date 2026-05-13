@@ -1,24 +1,125 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import path from "node:path";
 import neo4j from "neo4j-driver";
 const execFileAsync = promisify(execFile);
+const EXTENSION_VERSION = "0.1.3";
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 function getWorkspace(context) {
     return context.workspaceRoot ?? context.cwd ?? process.cwd();
 }
 function projectKeyForWorkspace(workspace) {
-    return process.env.PM_GRAPH_PROJECT_KEY || workspace;
+    if (process.env.PM_GRAPH_PROJECT_KEY)
+        return process.env.PM_GRAPH_PROJECT_KEY;
+    // Derive from the workspace directory name for a concise, stable key
+    return path.basename(workspace);
 }
+function neo4jConfigured() {
+    return Boolean(process.env.NEO4J_URI &&
+        (process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME) &&
+        process.env.NEO4J_PASSWORD);
+}
+function neo4jMissingMessage() {
+    const missing = [];
+    if (!process.env.NEO4J_URI)
+        missing.push("NEO4J_URI");
+    if (!process.env.NEO4J_USER && !process.env.NEO4J_USERNAME)
+        missing.push("NEO4J_USER");
+    if (!process.env.NEO4J_PASSWORD)
+        missing.push("NEO4J_PASSWORD");
+    return `Neo4j is not configured. Set ${missing.join(", ")} before using this command.`;
+}
+function createDriver() {
+    const uri = process.env.NEO4J_URI;
+    const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME;
+    const password = process.env.NEO4J_PASSWORD;
+    if (!uri || !user || !password) {
+        throw new Error(neo4jMissingMessage());
+    }
+    return neo4j.driver(uri, neo4j.auth.basic(user, password));
+}
+function neo4jSession(driver) {
+    return driver.session({ database: process.env.NEO4J_DATABASE });
+}
+/**
+ * Convert a Neo4j driver value (Integer, Node, Relationship, Path, …)
+ * into a plain JSON-safe value.
+ */
+function toPlain(value) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value !== "object")
+        return value;
+    // Neo4j Integer
+    if (neo4j.isInt(value))
+        return value.toNumber();
+    // Neo4j Node
+    if (neo4j.isNode(value)) {
+        return {
+            _labels: value.labels,
+            _elementId: value.elementId,
+            ...value.properties,
+        };
+    }
+    // Neo4j Relationship
+    if (neo4j.isRelationship(value)) {
+        return {
+            _type: value.type,
+            _elementId: value.elementId,
+            _startNodeElementId: value.startNodeElementId,
+            _endNodeElementId: value.endNodeElementId,
+            ...value.properties,
+        };
+    }
+    // Neo4j Path
+    if (neo4j.isPath(value)) {
+        return {
+            start: toPlain(value.start),
+            end: toPlain(value.end),
+            segments: value.segments.map((s) => ({
+                start: toPlain(s.start),
+                relationship: toPlain(s.relationship),
+                end: toPlain(s.end),
+            })),
+            length: value.length,
+        };
+    }
+    if (Array.isArray(value))
+        return value.map(toPlain);
+    if (typeof value === "object") {
+        const obj = {};
+        for (const [k, v] of Object.entries(value)) {
+            obj[k] = toPlain(v);
+        }
+        return obj;
+    }
+    return value;
+}
+// ---------------------------------------------------------------------------
+// PM CLI interaction
+// ---------------------------------------------------------------------------
 async function runPmJson(context, args) {
     const cliEntry = process.argv[1];
     const command = cliEntry ? process.execPath : "pm";
     const commandArgs = cliEntry ? [cliEntry, ...args, "--json"] : [...args, "--json"];
-    const { stdout } = await execFileAsync(command, commandArgs, {
-        cwd: getWorkspace(context),
-        timeout: 30_000,
-        maxBuffer: 20 * 1024 * 1024,
-    });
-    return JSON.parse(stdout);
+    try {
+        const { stdout } = await execFileAsync(command, commandArgs, {
+            cwd: getWorkspace(context),
+            timeout: 30_000,
+            maxBuffer: 20 * 1024 * 1024,
+        });
+        return JSON.parse(stdout);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to run pm ${args.join(" ")}: ${msg}`);
+    }
 }
+// ---------------------------------------------------------------------------
+// Graph construction
+// ---------------------------------------------------------------------------
 function relationshipType(rawType) {
     const text = typeof rawType === "string" && rawType.length > 0 ? rawType : "relates_to";
     return text.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
@@ -167,11 +268,16 @@ async function loadGraph(context) {
     }));
     return graphFromItems(items, getWorkspace(context), depsByItem);
 }
+// ---------------------------------------------------------------------------
+// Cypher generation (for export)
+// ---------------------------------------------------------------------------
 function cypherStatements(graph) {
-    const statements = [{
+    const statements = [
+        {
             statement: "MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n",
             parameters: { projectKey: graph.projectKey },
-        }];
+        },
+    ];
     statements.push(...graph.nodes.map((node) => ({
         statement: "MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id",
         parameters: {
@@ -194,41 +300,92 @@ function cypherStatements(graph) {
     }
     return statements;
 }
-async function syncNeo4j(graph) {
-    const uri = process.env.NEO4J_URI;
-    const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME;
-    const password = process.env.NEO4J_PASSWORD;
-    if (!uri || !user || !password) {
-        throw new Error("Set NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD before running pm-graph sync.");
-    }
-    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
-    const session = driver.session({ database: process.env.NEO4J_DATABASE });
+async function syncNeo4j(graph, options) {
+    const driver = createDriver();
+    const session = neo4jSession(driver);
+    const projectKey = graph.projectKey;
+    const currentIds = new Set(graph.nodes.map((n) => n.id));
     try {
-        await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n", { projectKey: graph.projectKey }));
-        for (const node of graph.nodes) {
+        if (options.fullSync) {
+            // Full resync: wipe all graph nodes for this project first
+            await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n", { projectKey }));
+        }
+        // Upsert nodes with progress-friendly batching
+        for (let i = 0; i < graph.nodes.length; i++) {
+            const node = graph.nodes[i];
             await session.executeWrite((tx) => tx.run("MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
-                projectKey: graph.projectKey,
+                projectKey,
                 id: node.id,
                 labels: node.labels,
-                properties: { ...node.properties, projectKey: graph.projectKey },
+                properties: { ...node.properties, projectKey },
             }));
         }
+        // Upsert relationships
         for (const relationship of graph.relationships) {
             await session.executeWrite((tx) => tx.run(`MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`, {
-                projectKey: graph.projectKey,
+                projectKey,
                 from: relationship.from,
                 to: relationship.to,
                 properties: relationship.properties,
             }));
         }
+        // Incremental mode: delete stale nodes that were not in this sync
+        let deletedStaleNodes = 0;
+        if (!options.fullSync && currentIds.size > 0) {
+            const deleteResult = await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) WHERE NOT n.id IN $currentIds DETACH DELETE n RETURN count(n) AS deleted", { projectKey, currentIds: [...currentIds] }));
+            deletedStaleNodes = deleteResult.records[0]?.get("deleted")?.toNumber() ?? 0;
+        }
+        // Store last sync timestamp
+        await session.executeWrite((tx) => tx.run("MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version", { projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION }));
+        return {
+            syncedNodes: graph.nodes.length,
+            syncedRelationships: graph.relationships.length,
+            deletedStaleNodes,
+        };
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Neo4j sync failed: ${msg}`);
     }
     finally {
         await session.close();
         await driver.close();
     }
-    return { syncedNodes: graph.nodes.length, syncedRelationships: graph.relationships.length };
 }
+// ---------------------------------------------------------------------------
+// Cypher query sanitisation
+// ---------------------------------------------------------------------------
+const DESTRUCTIVE_KEYWORDS = [
+    /\bCREATE\b/,
+    /\bMERGE\b/,
+    /\bDELETE\b/,
+    /\bDETACH\b/,
+    /\bDROP\b/,
+    /\bREMOVE\b/,
+    /\bSET\b(?!\s*\bSESSION\b)/,
+];
+const DESTRUCTIVE_NAMES = [
+    "CREATE",
+    "MERGE",
+    "DELETE",
+    "DETACH",
+    "DROP",
+    "REMOVE",
+    "SET",
+];
+function findDestructiveKeyword(query) {
+    const upper = query.toUpperCase();
+    for (let i = 0; i < DESTRUCTIVE_KEYWORDS.length; i++) {
+        if (DESTRUCTIVE_KEYWORDS[i].test(upper))
+            return DESTRUCTIVE_NAMES[i];
+    }
+    return null;
+}
+// ---------------------------------------------------------------------------
+// Command registrations
+// ---------------------------------------------------------------------------
 export function activate(api) {
+    // --- pm-graph ping -------------------------------------------------------
     api.registerCommand({
         name: "pm-graph ping",
         description: "Verify that the pm-graph extension is active.",
@@ -236,9 +393,11 @@ export function activate(api) {
             ok: true,
             source: "pm-graph",
             command: context.command,
-            neo4jConfigured: Boolean(process.env.NEO4J_URI && process.env.NEO4J_PASSWORD),
+            neo4jConfigured: neo4jConfigured(),
+            version: EXTENSION_VERSION,
         }),
     });
+    // --- pm-graph export -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph export",
         description: "Export the current workspace as dependency and knowledge graph JSON.",
@@ -247,6 +406,7 @@ export function activate(api) {
             graph: await loadGraph(context),
         }),
     });
+    // --- pm-graph cypher -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph cypher",
         description: "Render Cypher statements for importing the current workspace graph into Neo4j.",
@@ -262,16 +422,163 @@ export function activate(api) {
             };
         },
     });
+    // --- pm-graph sync -------------------------------------------------------
     api.registerCommand({
         name: "pm-graph sync",
-        description: "Sync the current workspace graph into Neo4j using NEO4J_* environment variables.",
+        description: "Sync the current workspace graph into Neo4j. Add --full for a complete wipe-and-resync.",
         run: async (context) => {
+            const args = context.args ?? [];
+            const fullSync = args.includes("--full");
+            if (!neo4jConfigured()) {
+                throw new Error(neo4jMissingMessage());
+            }
             const graph = await loadGraph(context);
-            const result = await syncNeo4j(graph);
+            const result = await syncNeo4j(graph, { fullSync });
             return {
                 ok: true,
-                ...result,
+                projectKey: graph.projectKey,
+                syncedNodes: result.syncedNodes,
+                syncedRelationships: result.syncedRelationships,
+                deletedStaleNodes: result.deletedStaleNodes,
+                fullSync,
             };
+        },
+    });
+    // --- pm-graph status -----------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph status",
+        description: "Show Neo4j configuration status, node/relationship counts, last sync timestamp, and extension version.",
+        run: async (context) => {
+            const workspace = getWorkspace(context);
+            const projectKey = projectKeyForWorkspace(workspace);
+            const configured = neo4jConfigured();
+            if (!configured) {
+                return {
+                    ok: true,
+                    neo4jConfigured: false,
+                    message: neo4jMissingMessage(),
+                    projectKey,
+                    workspace,
+                    version: EXTENSION_VERSION,
+                };
+            }
+            const driver = createDriver();
+            const session = neo4jSession(driver);
+            try {
+                const nodeResult = await session.executeRead((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count", { projectKey }));
+                const nodeCount = nodeResult.records[0]?.get("count")?.toNumber() ?? 0;
+                const relResult = await session.executeRead((tx) => tx.run("MATCH (:PmGraphNode {projectKey: $projectKey})-[r]->(:PmGraphNode {projectKey: $projectKey}) RETURN count(r) AS count", { projectKey }));
+                const relCount = relResult.records[0]?.get("count")?.toNumber() ?? 0;
+                const syncResult = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphSync {projectKey: $projectKey}) RETURN m.lastSyncedAt AS lastSyncedAt, m.syncVersion AS syncVersion", { projectKey }));
+                const lastSyncedAt = syncResult.records[0]?.get("lastSyncedAt") ?? null;
+                const syncVersion = syncResult.records[0]?.get("syncVersion") ?? null;
+                return {
+                    ok: true,
+                    neo4jConfigured: true,
+                    projectKey,
+                    workspace,
+                    nodeCount,
+                    relationshipCount: relCount,
+                    lastSyncedAt,
+                    syncVersion,
+                    version: EXTENSION_VERSION,
+                };
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`Failed to query Neo4j status: ${msg}`);
+            }
+            finally {
+                await session.close();
+                await driver.close();
+            }
+        },
+    });
+    // --- pm-graph query ------------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph query",
+        description: "Run a read-only Cypher query against Neo4j and return JSON results. Destructive keywords are blocked.",
+        run: async (context) => {
+            const query = (context.args ?? []).join(" ").trim();
+            if (!query) {
+                throw new Error("Usage: pm pm-graph query <cypher-query>");
+            }
+            const destructive = findDestructiveKeyword(query);
+            if (destructive) {
+                throw new Error(`Blocked destructive Cypher keyword "${destructive}". Only read-only queries (MATCH / RETURN / WITH / ORDER BY / LIMIT / SKIP / WHERE) are allowed.`);
+            }
+            if (!neo4jConfigured()) {
+                throw new Error(neo4jMissingMessage());
+            }
+            const driver = createDriver();
+            const session = neo4jSession(driver);
+            try {
+                const result = await session.executeRead((tx) => tx.run(query));
+                const records = result.records.map((record) => {
+                    const obj = {};
+                    for (const key of record.keys) {
+                        obj[key] = toPlain(record.get(key));
+                    }
+                    return obj;
+                });
+                return { ok: true, count: records.length, records };
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`Neo4j query failed: ${msg}`);
+            }
+            finally {
+                await session.close();
+                await driver.close();
+            }
+        },
+    });
+    // --- pm-graph neighbors --------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph neighbors",
+        description: "Return all 1-hop neighbors with relationships for a given node ID.",
+        run: async (context) => {
+            const nodeId = (context.args ?? [])[0];
+            if (!nodeId) {
+                throw new Error("Usage: pm pm-graph neighbors <node-id>");
+            }
+            if (!neo4jConfigured()) {
+                throw new Error(neo4jMissingMessage());
+            }
+            const projectKey = projectKeyForWorkspace(getWorkspace(context));
+            const driver = createDriver();
+            const session = neo4jSession(driver);
+            try {
+                const result = await session.executeRead((tx) => tx.run(`MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
+             RETURN center, r, neighbor, type(r) AS relType,
+                    CASE WHEN startNode(r) = center THEN 'outgoing' ELSE 'incoming' END AS direction`, { projectKey, nodeId }));
+                if (result.records.length === 0) {
+                    return {
+                        ok: true,
+                        center: null,
+                        neighbors: [],
+                        message: `No node found with id "${nodeId}" for project "${projectKey}".`,
+                    };
+                }
+                const center = toPlain(result.records[0].get("center"));
+                const neighbors = result.records.map((record) => ({
+                    node: toPlain(record.get("neighbor")),
+                    relationship: {
+                        type: record.get("relType"),
+                        direction: record.get("direction"),
+                        properties: toPlain(record.get("r")),
+                    },
+                }));
+                return { ok: true, center, neighbors };
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                throw new Error(`Failed to query neighbors: ${msg}`);
+            }
+            finally {
+                await session.close();
+                await driver.close();
+            }
         },
     });
 }
