@@ -5,7 +5,7 @@ import neo4j from "neo4j-driver";
 
 const execFileAsync = promisify(execFile);
 
-const EXTENSION_VERSION = "0.1.3";
+const EXTENSION_VERSION = "0.1.4";
 
 type CommandContext = {
   command?: string;
@@ -98,6 +98,43 @@ function neo4jMissingMessage(): string {
   return `Neo4j is not configured. Set ${missing.join(", ")} before using this command.`;
 }
 
+/**
+ * Produce a user-friendly error message for Neo4j connection failures.
+ * The neo4j-driver throws errors with codes like ServiceUnavailable or
+ * AuthorizationExpired that are not helpful on their own.
+ */
+function neo4jFriendlyError(err: unknown): Error {
+  if (!(err instanceof Error)) return new Error(String(err));
+
+  const msg = err.message ?? "";
+  const code = (err as { code?: string }).code ?? "";
+
+  if (
+    code === "ServiceUnavailable" ||
+    msg.includes("Could not perform discovery") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("connect ETIMEDOUT") ||
+    msg.includes("Failed to connect")
+  ) {
+    const uri = process.env.NEO4J_URI ?? "bolt://localhost:7687";
+    return new Error(
+      `Neo4j is not reachable at ${uri}. Check that Neo4j is running and NEO4J_URI is correct.`,
+    );
+  }
+
+  if (
+    code === "Neo.ClientError.Security.Unauthorized" ||
+    msg.includes("authentication failure") ||
+    msg.includes("Unauthorized")
+  ) {
+    return new Error(
+      "Neo4j authentication failed. Check NEO4J_USER and NEO4J_PASSWORD.",
+    );
+  }
+
+  return err;
+}
+
 function createDriver(): neo4j.Driver {
   const uri = process.env.NEO4J_URI!;
   const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME!;
@@ -105,7 +142,14 @@ function createDriver(): neo4j.Driver {
   if (!uri || !user || !password) {
     throw new Error(neo4jMissingMessage());
   }
-  return neo4j.driver(uri, neo4j.auth.basic(user, password));
+  return neo4j.driver(uri, neo4j.auth.basic(user, password), {
+    // Close idle connections after 5 minutes
+    maxConnectionLifetime: 5 * 60 * 1000,
+    // Give up acquiring a connection within 10 seconds
+    connectionAcquisitionTimeout: 10_000,
+    // Allow at most 10 concurrent connections per pool
+    maxConnectionPoolSize: 10,
+  });
 }
 
 function neo4jSession(driver: neo4j.Driver): neo4j.Session {
@@ -493,8 +537,7 @@ async function syncNeo4j(
       deletedStaleNodes,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Neo4j sync failed: ${msg}`);
+    throw neo4jFriendlyError(err);
   } finally {
     await session.close();
     await driver.close();
@@ -534,6 +577,15 @@ function findDestructiveKeyword(query: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Help text helpers
+// ---------------------------------------------------------------------------
+
+function hasHelpFlag(context: CommandContext): boolean {
+  const args = context.args ?? [];
+  return args.includes("--help") || args.includes("-h");
+}
+
+// ---------------------------------------------------------------------------
 // Command registrations
 // ---------------------------------------------------------------------------
 
@@ -542,23 +594,53 @@ export function activate(api: ExtensionApi): void {
   api.registerCommand({
     name: "pm-graph ping",
     description: "Verify that the pm-graph extension is active.",
-    run: async (context) => ({
-      ok: true,
-      source: "pm-graph",
-      command: context.command,
-      neo4jConfigured: neo4jConfigured(),
-      version: EXTENSION_VERSION,
-    }),
+    run: async (context) => {
+      if (hasHelpFlag(context)) {
+        return {
+          usage: "pm pm-graph ping [--json]",
+          description: "Verify that the pm-graph extension is active. Returns extension version and whether Neo4j is configured.",
+          flags: {
+            "--json": "Output as JSON",
+          },
+        };
+      }
+      return {
+        ok: true,
+        source: "pm-graph",
+        command: context.command,
+        neo4jConfigured: neo4jConfigured(),
+        version: EXTENSION_VERSION,
+      };
+    },
   });
 
   // --- pm-graph export -----------------------------------------------------
   api.registerCommand({
     name: "pm-graph export",
     description: "Export the current workspace as dependency and knowledge graph JSON.",
-    run: async (context) => ({
-      ok: true,
-      graph: await loadGraph(context),
-    }),
+    run: async (context) => {
+      if (hasHelpFlag(context)) {
+        return {
+          usage: "pm pm-graph export [--json]",
+          description: "Export the current workspace as a dependency and knowledge graph. Does not require Neo4j.",
+          flags: {
+            "--json": "Output as JSON",
+          },
+          output: {
+            graph: "Object containing nodes[], relationships[], projectKey, workspace, generatedAt",
+          },
+        };
+      }
+      try {
+        return {
+          ok: true,
+          graph: await loadGraph(context),
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Export failed: ${msg}`);
+      }
+    },
   });
 
   // --- pm-graph cypher -----------------------------------------------------
@@ -566,15 +648,32 @@ export function activate(api: ExtensionApi): void {
     name: "pm-graph cypher",
     description: "Render Cypher statements for importing the current workspace graph into Neo4j.",
     run: async (context) => {
-      const graph = await loadGraph(context);
-      return {
-        ok: true,
-        graph: {
-          nodes: graph.nodes.length,
-          relationships: graph.relationships.length,
-        },
-        statements: cypherStatements(graph),
-      };
+      if (hasHelpFlag(context)) {
+        return {
+          usage: "pm pm-graph cypher [--json]",
+          description: "Render parameterized Cypher statements for importing the current workspace graph into Neo4j. Does not execute them.",
+          flags: {
+            "--json": "Output as JSON",
+          },
+          output: {
+            statements: "Array of { statement, parameters } objects ready to execute against Neo4j",
+          },
+        };
+      }
+      try {
+        const graph = await loadGraph(context);
+        return {
+          ok: true,
+          graph: {
+            nodes: graph.nodes.length,
+            relationships: graph.relationships.length,
+          },
+          statements: cypherStatements(graph),
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Cypher generation failed: ${msg}`);
+      }
     },
   });
 
@@ -585,13 +684,38 @@ export function activate(api: ExtensionApi): void {
       "Sync the current workspace graph into Neo4j. Add --full for a complete wipe-and-resync.",
     run: async (context) => {
       const args = context.args ?? [];
+
+      if (hasHelpFlag(context)) {
+        return {
+          usage: "pm pm-graph sync [--full] [--json]",
+          description: "Sync the current workspace graph into Neo4j. Requires NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD.",
+          flags: {
+            "--full": "Full wipe-and-resync: deletes all existing PmGraphNode entries for this project before re-importing",
+            "--json": "Output as JSON",
+          },
+          output: {
+            syncedNodes: "Number of nodes upserted",
+            syncedRelationships: "Number of relationships upserted",
+            deletedStaleNodes: "Number of stale nodes removed (incremental mode only)",
+            fullSync: "Whether --full was used",
+          },
+        };
+      }
+
       const fullSync = args.includes("--full");
 
       if (!neo4jConfigured()) {
         throw new Error(neo4jMissingMessage());
       }
 
-      const graph = await loadGraph(context);
+      let graph: Graph;
+      try {
+        graph = await loadGraph(context);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to load workspace graph: ${msg}`);
+      }
+
       const result = await syncNeo4j(graph, { fullSync });
 
       return {
@@ -611,9 +735,38 @@ export function activate(api: ExtensionApi): void {
     description:
       "Show Neo4j configuration status, node/relationship counts, last sync timestamp, and extension version.",
     run: async (context) => {
+      if (hasHelpFlag(context)) {
+        return {
+          usage: "pm pm-graph status [--json]",
+          description: "Show Neo4j configuration status, node/relationship counts for the current project, local pm item count, and extension version.",
+          flags: {
+            "--json": "Output as JSON",
+          },
+          output: {
+            neo4jConfigured: "Whether NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD are all set",
+            projectKey: "Derived project key (from PM_GRAPH_PROJECT_KEY or directory name)",
+            workspace: "Current workspace path",
+            localItemCount: "Number of pm items found locally",
+            nodeCount: "Number of PmGraphNode entries in Neo4j (if connected)",
+            relationshipCount: "Number of relationships between PmGraphNode entries (if connected)",
+            lastSyncedAt: "Timestamp of the most recent sync (or null)",
+            version: "Extension version",
+          },
+        };
+      }
+
       const workspace = getWorkspace(context);
       const projectKey = projectKeyForWorkspace(workspace);
       const configured = neo4jConfigured();
+
+      // Always fetch local item count regardless of Neo4j availability
+      let localItemCount = 0;
+      try {
+        const result = await runPmJson<{ items?: PmItem[] }>(context, ["list-all"]);
+        localItemCount = result.items?.length ?? 0;
+      } catch {
+        // Non-fatal: workspace may not be initialised
+      }
 
       if (!configured) {
         return {
@@ -622,6 +775,7 @@ export function activate(api: ExtensionApi): void {
           message: neo4jMissingMessage(),
           projectKey,
           workspace,
+          localItemCount,
           version: EXTENSION_VERSION,
         };
       }
@@ -659,6 +813,7 @@ export function activate(api: ExtensionApi): void {
           neo4jConfigured: true,
           projectKey,
           workspace,
+          localItemCount,
           nodeCount,
           relationshipCount: relCount,
           lastSyncedAt,
@@ -666,8 +821,7 @@ export function activate(api: ExtensionApi): void {
           version: EXTENSION_VERSION,
         };
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Failed to query Neo4j status: ${msg}`);
+        throw neo4jFriendlyError(err);
       } finally {
         await session.close();
         await driver.close();
@@ -681,9 +835,24 @@ export function activate(api: ExtensionApi): void {
     description:
       "Run a read-only Cypher query against Neo4j and return JSON results. Destructive keywords are blocked.",
     run: async (context) => {
+      if (hasHelpFlag(context)) {
+        return {
+          usage: 'pm pm-graph query "<cypher-query>" [--json]',
+          description: "Run a read-only Cypher query against Neo4j. Destructive keywords (CREATE, MERGE, DELETE, DETACH, DROP, REMOVE, SET) are blocked.",
+          flags: {
+            "--json": "Output as JSON",
+          },
+          example: "pm pm-graph query \"MATCH (n:PmGraphNode {projectKey: 'my-project'}) RETURN n.id, n.title LIMIT 10\" --json",
+          output: {
+            count: "Number of records returned",
+            records: "Array of result objects with all Neo4j types converted to plain JSON",
+          },
+        };
+      }
+
       const query = (context.args ?? []).join(" ").trim();
       if (!query) {
-        throw new Error("Usage: pm pm-graph query <cypher-query>");
+        throw new Error('Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"');
       }
 
       const destructive = findDestructiveKeyword(query);
@@ -712,8 +881,7 @@ export function activate(api: ExtensionApi): void {
 
         return { ok: true, count: records.length, records };
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Neo4j query failed: ${msg}`);
+        throw neo4jFriendlyError(err);
       } finally {
         await session.close();
         await driver.close();
@@ -727,9 +895,24 @@ export function activate(api: ExtensionApi): void {
     description:
       "Return all 1-hop neighbors with relationships for a given node ID.",
     run: async (context) => {
+      if (hasHelpFlag(context)) {
+        return {
+          usage: "pm pm-graph neighbors <node-id> [--json]",
+          description: "Return all 1-hop neighbors and their relationships for a given node ID in Neo4j.",
+          flags: {
+            "--json": "Output as JSON",
+          },
+          example: "pm pm-graph neighbors TASK-42 --json",
+          output: {
+            center: "The queried node (or null if not found)",
+            neighbors: "Array of { node, relationship: { type, direction, properties } }",
+          },
+        };
+      }
+
       const nodeId = (context.args ?? [])[0];
       if (!nodeId) {
-        throw new Error("Usage: pm pm-graph neighbors <node-id>");
+        throw new Error("Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42");
       }
 
       if (!neo4jConfigured()) {
@@ -770,8 +953,7 @@ export function activate(api: ExtensionApi): void {
 
         return { ok: true, center, neighbors };
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Failed to query neighbors: ${msg}`);
+        throw neo4jFriendlyError(err);
       } finally {
         await session.close();
         await driver.close();
