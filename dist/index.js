@@ -1,9 +1,12 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import neo4j from "neo4j-driver";
+import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
 const EXTENSION_VERSION = "0.1.4";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const packageRoot = path.resolve(__dirname, "..");
+let neo4jApi = null;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -31,6 +34,32 @@ function neo4jMissingMessage() {
         missing.push("NEO4J_PASSWORD");
     return `Neo4j is not configured. Set ${missing.join(", ")} before using this command.`;
 }
+async function loadNeo4j() {
+    if (neo4jApi)
+        return neo4jApi;
+    try {
+        const mod = await import("neo4j-driver");
+        neo4jApi = (mod.default ?? mod);
+        return neo4jApi;
+    }
+    catch (err) {
+        console.error("Installing pm-graph Neo4j runtime dependency...");
+        const install = spawnSync("npm", ["install", "--omit=dev"], {
+            cwd: packageRoot,
+            stdio: "inherit",
+            env: { ...process.env, NODE_ENV: "production" },
+        });
+        if (install.error)
+            throw install.error;
+        if (install.status !== 0) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new Error(`Neo4j driver is not installed and npm install --omit=dev failed with exit code ${install.status ?? "unknown"}. (${msg})`);
+        }
+        const mod = await import("neo4j-driver");
+        neo4jApi = (mod.default ?? mod);
+        return neo4jApi;
+    }
+}
 /**
  * Produce a user-friendly error message for Neo4j connection failures.
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
@@ -56,13 +85,14 @@ function neo4jFriendlyError(err) {
     }
     return err;
 }
-function createDriver() {
+async function createDriver() {
     const uri = process.env.NEO4J_URI;
     const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME;
     const password = process.env.NEO4J_PASSWORD;
     if (!uri || !user || !password) {
         throw new Error(neo4jMissingMessage());
     }
+    const neo4j = await loadNeo4j();
     return neo4j.driver(uri, neo4j.auth.basic(user, password), {
         // Close idle connections after 5 minutes
         maxConnectionLifetime: 5 * 60 * 1000,
@@ -71,9 +101,6 @@ function createDriver() {
         // Allow at most 10 concurrent connections per pool
         maxConnectionPoolSize: 10,
     });
-}
-function neo4jSession(driver) {
-    return driver.session({ database: process.env.NEO4J_DATABASE });
 }
 /**
  * Convert a Neo4j driver value (Integer, Node, Relationship, Path, …)
@@ -85,37 +112,50 @@ function toPlain(value) {
     if (typeof value !== "object")
         return value;
     // Neo4j Integer
-    if (neo4j.isInt(value))
+    if ("toNumber" in value && typeof value.toNumber === "function") {
         return value.toNumber();
+    }
     // Neo4j Node
-    if (neo4j.isNode(value)) {
+    if ("labels" in value &&
+        Array.isArray(value.labels) &&
+        "properties" in value &&
+        typeof value.properties === "object") {
+        const node = value;
         return {
-            _labels: value.labels,
-            _elementId: value.elementId,
-            ...value.properties,
+            _labels: node.labels,
+            _elementId: node.elementId,
+            ...node.properties,
         };
     }
     // Neo4j Relationship
-    if (neo4j.isRelationship(value)) {
+    if ("type" in value &&
+        "properties" in value &&
+        typeof value.properties === "object" &&
+        ("startNodeElementId" in value || "endNodeElementId" in value)) {
+        const relationship = value;
         return {
-            _type: value.type,
-            _elementId: value.elementId,
-            _startNodeElementId: value.startNodeElementId,
-            _endNodeElementId: value.endNodeElementId,
-            ...value.properties,
+            _type: relationship.type,
+            _elementId: relationship.elementId,
+            _startNodeElementId: relationship.startNodeElementId,
+            _endNodeElementId: relationship.endNodeElementId,
+            ...relationship.properties,
         };
     }
     // Neo4j Path
-    if (neo4j.isPath(value)) {
+    if ("segments" in value &&
+        Array.isArray(value.segments) &&
+        "start" in value &&
+        "end" in value) {
+        const pathValue = value;
         return {
-            start: toPlain(value.start),
-            end: toPlain(value.end),
-            segments: value.segments.map((s) => ({
+            start: toPlain(pathValue.start),
+            end: toPlain(pathValue.end),
+            segments: pathValue.segments.map((s) => ({
                 start: toPlain(s.start),
                 relationship: toPlain(s.relationship),
                 end: toPlain(s.end),
             })),
-            length: value.length,
+            length: pathValue.length,
         };
     }
     if (Array.isArray(value))
@@ -128,6 +168,14 @@ function toPlain(value) {
         return obj;
     }
     return value;
+}
+function toNumber(value) {
+    if (typeof value === "number")
+        return value;
+    if (value && typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+        return value.toNumber();
+    }
+    return 0;
 }
 // ---------------------------------------------------------------------------
 // PM CLI interaction
@@ -333,8 +381,8 @@ function cypherStatements(graph) {
     return statements;
 }
 async function syncNeo4j(graph, options) {
-    const driver = createDriver();
-    const session = neo4jSession(driver);
+    const driver = await createDriver();
+    const session = driver.session({ database: process.env.NEO4J_DATABASE });
     const projectKey = graph.projectKey;
     const currentIds = new Set(graph.nodes.map((n) => n.id));
     try {
@@ -365,7 +413,7 @@ async function syncNeo4j(graph, options) {
         let deletedStaleNodes = 0;
         if (!options.fullSync && currentIds.size > 0) {
             const deleteResult = await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) WHERE NOT n.id IN $currentIds DETACH DELETE n RETURN count(n) AS deleted", { projectKey, currentIds: [...currentIds] }));
-            deletedStaleNodes = deleteResult.records[0]?.get("deleted")?.toNumber() ?? 0;
+            deletedStaleNodes = toNumber(deleteResult.records[0]?.get("deleted"));
         }
         // Store last sync timestamp
         await session.executeWrite((tx) => tx.run("MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version", { projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION }));
@@ -601,13 +649,13 @@ export function activate(api) {
                     version: EXTENSION_VERSION,
                 };
             }
-            const driver = createDriver();
-            const session = neo4jSession(driver);
+            const driver = await createDriver();
+            const session = driver.session({ database: process.env.NEO4J_DATABASE });
             try {
                 const nodeResult = await session.executeRead((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count", { projectKey }));
-                const nodeCount = nodeResult.records[0]?.get("count")?.toNumber() ?? 0;
+                const nodeCount = toNumber(nodeResult.records[0]?.get("count"));
                 const relResult = await session.executeRead((tx) => tx.run("MATCH (:PmGraphNode {projectKey: $projectKey})-[r]->(:PmGraphNode {projectKey: $projectKey}) RETURN count(r) AS count", { projectKey }));
-                const relCount = relResult.records[0]?.get("count")?.toNumber() ?? 0;
+                const relCount = toNumber(relResult.records[0]?.get("count"));
                 const syncResult = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphSync {projectKey: $projectKey}) RETURN m.lastSyncedAt AS lastSyncedAt, m.syncVersion AS syncVersion", { projectKey }));
                 const lastSyncedAt = syncResult.records[0]?.get("lastSyncedAt") ?? null;
                 const syncVersion = syncResult.records[0]?.get("syncVersion") ?? null;
@@ -663,8 +711,8 @@ export function activate(api) {
             if (!neo4jConfigured()) {
                 throw new Error(neo4jMissingMessage());
             }
-            const driver = createDriver();
-            const session = neo4jSession(driver);
+            const driver = await createDriver();
+            const session = driver.session({ database: process.env.NEO4J_DATABASE });
             try {
                 const result = await session.executeRead((tx) => tx.run(query));
                 const records = result.records.map((record) => {
@@ -712,8 +760,8 @@ export function activate(api) {
                 throw new Error(neo4jMissingMessage());
             }
             const projectKey = projectKeyForWorkspace(getWorkspace(context));
-            const driver = createDriver();
-            const session = neo4jSession(driver);
+            const driver = await createDriver();
+            const session = driver.session({ database: process.env.NEO4J_DATABASE });
             try {
                 const result = await session.executeRead((tx) => tx.run(`MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
              RETURN center, r, neighbor, type(r) AS relType,
