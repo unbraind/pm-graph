@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add bun-install verification to release workflow ([pm-graph-e063](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-e063.toon))
+
 ## 2026.05.26 - 2026-05-26
 
 ### Fixed
