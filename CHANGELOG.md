@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.1.4 - 2026-05-26
+## 2026.05.26 - 2026-05-26
+
+### Fixed
+
+- ci: fix release workflow step ordering ([pm-graph-f03m](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-f03m.toon))
 
 ### Other
 
