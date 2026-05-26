@@ -2,23 +2,89 @@
   "name": "pm-graph",
   "version": "0.1.4",
   "description": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
-  "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "check": "npm run typecheck",
+    "audit:prod": "npm audit --omit=dev",
+    "pack:dry-run": "npm pack --dry-run",
+    "changelog": "pm-changelog --pm-root .agents/pm --mode prepend --output CHANGELOG.md --release-version-from-package --since-previous-tag --until-release-tag --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm",
+    "changelog:full": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm",
+    "changelog:check": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --check",
+    "release:check": "npm run typecheck && npm run build && npm run audit:prod && npm run pack:dry-run && npm run changelog:check",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "neo4j-driver": "^5.28.1"
   },
   "devDependencies": {
-    "@types/node": "^22.15.17",
-    "typescript": "^5.8.3"
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "@unbrained/pm-cli": "^2026.5.24",
+    "pm-changelog": "^2026.5.25"
   },
   "files": [
     "dist/",
     "manifest.json",
-    "README.md"
-  ]
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/unbraind/pm-graph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/unbraind/pm-graph/issues"
+  },
+  "homepage": "https://github.com/unbraind/pm-graph#readme",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "peerDependencies": {
+    "@unbrained/pm-cli": ">=2026.5.24"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "@unbraind",
+  "license": "MIT",
+  "keywords": [
+    "graph",
+    "pm-cli",
+    "pm-extension",
+    "pm-package"
+  ],
+  "pm": {
+    "aliases": [
+      "graph"
+    ],
+    "extensions": [
+      "."
+    ],
+    "catalog": {
+      "display_name": "Knowledge Graph",
+      "category": "visualization",
+      "summary": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
+      "tags": [
+        "graph",
+        "neo4j",
+        "dependencies",
+        "knowledge"
+      ],
+      "links": {
+        "docs": "https://github.com/unbraind/pm-graph#readme",
+        "npm": "https://www.npmjs.com/package/pm-graph",
+        "repository": "https://github.com/unbraind/pm-graph",
+        "report": "https://github.com/unbraind/pm-graph/issues"
+      }
+    },
+    "docs": [
+      "README.md",
+      "CHANGELOG.md"
+    ],
+    "examples": [
+      "README.md"
+    ]
+  }
 }
