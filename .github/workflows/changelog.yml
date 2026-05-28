@@ -9,51 +9,39 @@ on:
       - package.json
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   generate-changelog:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
+          cache: npm
 
-      - name: Install pm-cli
-        run: npm install -g @unbrained/pm-cli
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Install pm-changelog
-        run: npm install -g pm-changelog
-
-      - name: Check for pm workspace
-        id: check_workspace
-        run: |
-          if ! pm list --status closed 2>/dev/null | grep -q .; then
-            echo "No pm workspace or no closed items found — skipping changelog generation."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Generate changelog
-        if: steps.check_workspace.outputs.skip != 'true'
-        run: pm changelog generate --mode prepend --output CHANGELOG.md
+      - name: Regenerate changelog
+        run: npm run changelog:full
 
       - name: Commit and push CHANGELOG.md
-        if: steps.check_workspace.outputs.skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No changes to CHANGELOG.md — nothing to commit."
           else
-            git commit -m "chore: regenerate CHANGELOG.md [skip ci]"
+            git commit -m "docs(changelog): regenerate to match fresh-clone CI output [skip ci]"
             git push
           fi
