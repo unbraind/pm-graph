@@ -6,6 +6,10 @@
 
 - Add publish retry + provenance fallback to release workflow ([pm-graph-e0at](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-e0at.toon))
 
+### Other
+
+- Production-readiness audit 2026-05-28 ([pm-graph-41bm](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-41bm.toon))
+
 ## 2026.05.27 - 2026-05-27
 
 ### Added
