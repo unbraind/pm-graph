@@ -1,0 +1,11 @@
+id: pm-graph-n0nt
+title: Hands-on functional test pass 2026-05-29 (real data)
+description: ""
+type: Feature
+status: open
+priority: 2
+tags: []
+created_at: "2026-05-29T21:21:30.357Z"
+updated_at: "2026-05-29T21:21:30.357Z"
+author: codex
+body: "Installed into a throwaway pm workspace seeded with real items (Epic>Feature, Tasks w/ deadlines, priority-1 Issue). Verified every command: ping (exit 0); export renders a real 10-node dependency+knowledge graph reflecting seeded items+type/status nodes (exit 0); cypher emits import statements (exit 0); status reports Neo4j config (exit 0). query + neighbors correctly fail with a clear 'Neo4j is not configured. Set NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD' message and exit 1 (graceful degradation, no crash). No code bugs found."
