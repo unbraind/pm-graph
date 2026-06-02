@@ -4,7 +4,9 @@ Knowledge graph and dependency graph extension for [pm CLI](https://github.com/u
 
 The extension reads the current workspace through `pm list-all --json` and `pm deps <id> --json`, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
 
-It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, or **Cypher** via `pm graph export` — with neighborhood (`--root`/`--depth`) and edge-type (`--edges`) shaping.
+It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm graph export` — with neighborhood (`--root`/`--depth`) and edge-type (`--edges`) shaping.
+
+It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `cycles`, `path`, and `critical-path` run dependency-cycle detection, shortest-path, longest-chain, orphan/root/leaf and centrality analysis directly against your workspace.
 
 ## Quick Start
 
@@ -54,7 +56,7 @@ pm install github.com/unbraind/pm-graph --force
 | `NEO4J_DATABASE` | No | Target database (defaults to server default) |
 | `PM_GRAPH_PROJECT_KEY` | No | Override the project key (defaults to workspace directory name) |
 
-The commands `export` and `cypher` do not require Neo4j at all.
+The commands `export`, `cypher`, `analyze`, `cycles`, `path`, and `critical-path`, plus the `pm graph export` exporter, do not require Neo4j at all.
 
 ## Commands
 
@@ -73,7 +75,7 @@ Example output:
   "ok": true,
   "source": "pm-graph",
   "neo4jConfigured": true,
-  "version": "0.1.4"
+  "version": "0.2.0"
 }
 ```
 
@@ -136,6 +138,8 @@ pm graph export --format mermaid                       # Mermaid graph TD to std
 pm graph export --format dot --output graph.dot        # Graphviz DOT to a file
 pm graph export --format json --output graph.json      # JSON Graph (nodes/edges)
 pm graph export --format cypher                         # parameterized Cypher (commented params)
+pm graph export --format graphml --output graph.graphml # GraphML XML for yEd / Gephi / NetworkX
+pm graph export --format plantuml --output graph.puml   # PlantUML object diagram
 ```
 
 Shape the exported graph:
@@ -156,7 +160,7 @@ pm graph export --format json --include-closed
 
 | Flag | Values | Default | Description |
 |---|---|---|---|
-| `--format` | `cypher` \| `mermaid` \| `dot` \| `json` | `json` | Output format. `mermaid` emits a `graph TD` flowchart; `dot` emits Graphviz `digraph`; `json` emits a JSON Graph (`nodes`/`edges`) document; `cypher` reuses the parameterized Neo4j import statements. |
+| `--format` | `cypher` \| `mermaid` \| `dot` \| `json` \| `graphml` \| `plantuml` | `json` | Output format. `mermaid` emits a `graph TD` flowchart; `dot` emits Graphviz `digraph`; `json` emits a JSON Graph (`nodes`/`edges`) document; `cypher` reuses the parameterized Neo4j import statements; `graphml` emits a valid GraphML XML document for yEd / Gephi / NetworkX; `plantuml` emits a `@startuml`…`@enduml` object diagram. |
 | `--output <file>` | path | — | Write to this file instead of stdout. |
 | `--root <id>` | item id | — | Restrict the graph to the neighborhood around this node. |
 | `--depth <n>` | non-negative integer | unlimited | Max hops from `--root` (undirected). Only meaningful with `--root`. |
@@ -221,8 +225,8 @@ Example output (Neo4j connected):
   "nodeCount": 18,
   "relationshipCount": 11,
   "lastSyncedAt": "2026-05-14T10:00:00.000Z",
-  "syncVersion": "0.1.4",
-  "version": "0.1.4"
+  "syncVersion": "0.2.0",
+  "version": "0.2.0"
 }
 ```
 
@@ -236,7 +240,7 @@ Example output (Neo4j not configured):
   "projectKey": "my-project",
   "workspace": "/path/to/workspace",
   "localItemCount": 15,
-  "version": "0.1.4"
+  "version": "0.2.0"
 }
 ```
 
@@ -282,6 +286,80 @@ Example output:
     }
   ]
 }
+```
+
+## Offline Analytics
+
+These commands analyze the workspace dependency graph **entirely offline** — no Neo4j required. They operate on **structural edges only** (`BLOCKED_BY`, `CHILD_OF`, and dependency edges such as `BLOCKS`/`RELATED`) between real items; facet edges (type/status/assignee/sprint/release) and tag edges are deliberately excluded so cycle, path, and centrality results stay meaningful.
+
+Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, and `critical-path` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood.
+
+### `pm pm-graph analyze`
+
+Comprehensive graph-health report: dependency-cycle count, orphan items (no edges), root items (no incoming dependency), leaf items (no outgoing dependency), longest dependency chain, top-N degree-centrality items, connected-component count, and blocked-item count.
+
+```bash
+pm pm-graph analyze --json
+pm pm-graph analyze --root pm-ep18 --depth 2 --json
+pm pm-graph analyze --include-closed --json
+```
+
+Example output (abbreviated):
+
+```json
+{
+  "ok": true,
+  "itemCount": 7,
+  "structuralEdgeCount": 6,
+  "cycleCount": 1,
+  "cycles": [["pm-oj3m", "pm-zc3a", "pm-oj3m"]],
+  "orphans": ["pm-op0k"],
+  "roots": ["pm-ep18"],
+  "leaves": ["pm-hd71"],
+  "longestChainLength": 4,
+  "longestChain": ["pm-ep18", "pm-k849", "pm-p2q3", "pm-hd71"],
+  "connectedComponents": 3,
+  "blockedItemCount": 5,
+  "topDegreeCentrality": [{ "id": "pm-ep18", "degree": 2, "inDegree": 0, "outDegree": 2 }]
+}
+```
+
+### `pm pm-graph cycles`
+
+Detect and list dependency cycles. Each cycle is printed as an ordered id path (first id equals last). **Exits with code 1 when any cycle exists** (so it can gate CI) and exits 0 when there are none.
+
+```bash
+pm pm-graph cycles            # human-readable; exit 1 if cycles found
+pm pm-graph cycles --json     # machine-readable
+```
+
+```jsonc
+// no cycles -> exit 0
+{ "ok": true, "cycleCount": 0, "cycles": [] }
+```
+
+### `pm pm-graph path`
+
+Shortest **directed** dependency path between two item ids via BFS over structural edges. Missing arguments yield a usage error (exit 2); an unknown id yields a not-found error (exit 3).
+
+```bash
+pm pm-graph path pm-ep18 pm-hd71 --json
+```
+
+```json
+{ "ok": true, "from": "pm-ep18", "to": "pm-hd71", "found": true, "path": ["pm-ep18", "pm-hd71"], "length": 1 }
+```
+
+### `pm pm-graph critical-path`
+
+The longest chain of blocking dependencies through the workspace — the critical path — as an ordered id list with its length. Cycle-safe.
+
+```bash
+pm pm-graph critical-path --json
+```
+
+```json
+{ "ok": true, "length": 4, "path": ["pm-ep18", "pm-k849", "pm-p2q3", "pm-hd71"] }
 ```
 
 ## Graph Model

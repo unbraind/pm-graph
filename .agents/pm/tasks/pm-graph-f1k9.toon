@@ -1,0 +1,13 @@
+id: pm-graph-f1k9
+title: "pm-graph critical-path: longest blocking chain"
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T11:35:40.098Z"
+updated_at: "2026-06-02T11:37:09.943Z"
+author: claude
+parent: pm-graph-1dpk
+close_reason: critical-path command shipped + verified against planted chain.
+body: "Implemented longestChain() (memoised, cycle-safe DFS) + 'pm-graph critical-path'. Verified critical path = planted chain D->C->B->A (length 4); --include-closed extends to length 5 via CHILD_OF to closed parent."

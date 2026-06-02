@@ -1,0 +1,13 @@
+id: pm-graph-79f2
+title: "graph exporter: add graphml + plantuml formats"
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T11:35:40.579Z"
+updated_at: "2026-06-02T11:37:10.611Z"
+author: claude
+parent: pm-graph-1dpk
+close_reason: graphml + plantuml export formats shipped + verified; existing formats unchanged.
+body: "Added renderGraphml() (valid GraphML XML w/ XML escaping, directed graph, node title/type/status/labels keys + edge reltype key) and renderPlantuml() (@startuml object diagram, one arrow per edge). Wired into ExportFormat + renderExport + exporter format validation + help. cypher/mermaid/dot/json unchanged. Verified both via 'pm graph export --format graphml|plantuml'."

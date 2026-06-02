@@ -1,0 +1,13 @@
+id: pm-graph-f9c3
+title: Unit tests for analytics + new renderers
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T11:35:41.232Z"
+updated_at: "2026-06-02T11:37:11.357Z"
+author: claude
+parent: pm-graph-1dpk
+close_reason: unit tests added; npm test green (15/15).
+body: "Added test/analytics.test.ts: 15 total tests pass. Covers findCycles (2-node, 3-node de-dup, acyclic), shortestPath (chain, self, no-path, shortest-of-many), longestChain (chain, cycle-safe), analyzeGraph (metrics + facet-edge exclusion), renderGraphml + renderPlantuml. Exported the pure helpers for testing."
