@@ -14,8 +14,9 @@ test("extension registers at least one capability", () => {
   const registered: string[] = [];
   const api = {
     registerCommand: () => { registered.push("command"); },
-    registerHook: () => { registered.push("hook"); },
+    registerExporter: () => { registered.push("exporter"); },
     registerImporter: () => { registered.push("importer"); },
+    registerHook: () => { registered.push("hook"); },
     registerSchema: () => { registered.push("schema"); },
     registerRenderer: () => { registered.push("renderer"); },
     registerSearchProvider: () => { registered.push("search"); },
@@ -24,4 +25,5 @@ test("extension registers at least one capability", () => {
   };
   extension.activate(api as any);
   assert.ok(registered.length > 0, `extension should register at least one capability, got: ${JSON.stringify(registered)}`);
+  assert.ok(registered.includes("exporter"), "extension should register the graph exporter");
 });
