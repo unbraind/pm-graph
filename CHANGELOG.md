@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add multi-format graph exporter \(pm graph export\): cypher, mermaid, dot, json-graph ([pm-graph-xii9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-xii9.toon))
+
 ## 2026.05.28 - 2026-05-28
 
 ### Added
