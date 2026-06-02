@@ -1,3 +1,4 @@
+import type { Exporter } from "@unbrained/pm-cli/sdk";
 type CommandContext = {
     command?: string;
     args?: string[];
@@ -11,7 +12,10 @@ type RegisterCommand = {
 };
 type ExtensionApi = {
     registerCommand(command: RegisterCommand): void;
+    registerExporter(name: string, exporter: Exporter): void;
 };
+export type ExportFormat = "cypher" | "mermaid" | "dot" | "json";
+export type EdgeFilter = "deps" | "tags" | "all";
 export declare function activate(api: ExtensionApi): void;
 declare const _default: {
     activate: typeof activate;

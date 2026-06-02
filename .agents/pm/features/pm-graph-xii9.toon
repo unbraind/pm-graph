@@ -1,0 +1,14 @@
+id: pm-graph-xii9
+title: "Add multi-format graph exporter (pm graph export): cypher, mermaid, dot, json-graph"
+description: ""
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T05:30:40.630Z"
+updated_at: "2026-06-02T05:38:23.299Z"
+author: codex
+notes[1]{created_at,author,text}:
+  "2026-06-02T05:38:23.273Z",codex,"text=Added registerExporter('graph') -> 'pm graph export' (importers capability). Formats: cypher, mermaid (graph TD), graphviz dot, json (JSON Graph). Flags: --format, --output, --root, --depth, --include-closed, --edges <deps|tags|all>. Single 'pm --path <pm_root> list-all --json --include-body' call; undirected BFS neighborhood; local EXIT_CODE/CommandError (USAGE=2, NOT_FOUND=3); type-only SDK import. Existing pm-graph cypher + Neo4j commands unchanged. Verified in ws2: all formats well-formed, file output, edge filters, root/depth, include-closed, exit codes 2/3/0 correct; build/tsc/test/audit green."
+close_reason: "Implemented and functionally verified the multi-format graph exporter; all verification gates (build, tsc --noEmit, test, prod audit, functional, secret scan) passed."
+body: ""

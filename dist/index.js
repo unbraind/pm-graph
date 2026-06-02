@@ -1,9 +1,33 @@
 import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
 const EXTENSION_VERSION = "0.1.4";
+// ---------------------------------------------------------------------------
+// Error contract
+// ---------------------------------------------------------------------------
+// pm's extension command runtime only treats a thrown error as a cleanly
+// handled non-zero exit when the error carries a numeric `exitCode` property
+// (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
+// fall through to its "unhandled" path, which RE-INVOKES the command handler a
+// second time and exits with a generic code. We mirror the SDK's EXIT_CODE
+// contract here rather than importing it: standalone-installed extensions load
+// only their own `dist/`, so `@unbrained/pm-cli` is not resolvable at runtime.
+const EXIT_CODE = {
+    GENERIC_FAILURE: 1,
+    USAGE: 2,
+    NOT_FOUND: 3,
+};
+class CommandError extends Error {
+    exitCode;
+    constructor(message, exitCode = EXIT_CODE.GENERIC_FAILURE) {
+        super(message);
+        this.name = "CommandError";
+        this.exitCode = exitCode;
+    }
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 let neo4jApi = null;
@@ -348,6 +372,46 @@ async function loadGraph(context) {
     }));
     return graphFromItems(items, getWorkspace(context), depsByItem);
 }
+/**
+ * Synchronously fetch all items for a given pm root using
+ * `pm --path <pm_root> list-all --json --include-body`. The `--include-body`
+ * payload already carries `dependencies[]`, `blocked_by`, `tags`, and facet
+ * fields, so a single call is enough to build the full graph — no per-item
+ * `pm deps` round-trips are needed. Used by the exporter pipeline, where the
+ * SDK provides `pm_root` (not a CommandContext `cwd`).
+ */
+function fetchItemsViaPath(pmRoot) {
+    const result = spawnSync("pm", ["--path", pmRoot, "list-all", "--json", "--include-body"], { encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
+    if (result.error || result.status !== 0) {
+        throw new CommandError(`Failed to fetch pm items (exit ${result.status ?? "unknown"}): ${result.stderr?.trim() || result.error?.message || "no output"}`);
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(result.stdout);
+    }
+    catch (err) {
+        throw new CommandError(`Failed to parse pm list-all output as JSON: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return parsed.items ?? [];
+}
+/**
+ * Derive the logical workspace directory from a pm_root. pm roots are usually
+ * `<workspace>/.agents/pm`; strip that suffix so the derived project key
+ * matches what the existing `cwd`-based commands produce.
+ */
+function workspaceFromPmRoot(pmRoot) {
+    const normalized = path.resolve(pmRoot);
+    const parts = normalized.split(path.sep);
+    if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
+        return parts.slice(0, -2).join(path.sep) || path.sep;
+    }
+    return normalized;
+}
+/** Build a Graph directly from items already loaded via list-all --include-body. */
+function loadGraphFromPath(pmRoot) {
+    const items = fetchItemsViaPath(pmRoot);
+    return graphFromItems(items, workspaceFromPmRoot(pmRoot), new Map());
+}
 // ---------------------------------------------------------------------------
 // Cypher generation (for export)
 // ---------------------------------------------------------------------------
@@ -379,6 +443,174 @@ function cypherStatements(graph) {
         });
     }
     return statements;
+}
+// Relationships generated from item metadata facets (type/status/assignee/...).
+const FACET_REL_TYPES = new Set([
+    "HAS_TYPE",
+    "HAS_STATUS",
+    "ASSIGNED_TO",
+    "IN_SPRINT",
+    "IN_RELEASE",
+]);
+const TAG_REL_TYPE = "TAGGED_WITH";
+/** Classify which relationship types survive a given --edges filter. */
+function edgeAllowed(type, filter) {
+    if (filter === "all")
+        return true;
+    if (filter === "tags")
+        return type === TAG_REL_TYPE;
+    // "deps": structural/dependency edges only (drop facet + tag edges)
+    return type !== TAG_REL_TYPE && !FACET_REL_TYPES.has(type);
+}
+/**
+ * Restrict a graph to the connected neighborhood of `rootId` within `depth`
+ * hops (treating relationships as undirected for reachability), and optionally
+ * drop closed items. Returns a new graph with consistently pruned nodes and
+ * relationships. When `rootId` is undefined, only the edge/closed filters
+ * apply.
+ */
+function shapeGraph(graph, opts) {
+    // 1. Filter relationships by the --edges selector first.
+    let relationships = graph.relationships.filter((r) => edgeAllowed(r.type, opts.edges));
+    // 2. Optionally drop closed PmItem nodes (facets/external nodes are kept).
+    const dropped = new Set();
+    let nodes = graph.nodes;
+    if (!opts.includeClosed) {
+        for (const node of graph.nodes) {
+            const status = node.properties.status;
+            const isItem = node.labels.includes("PmItem");
+            if (isItem && typeof status === "string" && (status === "closed" || status === "canceled")) {
+                dropped.add(node.id);
+            }
+        }
+        if (dropped.size > 0) {
+            nodes = nodes.filter((n) => !dropped.has(n.id));
+            relationships = relationships.filter((r) => !dropped.has(r.from) && !dropped.has(r.to));
+        }
+    }
+    // 3. Neighborhood restriction from --root within --depth hops (undirected).
+    if (opts.rootId) {
+        const adjacency = new Map();
+        for (const r of relationships) {
+            (adjacency.get(r.from) ?? adjacency.set(r.from, new Set()).get(r.from)).add(r.to);
+            (adjacency.get(r.to) ?? adjacency.set(r.to, new Set()).get(r.to)).add(r.from);
+        }
+        const maxDepth = opts.depth ?? Infinity;
+        const reachable = new Set();
+        const queue = [{ id: opts.rootId, d: 0 }];
+        reachable.add(opts.rootId);
+        while (queue.length > 0) {
+            const { id, d } = queue.shift();
+            if (d >= maxDepth)
+                continue;
+            for (const next of adjacency.get(id) ?? []) {
+                if (!reachable.has(next)) {
+                    reachable.add(next);
+                    queue.push({ id: next, d: d + 1 });
+                }
+            }
+        }
+        nodes = nodes.filter((n) => reachable.has(n.id));
+        relationships = relationships.filter((r) => reachable.has(r.from) && reachable.has(r.to));
+    }
+    return { ...graph, nodes, relationships };
+}
+/** Escape a string for a Mermaid node label inside `["..."]`. */
+function mermaidLabel(s) {
+    return s.replace(/"/g, "&quot;").replace(/\n/g, " ").trim();
+}
+/** Mermaid node ids must be alphanumeric/underscore. */
+function mermaidId(id) {
+    return "n_" + id.replace(/[^A-Za-z0-9_]/g, "_");
+}
+function renderMermaid(graph) {
+    const lines = ["graph TD"];
+    for (const node of graph.nodes) {
+        const title = typeof node.properties.title === "string" && node.properties.title
+            ? String(node.properties.title)
+            : node.id;
+        const status = typeof node.properties.status === "string" ? node.properties.status : "";
+        const label = status ? `${title} [${node.id}] (${status})` : `${title} [${node.id}]`;
+        lines.push(`  ${mermaidId(node.id)}["${mermaidLabel(label)}"]`);
+    }
+    if (graph.relationships.length > 0)
+        lines.push("");
+    for (const rel of graph.relationships) {
+        lines.push(`  ${mermaidId(rel.from)} -->|${mermaidLabel(rel.type)}| ${mermaidId(rel.to)}`);
+    }
+    return lines.join("\n");
+}
+/** Escape a string for a Graphviz double-quoted attribute. */
+function dotEscape(s) {
+    return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+}
+function renderDot(graph) {
+    const lines = ["digraph pm_graph {", "  rankdir=LR;", '  node [shape=box, style=rounded];'];
+    for (const node of graph.nodes) {
+        const title = typeof node.properties.title === "string" && node.properties.title
+            ? String(node.properties.title)
+            : node.id;
+        const status = typeof node.properties.status === "string" ? node.properties.status : "";
+        // Build the second line first, then join with the DOT line-break directive
+        // "\n" AFTER escaping so dotEscape does not double-escape the backslash.
+        const second = status ? `[${node.id}] ${status}` : `[${node.id}]`;
+        const label = `${dotEscape(title)}\\n${dotEscape(second)}`;
+        lines.push(`  "${dotEscape(node.id)}" [label="${label}"];`);
+    }
+    for (const rel of graph.relationships) {
+        lines.push(`  "${dotEscape(rel.from)}" -> "${dotEscape(rel.to)}" [label="${dotEscape(rel.type)}"];`);
+    }
+    lines.push("}");
+    return lines.join("\n");
+}
+/** A JSON Graph Format-style document (nodes/edges) for generic graph tooling. */
+function renderJsonGraph(graph) {
+    const doc = {
+        graph: {
+            directed: true,
+            type: "pm-graph",
+            metadata: {
+                generatedAt: graph.generatedAt,
+                workspace: graph.workspace,
+                projectKey: graph.projectKey,
+            },
+            nodes: graph.nodes.map((node) => ({
+                id: node.id,
+                label: typeof node.properties.title === "string" ? node.properties.title : node.id,
+                labels: node.labels,
+                metadata: node.properties,
+            })),
+            edges: graph.relationships.map((rel) => ({
+                source: rel.from,
+                target: rel.to,
+                relation: rel.type,
+                metadata: rel.properties,
+            })),
+        },
+    };
+    return JSON.stringify(doc, null, 2);
+}
+function renderExport(format, graph) {
+    switch (format) {
+        case "cypher":
+            return cypherStatements(graph)
+                .map((s) => `// params: ${JSON.stringify(s.parameters)}\n${s.statement};`)
+                .join("\n");
+        case "mermaid":
+            return renderMermaid(graph);
+        case "dot":
+            return renderDot(graph);
+        case "json":
+            return renderJsonGraph(graph);
+    }
+}
+function readExportOption(options, ...keys) {
+    for (const key of keys) {
+        const value = options[key];
+        if (value !== undefined && value !== null)
+            return value;
+    }
+    return undefined;
 }
 async function syncNeo4j(graph, options) {
     const driver = await createDriver();
@@ -794,6 +1026,67 @@ export function activate(api) {
             }
         },
     });
+    // --- pm graph export -----------------------------------------------------
+    // registerExporter("graph") auto-creates the `pm graph export` command (the
+    // `<name> export` form). It does NOT collide with the existing
+    // `pm pm-graph cypher` command (different name). The export pipeline builds
+    // the workspace graph from a single `pm list-all --json --include-body`
+    // call and renders it to one of four offline formats. No Neo4j required.
+    const exporter = (ctx) => {
+        const options = ctx.options ?? {};
+        const rawFormat = String(readExportOption(options, "format") ?? "json").toLowerCase();
+        if (!["cypher", "mermaid", "dot", "json"].includes(rawFormat)) {
+            throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json.`, EXIT_CODE.USAGE);
+        }
+        const format = rawFormat;
+        const rawEdges = String(readExportOption(options, "edges") ?? "all").toLowerCase();
+        if (!["deps", "tags", "all"].includes(rawEdges)) {
+            throw new CommandError(`Unknown --edges "${rawEdges}". Valid: deps | tags | all.`, EXIT_CODE.USAGE);
+        }
+        const edges = rawEdges;
+        const includeClosed = Boolean(readExportOption(options, "include-closed", "includeClosed"));
+        const rootId = readExportOption(options, "root");
+        const root = typeof rootId === "string" && rootId.trim().length > 0 ? rootId.trim() : undefined;
+        const rawDepth = readExportOption(options, "depth");
+        let depth;
+        if (rawDepth !== undefined) {
+            const parsed = parseInt(String(rawDepth), 10);
+            if (Number.isNaN(parsed) || parsed < 0) {
+                throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+            }
+            depth = parsed;
+        }
+        const fullGraph = loadGraphFromPath(ctx.pm_root);
+        if (root && !fullGraph.nodes.some((n) => n.id === root)) {
+            throw new CommandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+        }
+        const graph = shapeGraph(fullGraph, { edges, includeClosed, rootId: root, depth });
+        const output = renderExport(format, graph);
+        const outputPath = readExportOption(options, "output");
+        if (outputPath) {
+            const absolutePath = path.resolve(outputPath);
+            writeFileSync(absolutePath, output + "\n", "utf-8");
+            console.error(`graph export: wrote ${graph.nodes.length} node(s), ${graph.relationships.length} edge(s) as ${format} to ${absolutePath}`);
+            return {
+                ok: true,
+                format,
+                edges,
+                nodes: graph.nodes.length,
+                relationships: graph.relationships.length,
+                file: absolutePath,
+            };
+        }
+        console.log(output);
+        return {
+            ok: true,
+            format,
+            edges,
+            nodes: graph.nodes.length,
+            relationships: graph.relationships.length,
+            output,
+        };
+    };
+    api.registerExporter("graph", exporter);
 }
 export default { activate };
 //# sourceMappingURL=index.js.map
