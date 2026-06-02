@@ -1,0 +1,13 @@
+id: pm-graph-vtlu
+title: "pm-graph path: shortest dependency path (BFS)"
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T11:35:39.435Z"
+updated_at: "2026-06-02T11:37:09.203Z"
+author: claude
+parent: pm-graph-1dpk
+close_reason: path command shipped; usage/not-found exit codes verified.
+body: Implemented shortestPath() (BFS) + 'pm-graph path <from> <to>'. USAGE exit 2 on missing args; NOT_FOUND exit 3 on unknown id. Verified directed path D->A (len 1 via RELATED shortcut) and no-path A->D.

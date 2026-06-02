@@ -1,0 +1,13 @@
+id: pm-graph-89nw
+title: "Decision: analytics operate on STRUCTURAL edges only"
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T11:35:41.595Z"
+updated_at: "2026-06-02T11:35:57.571Z"
+author: claude
+parent: pm-graph-1dpk
+close_reason: Decision recorded; implemented and verified with real data.
+body: "Analytics (cycles/path/critical-path/analyze) operate ONLY on STRUCTURAL edges: BLOCKED_BY + CHILD_OF + dependency edges (BLOCKS/RELATED/etc.). Facet edges (HAS_TYPE/HAS_STATUS/ASSIGNED_TO/IN_SPRINT/IN_RELEASE) and tag edges (TAGGED_WITH) are deliberately excluded. Rationale: if facet/tag edges were included, every item sharing a status or tag would appear linked, producing meaningless cycles, inflated centrality, a single giant connected component, and bogus 'paths'. Filtering to structural edges keeps cycle/path/critical-path semantically honest. Implemented via isStructuralEdge() reusing the existing FACET_REL_TYPES/TAG_REL_TYPE classification, and structuralEdges() additionally restricts endpoints to PmItem nodes only (facet/external nodes dropped).\n\nEdge direction note: BLOCKED_BY is stored item->blocker (B --BLOCKED_BY--> A means B is blocked by A). Therefore a 'root' (no incoming dep edge) is the most-blocked item and a 'leaf' (no outgoing dep edge) is a foundational item. critical-path / longestChain follow these directed edges; verified against a planted A<-B<-C<-D chain (length 4)."

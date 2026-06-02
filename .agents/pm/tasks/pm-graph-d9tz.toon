@@ -1,0 +1,13 @@
+id: pm-graph-d9tz
+title: "pm-graph analyze: offline graph-health report"
+description: ""
+type: Task
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-02T11:35:37.767Z"
+updated_at: "2026-06-02T11:37:07.958Z"
+author: claude
+parent: pm-graph-1dpk
+close_reason: analyze command shipped + functionally tested with real data.
+body: "Implemented analyzeGraph() + 'pm-graph analyze' command. Reports itemCount, structuralEdgeCount, cycleCount/cycles, orphans, roots, leaves, longestChain(Length), connectedComponents, blockedItems, topDegreeCentrality. Supports --root/--depth/--include-closed/--json. Verified on real workspace: 7 items, 6 structural edges, 1 cycle, 1 orphan, chain length 4, 3 components."
