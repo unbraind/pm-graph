@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Deepen pm-graph with offline analytics + new export formats ([pm-graph-1dpk](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-1dpk.toon))
+- Unit tests for analytics + new renderers ([pm-graph-f9c3](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-f9c3.toon))
+- graph exporter: add graphml + plantuml formats ([pm-graph-79f2](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-79f2.toon))
+
+### Other
+
+- pm-graph critical-path: longest blocking chain ([pm-graph-f1k9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-f1k9.toon))
+- pm-graph path: shortest dependency path \(BFS\) ([pm-graph-vtlu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-vtlu.toon))
+- pm-graph cycles: detect dependency cycles, CI exit code ([pm-graph-h0xs](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-h0xs.toon))
+- pm-graph analyze: offline graph-health report ([pm-graph-d9tz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-d9tz.toon))
+- Decision: analytics operate on STRUCTURAL edges only ([pm-graph-89nw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-89nw.toon))
+
 ## 2026.06.02 - 2026-06-02
 
 ### Added

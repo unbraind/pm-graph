@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.1.4";
+const EXTENSION_VERSION = "0.2.0";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -412,6 +412,102 @@ function loadGraphFromPath(pmRoot) {
     const items = fetchItemsViaPath(pmRoot);
     return graphFromItems(items, workspaceFromPmRoot(pmRoot), new Map());
 }
+/**
+ * Build a Graph for a CommandContext via a single
+ * `pm list-all --json --include-body` call from the workspace cwd. The
+ * `--include-body` payload already carries dependencies/blocked_by/parent/tags,
+ * so no per-item `pm deps` round-trips are needed. Used by the offline
+ * analytics commands (analyze/cycles/path/critical-path).
+ */
+function loadGraphForContext(context) {
+    const workspace = getWorkspace(context);
+    const result = spawnSync("pm", ["list-all", "--json", "--include-body"], { cwd: workspace, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
+    if (result.error || result.status !== 0) {
+        throw new CommandError(`Failed to fetch pm items (exit ${result.status ?? "unknown"}): ${result.stderr?.trim() || result.error?.message || "no output"}`);
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(result.stdout);
+    }
+    catch (err) {
+        throw new CommandError(`Failed to parse pm list-all output as JSON: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return graphFromItems(parsed.items ?? [], workspace, new Map());
+}
+/**
+ * Parse the shared analytics flags (--json, --include-closed, --root, --depth)
+ * and collect remaining positional arguments. Throws a USAGE CommandError on a
+ * malformed --depth or a value-less --root/--depth.
+ */
+function parseAnalyticsFlags(args) {
+    const flags = { json: false, includeClosed: false, positionals: [] };
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (arg === "--json") {
+            flags.json = true;
+        }
+        else if (arg === "--include-closed") {
+            flags.includeClosed = true;
+        }
+        else if (arg === "--root") {
+            const value = args[++i];
+            if (value === undefined)
+                throw new CommandError("--root requires an item id.", EXIT_CODE.USAGE);
+            flags.root = value;
+        }
+        else if (arg.startsWith("--root=")) {
+            flags.root = arg.slice("--root=".length);
+        }
+        else if (arg === "--depth") {
+            const value = args[++i];
+            if (value === undefined)
+                throw new CommandError("--depth requires an integer.", EXIT_CODE.USAGE);
+            const parsed = parseInt(value, 10);
+            if (Number.isNaN(parsed) || parsed < 0) {
+                throw new CommandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+            }
+            flags.depth = parsed;
+        }
+        else if (arg.startsWith("--depth=")) {
+            const value = arg.slice("--depth=".length);
+            const parsed = parseInt(value, 10);
+            if (Number.isNaN(parsed) || parsed < 0) {
+                throw new CommandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+            }
+            flags.depth = parsed;
+        }
+        else if (arg === "--help" || arg === "-h") {
+            // handled separately by hasHelpFlag
+        }
+        else if (arg.startsWith("--")) {
+            // ignore unknown flags rather than misparse them as positionals
+        }
+        else {
+            flags.positionals.push(arg);
+        }
+    }
+    return flags;
+}
+/**
+ * Load a graph for a context and apply the shared analytics shaping
+ * (structural edges only is enforced downstream; here we only honor
+ * --include-closed and an optional --root/--depth neighborhood). Throws
+ * NOT_FOUND when --root is absent from the workspace.
+ */
+function shapedAnalyticsGraph(context, flags) {
+    const full = loadGraphForContext(context);
+    if (flags.root && !full.nodes.some((n) => n.id === flags.root)) {
+        throw new CommandError(`--root node "${flags.root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+    }
+    // Restrict to structural edges so neighborhood shaping follows dependencies,
+    // not facet/tag links. The analytics functions also re-filter defensively.
+    return shapeGraph(full, {
+        edges: "deps",
+        includeClosed: flags.includeClosed,
+        rootId: flags.root,
+        depth: flags.depth,
+    });
+}
 // ---------------------------------------------------------------------------
 // Cypher generation (for export)
 // ---------------------------------------------------------------------------
@@ -590,6 +686,85 @@ function renderJsonGraph(graph) {
     };
     return JSON.stringify(doc, null, 2);
 }
+/** Escape a string for XML text/attribute content. */
+function xmlEscape(s) {
+    return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+}
+/**
+ * Render a valid GraphML XML document (consumable by yEd / Gephi / NetworkX).
+ * Declares string keys for node title/type/status/labels and edge type, then
+ * emits one <node> per graph node and one <edge> per relationship.
+ */
+export function renderGraphml(graph) {
+    const lines = [];
+    lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+    lines.push('<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">');
+    lines.push('  <key id="title" for="node" attr.name="title" attr.type="string"/>');
+    lines.push('  <key id="type" for="node" attr.name="type" attr.type="string"/>');
+    lines.push('  <key id="status" for="node" attr.name="status" attr.type="string"/>');
+    lines.push('  <key id="labels" for="node" attr.name="labels" attr.type="string"/>');
+    lines.push('  <key id="reltype" for="edge" attr.name="reltype" attr.type="string"/>');
+    lines.push('  <graph id="pm-graph" edgedefault="directed">');
+    for (const node of graph.nodes) {
+        const title = typeof node.properties.title === "string" && node.properties.title
+            ? String(node.properties.title)
+            : node.id;
+        const type = typeof node.properties.type === "string" ? node.properties.type : "";
+        const status = typeof node.properties.status === "string" ? node.properties.status : "";
+        lines.push(`    <node id="${xmlEscape(node.id)}">`);
+        lines.push(`      <data key="title">${xmlEscape(title)}</data>`);
+        if (type)
+            lines.push(`      <data key="type">${xmlEscape(type)}</data>`);
+        if (status)
+            lines.push(`      <data key="status">${xmlEscape(status)}</data>`);
+        lines.push(`      <data key="labels">${xmlEscape(node.labels.join(" "))}</data>`);
+        lines.push("    </node>");
+    }
+    graph.relationships.forEach((rel, index) => {
+        lines.push(`    <edge id="e${index}" source="${xmlEscape(rel.from)}" target="${xmlEscape(rel.to)}">`);
+        lines.push(`      <data key="reltype">${xmlEscape(rel.type)}</data>`);
+        lines.push("    </edge>");
+    });
+    lines.push("  </graph>");
+    lines.push("</graphml>");
+    return lines.join("\n");
+}
+/** Sanitise an id for use as a PlantUML alias (alphanumeric/underscore). */
+function plantumlAlias(id) {
+    return "n_" + id.replace(/[^A-Za-z0-9_]/g, "_");
+}
+/** Escape a string for a PlantUML double-quoted label. */
+function plantumlLabel(s) {
+    return s.replace(/"/g, "'").replace(/\n/g, " ").trim();
+}
+/**
+ * Render a PlantUML object diagram (`@startuml`…`@enduml`) with one object per
+ * node and one arrow per relationship, the relationship type as the arrow
+ * label. Renders with PlantUML / Structurizr / many docs toolchains.
+ */
+export function renderPlantuml(graph) {
+    const lines = ["@startuml", "left to right direction"];
+    for (const node of graph.nodes) {
+        const title = typeof node.properties.title === "string" && node.properties.title
+            ? String(node.properties.title)
+            : node.id;
+        const status = typeof node.properties.status === "string" ? node.properties.status : "";
+        const label = status ? `${title} [${node.id}] (${status})` : `${title} [${node.id}]`;
+        lines.push(`object "${plantumlLabel(label)}" as ${plantumlAlias(node.id)}`);
+    }
+    if (graph.relationships.length > 0)
+        lines.push("");
+    for (const rel of graph.relationships) {
+        lines.push(`${plantumlAlias(rel.from)} --> ${plantumlAlias(rel.to)} : ${plantumlLabel(rel.type)}`);
+    }
+    lines.push("@enduml");
+    return lines.join("\n");
+}
 function renderExport(format, graph) {
     switch (format) {
         case "cypher":
@@ -602,6 +777,10 @@ function renderExport(format, graph) {
             return renderDot(graph);
         case "json":
             return renderJsonGraph(graph);
+        case "graphml":
+            return renderGraphml(graph);
+        case "plantuml":
+            return renderPlantuml(graph);
     }
 }
 function readExportOption(options, ...keys) {
@@ -611,6 +790,262 @@ function readExportOption(options, ...keys) {
             return value;
     }
     return undefined;
+}
+// ---------------------------------------------------------------------------
+// Graph analytics (offline — operate on STRUCTURAL edges only)
+// ---------------------------------------------------------------------------
+// Analytics treat the workspace as a directed dependency graph. Only
+// *structural* edges (BLOCKED_BY + CHILD_OF + dependency edges such as BLOCKS /
+// RELATED) participate. Facet edges (HAS_TYPE/HAS_STATUS/ASSIGNED_TO/IN_SPRINT/
+// IN_RELEASE) and tag edges (TAGGED_WITH) are metadata, not dependencies — if
+// they were included, every item sharing a status or tag would appear linked,
+// producing meaningless cycles, components, and centrality. Filtering to
+// structural edges keeps cycle/path/critical-path results semantically honest.
+function isStructuralEdge(type) {
+    return type !== TAG_REL_TYPE && !FACET_REL_TYPES.has(type);
+}
+/** Item-only node ids (drop facet/tag/external nodes that are not PmItems). */
+function itemNodeIds(graph) {
+    const ids = new Set();
+    for (const node of graph.nodes) {
+        if (node.labels.includes("PmItem"))
+            ids.add(node.id);
+    }
+    return ids;
+}
+/** Extract the directed structural edges of a graph, between item nodes only. */
+function structuralEdges(graph) {
+    const items = itemNodeIds(graph);
+    const seen = new Set();
+    const edges = [];
+    for (const rel of graph.relationships) {
+        if (!isStructuralEdge(rel.type))
+            continue;
+        if (!items.has(rel.from) || !items.has(rel.to))
+            continue;
+        const key = `${rel.from}->${rel.to}:${rel.type}`;
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        edges.push({ from: rel.from, to: rel.to, type: rel.type });
+    }
+    return edges;
+}
+/** Directed adjacency (from -> [to]) over a set of edges. */
+function buildAdjacency(edges) {
+    const adjacency = new Map();
+    for (const e of edges) {
+        const list = adjacency.get(e.from) ?? [];
+        if (!list.includes(e.to))
+            list.push(e.to);
+        adjacency.set(e.from, list);
+    }
+    return adjacency;
+}
+/**
+ * Detect all elementary directed cycles among structural edges using an
+ * iterative DFS with a recursion stack. Returns each cycle as an ordered id
+ * path whose first and last ids are equal (e.g. [E, F, E]). Cycles are
+ * de-duplicated by their canonical rotation so A->B->A and B->A->B collapse.
+ */
+export function findCycles(nodes, edges) {
+    const adjacency = buildAdjacency(edges);
+    const cycles = [];
+    const seenCanonical = new Set();
+    const canonical = (cycle) => {
+        // cycle excludes the repeated closing node; rotate to start at min id.
+        const core = cycle.slice(0, -1);
+        let minIdx = 0;
+        for (let i = 1; i < core.length; i++) {
+            if (core[i] < core[minIdx])
+                minIdx = i;
+        }
+        const rotated = [...core.slice(minIdx), ...core.slice(0, minIdx)];
+        return rotated.join("->");
+    };
+    for (const start of nodes) {
+        // Iterative DFS carrying the current path; detect back-edges to a node
+        // already on the path (a cycle), or revisits handled via path membership.
+        const stack = [
+            { node: start, path: [start], onPath: new Set([start]) },
+        ];
+        while (stack.length > 0) {
+            const { node, path: currentPath, onPath } = stack.pop();
+            for (const next of adjacency.get(node) ?? []) {
+                if (next === start && currentPath.length >= 1) {
+                    // Closed a cycle back to the start node.
+                    const cycle = [...currentPath, start];
+                    const key = canonical(cycle);
+                    if (!seenCanonical.has(key)) {
+                        seenCanonical.add(key);
+                        cycles.push(cycle);
+                    }
+                    continue;
+                }
+                // Only extend along nodes greater than start to avoid re-finding
+                // cycles rooted at smaller ids, and never revisit a node on this path.
+                if (next < start || onPath.has(next))
+                    continue;
+                const nextOnPath = new Set(onPath);
+                nextOnPath.add(next);
+                stack.push({ node: next, path: [...currentPath, next], onPath: nextOnPath });
+            }
+        }
+    }
+    return cycles;
+}
+/**
+ * Shortest directed path from `from` to `to` over structural edges (BFS).
+ * Returns the ordered id path (inclusive of both endpoints) or null if no path
+ * exists. Returns [from] when from === to.
+ */
+export function shortestPath(edges, from, to) {
+    if (from === to)
+        return [from];
+    const adjacency = buildAdjacency(edges);
+    const visited = new Set([from]);
+    const queue = [from];
+    const prev = new Map();
+    while (queue.length > 0) {
+        const node = queue.shift();
+        for (const next of adjacency.get(node) ?? []) {
+            if (visited.has(next))
+                continue;
+            visited.add(next);
+            prev.set(next, node);
+            if (next === to) {
+                const path = [to];
+                let cur = to;
+                while (prev.has(cur)) {
+                    cur = prev.get(cur);
+                    path.unshift(cur);
+                }
+                return path;
+            }
+            queue.push(next);
+        }
+    }
+    return null;
+}
+/**
+ * Longest dependency chain (critical path) over structural edges. Uses a
+ * memoised DFS that is safe on cyclic graphs (nodes on the active recursion
+ * stack are skipped, so a cycle cannot inflate the chain infinitely). Returns
+ * the ordered id list of the longest simple chain found.
+ */
+export function longestChain(nodes, edges) {
+    const adjacency = buildAdjacency(edges);
+    const memo = new Map();
+    const onStack = new Set();
+    const dfs = (node) => {
+        const cached = memo.get(node);
+        if (cached)
+            return cached;
+        onStack.add(node);
+        let best = [];
+        for (const next of adjacency.get(node) ?? []) {
+            if (onStack.has(next))
+                continue; // skip back-edges (cycle safety)
+            const candidate = dfs(next);
+            if (candidate.length > best.length)
+                best = candidate;
+        }
+        onStack.delete(node);
+        const result = [node, ...best];
+        memo.set(node, result);
+        return result;
+    };
+    let longest = [];
+    for (const node of nodes) {
+        const chain = dfs(node);
+        if (chain.length > longest.length)
+            longest = chain;
+    }
+    return longest;
+}
+/**
+ * Compute a comprehensive offline graph-health report from a shaped graph.
+ * All analytics operate on structural edges between item nodes only.
+ */
+export function analyzeGraph(graph, topN = 10) {
+    const items = [...itemNodeIds(graph)].sort();
+    const edges = structuralEdges(graph);
+    const inDegree = new Map();
+    const outDegree = new Map();
+    for (const id of items) {
+        inDegree.set(id, 0);
+        outDegree.set(id, 0);
+    }
+    for (const e of edges) {
+        outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1);
+        inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
+    }
+    // Orphans: no structural edges at all (no in, no out).
+    const orphans = items.filter((id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) === 0);
+    // Roots: have outgoing/incoming structure but no INCOMING dependency edge.
+    const roots = items.filter((id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) > 0);
+    // Leaves: have incoming structure but no outgoing dependency edge.
+    const leaves = items.filter((id) => (outDegree.get(id) ?? 0) === 0 && (inDegree.get(id) ?? 0) > 0);
+    const cycles = findCycles(items, edges);
+    const longest = longestChain(items, edges);
+    // Connected components over the UNDIRECTED projection of structural edges.
+    const undirected = new Map();
+    for (const id of items)
+        undirected.set(id, new Set());
+    for (const e of edges) {
+        undirected.get(e.from)?.add(e.to);
+        undirected.get(e.to)?.add(e.from);
+    }
+    const visited = new Set();
+    let components = 0;
+    for (const id of items) {
+        if (visited.has(id))
+            continue;
+        components++;
+        const queue = [id];
+        visited.add(id);
+        while (queue.length > 0) {
+            const cur = queue.shift();
+            for (const next of undirected.get(cur) ?? []) {
+                if (!visited.has(next)) {
+                    visited.add(next);
+                    queue.push(next);
+                }
+            }
+        }
+    }
+    // Blocked items: any item carrying a BLOCKED_BY outgoing edge.
+    const blockedItems = items.filter((id) => edges.some((e) => e.from === id && e.type === "BLOCKED_BY"));
+    const topDegreeCentrality = items
+        .map((id) => ({
+        id,
+        degree: (inDegree.get(id) ?? 0) + (outDegree.get(id) ?? 0),
+        inDegree: inDegree.get(id) ?? 0,
+        outDegree: outDegree.get(id) ?? 0,
+    }))
+        .filter((d) => d.degree > 0)
+        .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
+        .slice(0, topN);
+    return {
+        workspace: graph.workspace,
+        projectKey: graph.projectKey,
+        itemCount: items.length,
+        structuralEdgeCount: edges.length,
+        cycleCount: cycles.length,
+        cycles,
+        orphanCount: orphans.length,
+        orphans,
+        rootCount: roots.length,
+        roots,
+        leafCount: leaves.length,
+        leaves,
+        longestChainLength: longest.length,
+        longestChain: longest,
+        connectedComponents: components,
+        blockedItemCount: blockedItems.length,
+        blockedItems,
+        topDegreeCentrality,
+    };
 }
 async function syncNeo4j(graph, options) {
     const driver = await createDriver();
@@ -1026,17 +1461,163 @@ export function activate(api) {
             }
         },
     });
+    // --- pm-graph analyze ----------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph analyze",
+        description: "Comprehensive offline graph-health report: cycles, orphans, roots, leaves, longest chain, degree centrality, components, blocked items.",
+        run: async (context) => {
+            if (hasHelpFlag(context)) {
+                return {
+                    usage: "pm pm-graph analyze [--root <id>] [--depth <n>] [--include-closed] [--json]",
+                    description: "Build the workspace dependency graph offline (no Neo4j) and report its health: dependency cycle count, orphan/root/leaf items, longest dependency chain, top degree-centrality items, connected-component count, and blocked-item count. Operates on STRUCTURAL edges (BLOCKED_BY + CHILD_OF + dependency edges) only.",
+                    flags: {
+                        "--root <id>": "Restrict to the neighborhood of an item id",
+                        "--depth <n>": "Max hop distance from --root (non-negative integer)",
+                        "--include-closed": "Include closed/canceled items (excluded by default)",
+                        "--json": "Output as JSON",
+                    },
+                    output: {
+                        itemCount: "Number of item nodes analyzed",
+                        structuralEdgeCount: "Number of structural edges analyzed",
+                        cycleCount: "Number of distinct dependency cycles",
+                        orphans: "Item ids with no structural edges",
+                        roots: "Item ids with no incoming dependency edge",
+                        leaves: "Item ids with no outgoing dependency edge",
+                        longestChain: "Ordered ids of the longest dependency chain",
+                        connectedComponents: "Number of connected components (undirected projection)",
+                        blockedItems: "Item ids carrying a BLOCKED_BY edge",
+                        topDegreeCentrality: "Top-N items by total degree",
+                    },
+                };
+            }
+            const flags = parseAnalyticsFlags(context.args ?? []);
+            const graph = shapedAnalyticsGraph(context, flags);
+            const report = analyzeGraph(graph);
+            return { ok: true, ...report };
+        },
+    });
+    // --- pm-graph cycles -----------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph cycles",
+        description: "Detect and list dependency cycles among structural edges. Exits non-zero (1) when cycles exist — CI-usable.",
+        run: async (context) => {
+            if (hasHelpFlag(context)) {
+                return {
+                    usage: "pm pm-graph cycles [--root <id>] [--depth <n>] [--include-closed] [--json]",
+                    description: "Detect dependency cycles among STRUCTURAL edges (BLOCKED_BY + dependency edges, not facet/tag edges). Prints each cycle as an id path. Exits with code 1 when any cycle exists (so it can gate CI); exits 0 when there are none.",
+                    flags: {
+                        "--root <id>": "Restrict to the neighborhood of an item id",
+                        "--depth <n>": "Max hop distance from --root",
+                        "--include-closed": "Include closed/canceled items",
+                        "--json": "Output as JSON",
+                    },
+                    output: {
+                        cycleCount: "Number of distinct cycles",
+                        cycles: "Array of cycles, each an ordered id path (first === last)",
+                    },
+                };
+            }
+            const flags = parseAnalyticsFlags(context.args ?? []);
+            const graph = shapedAnalyticsGraph(context, flags);
+            const edges = structuralEdges(graph);
+            const items = [...itemNodeIds(graph)].sort();
+            const cycles = findCycles(items, edges);
+            if (cycles.length > 0) {
+                const detail = cycles.map((c) => c.join(" -> ")).join("; ");
+                throw new CommandError(`Found ${cycles.length} dependency cycle(s): ${detail}`, EXIT_CODE.GENERIC_FAILURE);
+            }
+            return { ok: true, cycleCount: 0, cycles: [] };
+        },
+    });
+    // --- pm-graph path -------------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph path",
+        description: "Shortest directed dependency path between two item ids (BFS over structural edges).",
+        run: async (context) => {
+            if (hasHelpFlag(context)) {
+                return {
+                    usage: "pm pm-graph path <from> <to> [--include-closed] [--json]",
+                    description: "Compute the shortest directed dependency path from <from> to <to> via BFS over STRUCTURAL edges. Reports the ordered id path or that no path exists.",
+                    flags: {
+                        "--include-closed": "Include closed/canceled items",
+                        "--json": "Output as JSON",
+                    },
+                    example: "pm pm-graph path pm-ep18 pm-hd71 --json",
+                    output: {
+                        from: "Source item id",
+                        to: "Target item id",
+                        found: "Whether a directed path exists",
+                        path: "Ordered id path (inclusive) or null",
+                        length: "Number of edges on the path (path.length - 1) or null",
+                    },
+                };
+            }
+            const flags = parseAnalyticsFlags(context.args ?? []);
+            const [from, to] = flags.positionals;
+            if (!from || !to) {
+                throw new CommandError("Usage: pm pm-graph path <from> <to>\nExample: pm pm-graph path pm-ep18 pm-hd71", EXIT_CODE.USAGE);
+            }
+            const graph = shapedAnalyticsGraph(context, flags);
+            const items = itemNodeIds(graph);
+            if (!items.has(from)) {
+                throw new CommandError(`Item "${from}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+            }
+            if (!items.has(to)) {
+                throw new CommandError(`Item "${to}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+            }
+            const edges = structuralEdges(graph);
+            const path = shortestPath(edges, from, to);
+            return {
+                ok: true,
+                from,
+                to,
+                found: path !== null,
+                path,
+                length: path ? path.length - 1 : null,
+            };
+        },
+    });
+    // --- pm-graph critical-path ---------------------------------------------
+    api.registerCommand({
+        name: "pm-graph critical-path",
+        description: "The longest chain of blocking dependencies through the workspace (the critical path), as an ordered id list.",
+        run: async (context) => {
+            if (hasHelpFlag(context)) {
+                return {
+                    usage: "pm pm-graph critical-path [--root <id>] [--depth <n>] [--include-closed] [--json]",
+                    description: "Compute the longest chain of structural (blocking) dependencies through the workspace — the critical path. Reports the ordered id list and its length. Cycle-safe.",
+                    flags: {
+                        "--root <id>": "Restrict to the neighborhood of an item id",
+                        "--depth <n>": "Max hop distance from --root",
+                        "--include-closed": "Include closed/canceled items",
+                        "--json": "Output as JSON",
+                    },
+                    output: {
+                        length: "Number of items on the critical path",
+                        path: "Ordered id list of the critical path",
+                    },
+                };
+            }
+            const flags = parseAnalyticsFlags(context.args ?? []);
+            const graph = shapedAnalyticsGraph(context, flags);
+            const edges = structuralEdges(graph);
+            const items = [...itemNodeIds(graph)].sort();
+            const chain = longestChain(items, edges);
+            return { ok: true, length: chain.length, path: chain };
+        },
+    });
     // --- pm graph export -----------------------------------------------------
     // registerExporter("graph") auto-creates the `pm graph export` command (the
     // `<name> export` form). It does NOT collide with the existing
     // `pm pm-graph cypher` command (different name). The export pipeline builds
     // the workspace graph from a single `pm list-all --json --include-body`
-    // call and renders it to one of four offline formats. No Neo4j required.
+    // call and renders it to one of six offline formats (cypher | mermaid | dot |
+    // json | graphml | plantuml). No Neo4j required.
     const exporter = (ctx) => {
         const options = ctx.options ?? {};
         const rawFormat = String(readExportOption(options, "format") ?? "json").toLowerCase();
-        if (!["cypher", "mermaid", "dot", "json"].includes(rawFormat)) {
-            throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json.`, EXIT_CODE.USAGE);
+        if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(rawFormat)) {
+            throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);
         }
         const format = rawFormat;
         const rawEdges = String(readExportOption(options, "edges") ?? "all").toLowerCase();
