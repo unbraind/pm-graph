@@ -4,7 +4,8 @@
   "description": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
   "entry": "./dist/index.js",
   "capabilities": [
-    "commands"
+    "commands",
+    "importers"
   ],
   "pm": {
     "compatibility": "v2"

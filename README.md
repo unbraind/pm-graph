@@ -4,6 +4,8 @@ Knowledge graph and dependency graph extension for [pm CLI](https://github.com/u
 
 The extension reads the current workspace through `pm list-all --json` and `pm deps <id> --json`, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
 
+It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, or **Cypher** via `pm graph export` — with neighborhood (`--root`/`--depth`) and edge-type (`--edges`) shaping.
+
 ## Quick Start
 
 **Step 1 — Install the extension:**
@@ -124,6 +126,53 @@ Example output (abbreviated):
   ]
 }
 ```
+
+### `pm graph export`
+
+Export the current workspace graph to a portable file format for diagramming or import into other graph tooling. Builds the graph from a single `pm list-all --json --include-body` call. **Does not require Neo4j.**
+
+```bash
+pm graph export --format mermaid                       # Mermaid graph TD to stdout
+pm graph export --format dot --output graph.dot        # Graphviz DOT to a file
+pm graph export --format json --output graph.json      # JSON Graph (nodes/edges)
+pm graph export --format cypher                         # parameterized Cypher (commented params)
+```
+
+Shape the exported graph:
+
+```bash
+# Dependency edges only (drop facet + tag edges)
+pm graph export --format mermaid --edges deps
+
+# Only tag relationships
+pm graph export --format mermaid --edges tags
+
+# 2-hop neighborhood around one item (undirected reachability)
+pm graph export --format dot --root TASK-42 --depth 2
+
+# Include closed/canceled items (excluded by default)
+pm graph export --format json --include-closed
+```
+
+| Flag | Values | Default | Description |
+|---|---|---|---|
+| `--format` | `cypher` \| `mermaid` \| `dot` \| `json` | `json` | Output format. `mermaid` emits a `graph TD` flowchart; `dot` emits Graphviz `digraph`; `json` emits a JSON Graph (`nodes`/`edges`) document; `cypher` reuses the parameterized Neo4j import statements. |
+| `--output <file>` | path | — | Write to this file instead of stdout. |
+| `--root <id>` | item id | — | Restrict the graph to the neighborhood around this node. |
+| `--depth <n>` | non-negative integer | unlimited | Max hops from `--root` (undirected). Only meaningful with `--root`. |
+| `--include-closed` | flag | off | Include `closed`/`canceled` items (excluded by default). |
+| `--edges <deps\|tags\|all>` | `deps` \| `tags` \| `all` | `all` | `deps` keeps dependency/structural edges (`BLOCKED_BY`, `CHILD_OF`, dependency kinds); `tags` keeps only `TAGGED_WITH`; `all` keeps everything including facet edges. |
+
+Example output (`--format mermaid --edges deps`):
+
+```mermaid
+graph TD
+  n_TASK_2["Build API [TASK-2] (in_progress)"]
+  n_TASK_1["Design schema [TASK-1] (closed)"]
+  n_TASK_2 -->|BLOCKED_BY| n_TASK_1
+```
+
+`pm graph export` is provided through pm's exporter pipeline, so it is invoked as `pm graph export` (the `<name> export` form). It is fully offline and never touches Neo4j.
 
 ### `pm pm-graph sync`
 
