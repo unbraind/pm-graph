@@ -1,6 +1,12 @@
 # Changelog
 
-## 2026.6.2-1 - 2026-06-02
+## Unreleased
+
+### Added
+
+- Add topo-sort, impact, and dependency-depth analytics ([pm-graph-r5yz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-r5yz.toon))
+
+## 2026.06.02-1 - 2026-06-02
 
 ### Added
 

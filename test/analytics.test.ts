@@ -8,6 +8,9 @@ import {
   analyzeGraph,
   renderGraphml,
   renderPlantuml,
+  topoSort,
+  reverseReachable,
+  dependencyDepths,
 } from "../dist/index.js";
 
 // The renderers and analytics helpers are exported from the compiled module.
@@ -176,4 +179,83 @@ test("renderPlantuml emits a valid @startuml block", () => {
   assert.ok(/n_A\b/.test(uml) && /n_B\b/.test(uml), "aliases sanitized");
   assert.ok(uml.includes("--> n_A : BLOCKED_BY"), "edge with rel-type label");
   assert.ok(!uml.includes('"X"') || uml.includes("'X'"), "double-quotes neutralized in labels");
+});
+
+// --- topoSort -------------------------------------------------------------
+
+test("topoSort orders dependencies before dependents on a chain", () => {
+  // D->C->B->A (each blocked by the next). A has no prereqs, must come first;
+  // D depends on everything, must come last.
+  const { order, cycleNodes } = topoSort(["A", "B", "C", "D"], chainEdges);
+  assert.deepStrictEqual(cycleNodes, [], "acyclic: no cycle nodes");
+  assert.deepStrictEqual(order, ["A", "B", "C", "D"]);
+  // every edge from->to must have `to` appear before `from`
+  for (const e of chainEdges) {
+    assert.ok(order.indexOf(e.to) < order.indexOf(e.from), `${e.to} before ${e.from}`);
+  }
+});
+
+test("topoSort is deterministic (ties broken by ascending id)", () => {
+  // Two independent roots Y and X both blocked by Z. Z first, then X, then Y.
+  const edges: Edge[] = [
+    { from: "Y", to: "Z", type: "BLOCKED_BY" },
+    { from: "X", to: "Z", type: "BLOCKED_BY" },
+  ];
+  const { order } = topoSort(["X", "Y", "Z"], edges);
+  assert.deepStrictEqual(order, ["Z", "X", "Y"]);
+});
+
+test("topoSort reports cycle nodes and a resolvable prefix", () => {
+  // G->A->... acyclic part plus E<->F cycle.
+  const edges: Edge[] = [
+    { from: "G", to: "H", type: "BLOCKED_BY" },
+    ...cycleEdges, // E<->F
+  ];
+  const { order, cycleNodes } = topoSort(["E", "F", "G", "H"], edges);
+  assert.deepStrictEqual(cycleNodes, ["E", "F"], "E and F are unresolvable");
+  // H has no prereqs, G depends on H; both resolvable.
+  assert.deepStrictEqual(order, ["H", "G"]);
+});
+
+// --- reverseReachable -----------------------------------------------------
+
+test("reverseReachable finds all transitive dependents", () => {
+  // D->C->B->A means A is depended on by B,C,D transitively.
+  assert.deepStrictEqual(reverseReachable(chainEdges, "A"), ["B", "C", "D"]);
+  assert.deepStrictEqual(reverseReachable(chainEdges, "C"), ["D"]);
+  assert.deepStrictEqual(reverseReachable(chainEdges, "D"), [], "D has no dependents");
+});
+
+test("reverseReachable is cycle-safe", () => {
+  const impacted = reverseReachable(cycleEdges, "E");
+  // F is reachable backwards from E; E excludes itself; must terminate.
+  assert.deepStrictEqual(impacted, ["F"]);
+});
+
+// --- dependencyDepths -----------------------------------------------------
+
+test("dependencyDepths computes longest path to a leaf per node", () => {
+  const depths = dependencyDepths(["A", "B", "C", "D"], chainEdges);
+  assert.strictEqual(depths.get("A"), 0, "leaf depth 0");
+  assert.strictEqual(depths.get("B"), 1);
+  assert.strictEqual(depths.get("C"), 2);
+  assert.strictEqual(depths.get("D"), 3, "far end of the chain");
+});
+
+test("dependencyDepths is cycle-safe", () => {
+  const depths = dependencyDepths(["E", "F"], cycleEdges);
+  // must terminate; each depth finite and <= node count
+  assert.ok((depths.get("E") ?? 0) >= 0 && (depths.get("E") ?? 0) <= 2);
+  assert.ok((depths.get("F") ?? 0) >= 0 && (depths.get("F") ?? 0) <= 2);
+});
+
+test("analyzeGraph exposes maxDepth and depthByItem", () => {
+  const report = analyzeGraph(syntheticGraph as any);
+  // chain D->C->B->A gives maxDepth 3 (D), and depthByItem sorted deepest-first.
+  assert.strictEqual(report.maxDepth, 3, "D sits 3 edges from leaf A");
+  assert.strictEqual(report.depthByItem[0].id, "D");
+  assert.strictEqual(report.depthByItem[0].depth, 3);
+  const byId = new Map(report.depthByItem.map((d: { id: string; depth: number }) => [d.id, d.depth]));
+  assert.strictEqual(byId.get("A"), 0);
+  assert.strictEqual(byId.get("O"), 0, "orphan depth 0");
 });

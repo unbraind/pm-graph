@@ -6,7 +6,7 @@ The extension reads the current workspace through `pm list-all --json` and `pm d
 
 It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm graph export` — with neighborhood (`--root`/`--depth`) and edge-type (`--edges`) shaping.
 
-It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `cycles`, `path`, and `critical-path` run dependency-cycle detection, shortest-path, longest-chain, orphan/root/leaf and centrality analysis directly against your workspace.
+It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact` run dependency-cycle detection, shortest-path, longest-chain, topological ordering, downstream-impact, orphan/root/leaf and centrality analysis directly against your workspace.
 
 ## Quick Start
 
@@ -56,7 +56,7 @@ pm install github.com/unbraind/pm-graph --force
 | `NEO4J_DATABASE` | No | Target database (defaults to server default) |
 | `PM_GRAPH_PROJECT_KEY` | No | Override the project key (defaults to workspace directory name) |
 
-The commands `export`, `cypher`, `analyze`, `cycles`, `path`, and `critical-path`, plus the `pm graph export` exporter, do not require Neo4j at all.
+The commands `export`, `cypher`, `analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact`, plus the `pm graph export` exporter, do not require Neo4j at all.
 
 ## Commands
 
@@ -292,7 +292,7 @@ Example output:
 
 These commands analyze the workspace dependency graph **entirely offline** — no Neo4j required. They operate on **structural edges only** (`BLOCKED_BY`, `CHILD_OF`, and dependency edges such as `BLOCKS`/`RELATED`) between real items; facet edges (type/status/assignee/sprint/release) and tag edges are deliberately excluded so cycle, path, and centrality results stay meaningful.
 
-Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, and `critical-path` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood.
+Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood.
 
 ### `pm pm-graph analyze`
 
@@ -320,9 +320,13 @@ Example output (abbreviated):
   "longestChain": ["pm-ep18", "pm-k849", "pm-p2q3", "pm-hd71"],
   "connectedComponents": 3,
   "blockedItemCount": 5,
-  "topDegreeCentrality": [{ "id": "pm-ep18", "degree": 2, "inDegree": 0, "outDegree": 2 }]
+  "topDegreeCentrality": [{ "id": "pm-ep18", "degree": 2, "inDegree": 0, "outDegree": 2 }],
+  "maxDepth": 3,
+  "depthByItem": [{ "id": "pm-hd71", "depth": 3 }, { "id": "pm-p2q3", "depth": 2 }]
 }
 ```
+
+The `maxDepth` and `depthByItem` fields report the **dependency depth** of each item — the number of edges on the longest directed structural path starting at the item (its distance to a leaf along blocker edges). A leaf has depth `0`; `maxDepth` equals the critical-path depth. `depthByItem` is sorted deepest-first. These fields are additive; all previously emitted fields are unchanged.
 
 ### `pm pm-graph cycles`
 
@@ -360,6 +364,35 @@ pm pm-graph critical-path --json
 
 ```json
 { "ok": true, "length": 4, "path": ["pm-ep18", "pm-k849", "pm-p2q3", "pm-hd71"] }
+```
+
+### `pm pm-graph topo-sort`
+
+Emit a valid **topological execution order** of items over structural edges (Kahn's algorithm), so each item is listed only after the items it depends on. Ties are broken by ascending id for deterministic output. **Exits with code 1 when a dependency cycle prevents a complete ordering** (CI-usable), reporting the cycle members and the resolvable prefix. Accepts `--root`/`--depth`/`--include-closed`.
+
+```bash
+pm pm-graph topo-sort --json
+```
+
+```json
+{
+  "ok": true,
+  "count": 6,
+  "cyclic": false,
+  "order": ["pm-p030", "pm-ijd7", "pm-vc4q", "pm-yol1", "pm-0wtl", "pm-8k1m"]
+}
+```
+
+### `pm pm-graph impact`
+
+List every item **transitively blocked-by / downstream** of a given item id — the reverse-reachable set following edge direction. Complements `path` and `neighbors`. A missing id yields a not-found error (exit 3); no id yields a usage error (exit 2).
+
+```bash
+pm pm-graph impact pm-vc4q --json
+```
+
+```json
+{ "ok": true, "id": "pm-vc4q", "count": 3, "impacted": ["pm-0wtl", "pm-8k1m", "pm-yol1"] }
 ```
 
 ## Graph Model
