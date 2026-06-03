@@ -1,0 +1,16 @@
+id: pm-graph-r5yz
+title: "Add topo-sort, impact, and dependency-depth analytics"
+description: ""
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-06-03T23:20:29.326Z"
+updated_at: "2026-06-03T23:20:42.138Z"
+author: codex
+resolution: completed
+comments[2]{created_at,author,text}:
+  "2026-06-03T23:20:36.802Z",codex,"Implemented in src/index.ts: topoSort (Kahn), reverseReachable (reverse BFS), dependencyDepths (memoised cycle-safe DFS), all exported for tests. analyzeGraph now returns maxDepth + depthByItem. Two new registerCommand blocks (topo-sort, impact) mirroring existing path/critical-path patterns + CommandError/EXIT_CODE contract."
+  "2026-06-03T23:20:36.989Z",codex,"Verified functionally: chain A<-B<-C, branch D<-B, F<-E. topo-sort -> 6-item order (deps before dependents); impact A -> [B,C,D]; analyze maxDepth=2 matches longestChain. Cycle workspace (X<->Y) -> topo-sort exits 1 with cycle path. 23/23 unit tests pass; typecheck+build clean."
+close_reason: "Shipped topo-sort, impact, and dependency-depth analytics; all tested."
+body: "Three additive offline-analytics enhancements:\n\n1. `pm pm-graph topo-sort` — valid topological execution order over structural edges via Kahn's algorithm; deterministic (id-sorted ties); exits 1 on a cycle, reporting the cycle path and resolvable prefix. Honors --root/--depth/--include-closed.\n2. `pm pm-graph impact <id>` — reverse-reachable set: all items transitively blocked-by/downstream of <id>, with count. Complements path/neighbors.\n3. `analyze` extended with dependency-depth: maxDepth + depthByItem[] (longest path from each item to a leaf). Additive fields only; existing output unchanged.\n\nAll backward-compatible. New pure helpers (topoSort/reverseReachable/dependencyDepths) covered by unit tests; functionally verified against real workspaces incl. the cycle case."

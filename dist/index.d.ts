@@ -71,6 +71,41 @@ export declare function shortestPath(edges: StructuralEdge[], from: string, to: 
  * the ordered id list of the longest simple chain found.
  */
 export declare function longestChain(nodes: string[], edges: StructuralEdge[]): string[];
+/**
+ * Topological execution order over structural edges using Kahn's algorithm.
+ *
+ * Edges point from an item to its blocker/dependency (e.g. B --BLOCKED_BY--> A
+ * means "B is blocked by A", so A must be done before B). A valid execution
+ * order therefore lists a node only after every node it points to. We compute
+ * that order by treating out-edges as prerequisites: repeatedly emit nodes whose
+ * out-degree (unsatisfied prerequisites) has dropped to zero.
+ *
+ * Returns `{ order, cycleNodes }`. When the graph is acyclic, `order` contains
+ * every node and `cycleNodes` is empty. When a cycle exists, the nodes that
+ * could not be ordered are returned in `cycleNodes` (and `order` holds the
+ * resolvable prefix). Ties are broken by ascending id for deterministic output.
+ */
+export declare function topoSort(nodes: string[], edges: StructuralEdge[]): {
+    order: string[];
+    cycleNodes: string[];
+};
+/**
+ * Reverse-reachable set from `start` over structural edges: every node that can
+ * reach `start` by following edge direction (i.e. everything transitively
+ * blocked-by / downstream of `start`). With edges pointing item -> blocker, the
+ * dependents of X are the nodes with an edge INTO X, so we walk edges backwards
+ * via a reverse adjacency (BFS). Excludes `start` itself. Result is sorted.
+ */
+export declare function reverseReachable(edges: StructuralEdge[], start: string): string[];
+/**
+ * Longest-path depth per node: the number of edges on the longest directed
+ * structural path STARTING at the node (its distance to a leaf along blocker
+ * edges). A leaf (no outgoing edge) has depth 0. Cycle-safe: nodes on the active
+ * recursion stack are skipped so a cycle cannot inflate depth infinitely. This
+ * is the "longest path from any root" metric expressed per node, since the
+ * deepest node is exactly the far end of the critical path.
+ */
+export declare function dependencyDepths(nodes: string[], edges: StructuralEdge[]): Map<string, number>;
 type AnalyzeReport = {
     workspace: string;
     projectKey: string;
@@ -94,6 +129,11 @@ type AnalyzeReport = {
         degree: number;
         inDegree: number;
         outDegree: number;
+    }>;
+    maxDepth: number;
+    depthByItem: Array<{
+        id: string;
+        depth: number;
     }>;
 };
 /**
