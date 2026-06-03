@@ -964,6 +964,128 @@ export function longestChain(nodes, edges) {
     return longest;
 }
 /**
+ * Topological execution order over structural edges using Kahn's algorithm.
+ *
+ * Edges point from an item to its blocker/dependency (e.g. B --BLOCKED_BY--> A
+ * means "B is blocked by A", so A must be done before B). A valid execution
+ * order therefore lists a node only after every node it points to. We compute
+ * that order by treating out-edges as prerequisites: repeatedly emit nodes whose
+ * out-degree (unsatisfied prerequisites) has dropped to zero.
+ *
+ * Returns `{ order, cycleNodes }`. When the graph is acyclic, `order` contains
+ * every node and `cycleNodes` is empty. When a cycle exists, the nodes that
+ * could not be ordered are returned in `cycleNodes` (and `order` holds the
+ * resolvable prefix). Ties are broken by ascending id for deterministic output.
+ */
+export function topoSort(nodes, edges) {
+    // Prerequisites of a node = the distinct nodes it points to (its blockers).
+    const prereqs = new Map();
+    // Dependents: for each prerequisite, which nodes wait on it.
+    const dependents = new Map();
+    const nodeSet = new Set(nodes);
+    for (const id of nodes)
+        prereqs.set(id, new Set());
+    for (const e of edges) {
+        if (!nodeSet.has(e.from) || !nodeSet.has(e.to))
+            continue;
+        if (e.from === e.to)
+            continue; // self-loop is its own cycle, handled below
+        const set = prereqs.get(e.from);
+        if (!set.has(e.to)) {
+            set.add(e.to);
+            (dependents.get(e.to) ?? dependents.set(e.to, []).get(e.to)).push(e.from);
+        }
+    }
+    // Seed the ready queue with nodes that have no prerequisites.
+    const ready = nodes.filter((id) => prereqs.get(id).size === 0).sort();
+    const order = [];
+    const remaining = new Map();
+    for (const id of nodes)
+        remaining.set(id, prereqs.get(id).size);
+    while (ready.length > 0) {
+        const id = ready.shift();
+        order.push(id);
+        let inserted = false;
+        for (const dep of dependents.get(id) ?? []) {
+            const left = (remaining.get(dep) ?? 0) - 1;
+            remaining.set(dep, left);
+            if (left === 0) {
+                // Insert keeping the ready queue sorted for deterministic output.
+                const idx = ready.findIndex((x) => x > dep);
+                if (idx === -1)
+                    ready.push(dep);
+                else
+                    ready.splice(idx, 0, dep);
+                inserted = true;
+            }
+        }
+        void inserted;
+    }
+    // Any node never emitted is part of (or downstream of) a cycle.
+    const ordered = new Set(order);
+    const cycleNodes = nodes.filter((id) => !ordered.has(id)).sort();
+    return { order, cycleNodes };
+}
+/**
+ * Reverse-reachable set from `start` over structural edges: every node that can
+ * reach `start` by following edge direction (i.e. everything transitively
+ * blocked-by / downstream of `start`). With edges pointing item -> blocker, the
+ * dependents of X are the nodes with an edge INTO X, so we walk edges backwards
+ * via a reverse adjacency (BFS). Excludes `start` itself. Result is sorted.
+ */
+export function reverseReachable(edges, start) {
+    const reverse = new Map();
+    for (const e of edges) {
+        (reverse.get(e.to) ?? reverse.set(e.to, []).get(e.to)).push(e.from);
+    }
+    const seen = new Set();
+    const queue = [start];
+    while (queue.length > 0) {
+        const node = queue.shift();
+        for (const prev of reverse.get(node) ?? []) {
+            if (prev === start || seen.has(prev))
+                continue;
+            seen.add(prev);
+            queue.push(prev);
+        }
+    }
+    return [...seen].sort();
+}
+/**
+ * Longest-path depth per node: the number of edges on the longest directed
+ * structural path STARTING at the node (its distance to a leaf along blocker
+ * edges). A leaf (no outgoing edge) has depth 0. Cycle-safe: nodes on the active
+ * recursion stack are skipped so a cycle cannot inflate depth infinitely. This
+ * is the "longest path from any root" metric expressed per node, since the
+ * deepest node is exactly the far end of the critical path.
+ */
+export function dependencyDepths(nodes, edges) {
+    const adjacency = buildAdjacency(edges);
+    const memo = new Map();
+    const onStack = new Set();
+    const dfs = (node) => {
+        const cached = memo.get(node);
+        if (cached !== undefined)
+            return cached;
+        onStack.add(node);
+        let best = 0;
+        for (const next of adjacency.get(node) ?? []) {
+            if (onStack.has(next))
+                continue; // cycle safety
+            const candidate = 1 + dfs(next);
+            if (candidate > best)
+                best = candidate;
+        }
+        onStack.delete(node);
+        memo.set(node, best);
+        return best;
+    };
+    const depths = new Map();
+    for (const node of nodes)
+        depths.set(node, dfs(node));
+    return depths;
+}
+/**
  * Compute a comprehensive offline graph-health report from a shaped graph.
  * All analytics operate on structural edges between item nodes only.
  */
@@ -1026,6 +1148,13 @@ export function analyzeGraph(graph, topN = 10) {
         .filter((d) => d.degree > 0)
         .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
         .slice(0, topN);
+    // Dependency depth per item: longest directed structural path starting at the
+    // item (distance to a leaf). maxDepth is the depth of the critical path.
+    const depths = dependencyDepths(items, edges);
+    const depthByItem = items
+        .map((id) => ({ id, depth: depths.get(id) ?? 0 }))
+        .sort((a, b) => b.depth - a.depth || a.id.localeCompare(b.id));
+    const maxDepth = depthByItem.reduce((max, d) => (d.depth > max ? d.depth : max), 0);
     return {
         workspace: graph.workspace,
         projectKey: graph.projectKey,
@@ -1045,6 +1174,8 @@ export function analyzeGraph(graph, topN = 10) {
         blockedItemCount: blockedItems.length,
         blockedItems,
         topDegreeCentrality,
+        maxDepth,
+        depthByItem,
     };
 }
 async function syncNeo4j(graph, options) {
@@ -1487,6 +1618,8 @@ export function activate(api) {
                         connectedComponents: "Number of connected components (undirected projection)",
                         blockedItems: "Item ids carrying a BLOCKED_BY edge",
                         topDegreeCentrality: "Top-N items by total degree",
+                        maxDepth: "Longest dependency depth across all items (critical-path depth)",
+                        depthByItem: "Per-item dependency depth (longest path from the item to a leaf), sorted deepest-first",
                     },
                 };
             }
@@ -1604,6 +1737,80 @@ export function activate(api) {
             const items = [...itemNodeIds(graph)].sort();
             const chain = longestChain(items, edges);
             return { ok: true, length: chain.length, path: chain };
+        },
+    });
+    // --- pm-graph topo-sort --------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph topo-sort",
+        description: "Topological execution order respecting dependency/blocked_by edges (Kahn's algorithm). Exits non-zero (1) on a cycle.",
+        run: async (context) => {
+            if (hasHelpFlag(context)) {
+                return {
+                    usage: "pm pm-graph topo-sort [--root <id>] [--depth <n>] [--include-closed] [--json]",
+                    description: "Emit a valid topological execution order of items over STRUCTURAL edges (BLOCKED_BY + dependency edges), so each item is listed only after the items it depends on. Uses Kahn's algorithm. Ties are broken by ascending id for deterministic output. Reports the resolvable prefix and the cycle members, and EXITS WITH CODE 1 when a dependency cycle prevents a complete ordering (CI-usable).",
+                    flags: {
+                        "--root <id>": "Restrict to the neighborhood of an item id",
+                        "--depth <n>": "Max hop distance from --root",
+                        "--include-closed": "Include closed/canceled items",
+                        "--json": "Output as JSON",
+                    },
+                    output: {
+                        order: "Ordered item ids (dependencies before dependents); complete when acyclic",
+                        count: "Number of items placed in the order",
+                        cyclic: "Whether a cycle prevented a complete ordering",
+                    },
+                };
+            }
+            const flags = parseAnalyticsFlags(context.args ?? []);
+            const graph = shapedAnalyticsGraph(context, flags);
+            const edges = structuralEdges(graph);
+            const items = [...itemNodeIds(graph)].sort();
+            const { order, cycleNodes } = topoSort(items, edges);
+            if (cycleNodes.length > 0) {
+                // Surface the actual cycle path(s) among the unresolved nodes for context.
+                const cycles = findCycles(cycleNodes, edges);
+                const detail = cycles.length > 0
+                    ? cycles.map((c) => c.join(" -> ")).join("; ")
+                    : cycleNodes.join(", ");
+                throw new CommandError(`Cannot produce a topological order: ${cycleNodes.length} item(s) are involved in a dependency cycle (${detail}). Resolved prefix: ${order.length} item(s).`, EXIT_CODE.GENERIC_FAILURE);
+            }
+            return { ok: true, count: order.length, cyclic: false, order };
+        },
+    });
+    // --- pm-graph impact -----------------------------------------------------
+    api.registerCommand({
+        name: "pm-graph impact",
+        description: "List all items transitively blocked-by / downstream of an item id (reverse-reachable set) with a count.",
+        run: async (context) => {
+            if (hasHelpFlag(context)) {
+                return {
+                    usage: "pm pm-graph impact <id> [--include-closed] [--json]",
+                    description: "Compute the impact set of an item: every item that transitively depends on it (is blocked-by / downstream of it) over STRUCTURAL edges. Equivalent to the reverse-reachable set following edge direction. Complements `path` and `neighbors`. Reports the affected item ids and their count.",
+                    flags: {
+                        "--include-closed": "Include closed/canceled items",
+                        "--json": "Output as JSON",
+                    },
+                    example: "pm pm-graph impact pm-ep18 --json",
+                    output: {
+                        id: "The item whose downstream impact was computed",
+                        count: "Number of items transitively affected",
+                        impacted: "Sorted ids of all items transitively blocked-by/downstream of <id>",
+                    },
+                };
+            }
+            const flags = parseAnalyticsFlags(context.args ?? []);
+            const [id] = flags.positionals;
+            if (!id) {
+                throw new CommandError("Usage: pm pm-graph impact <id>\nExample: pm pm-graph impact pm-ep18", EXIT_CODE.USAGE);
+            }
+            const graph = shapedAnalyticsGraph(context, flags);
+            const items = itemNodeIds(graph);
+            if (!items.has(id)) {
+                throw new CommandError(`Item "${id}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+            }
+            const edges = structuralEdges(graph);
+            const impacted = reverseReachable(edges, id);
+            return { ok: true, id, count: impacted.length, impacted };
         },
     });
     // --- pm graph export -----------------------------------------------------
