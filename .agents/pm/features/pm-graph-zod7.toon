@@ -1,0 +1,21 @@
+id: pm-graph-zod7
+title: Report bottleneck connectors in graph analytics
+description: ""
+type: Feature
+status: closed
+priority: 1
+tags[2]: context-management,enhancement
+created_at: "2026-06-06T19:32:02.478Z"
+updated_at: "2026-06-06T19:32:03.464Z"
+author: codex
+files[4]{path,scope,note}:
+  dist/index.d.ts,project,implementation
+  dist/index.js,project,implementation
+  src/index.ts,project,implementation
+  test/analytics.test.ts,project,implementation
+tests[1]{command,path,scope,timeout_seconds,pm_context_mode,env_set,env_clear,shared_host_safe,assert_stdout_contains,assert_stdout_regex,assert_stderr_contains,assert_stderr_regex,assert_stdout_min_lines,assert_json_field_equals,assert_json_field_gte,note}:
+  PM_PATH=.agents/pm PM_GLOBAL_PATH=.agents/pm Graph analytics now report structural bottleneck connectors with tests.,null,project,240,null,null,null,null,null,null,null,null,null,null,null,package verification
+docs[1]{path,scope,note}:
+  README.md,project,Graph docs cover articulation points and bridge edges
+close_reason: npm test
+body: Add articulation point and bridge-edge analytics to offline graph analyze reports so users can spot project-context bottlenecks without Neo4j.

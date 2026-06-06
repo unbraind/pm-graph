@@ -1085,6 +1085,60 @@ export function dependencyDepths(nodes, edges) {
         depths.set(node, dfs(node));
     return depths;
 }
+export function criticalConnectors(nodes, edges) {
+    const nodeSet = new Set(nodes);
+    const adjacency = new Map();
+    for (const id of nodes)
+        adjacency.set(id, new Set());
+    for (const edge of edges) {
+        if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to) || edge.from === edge.to)
+            continue;
+        adjacency.get(edge.from)?.add(edge.to);
+        adjacency.get(edge.to)?.add(edge.from);
+    }
+    const disc = new Map();
+    const low = new Map();
+    const parent = new Map();
+    const articulation = new Set();
+    const bridges = [];
+    let time = 0;
+    const visit = (u) => {
+        disc.set(u, ++time);
+        low.set(u, disc.get(u));
+        let childCount = 0;
+        for (const v of [...(adjacency.get(u) ?? [])].sort()) {
+            if (!disc.has(v)) {
+                parent.set(v, u);
+                childCount++;
+                visit(v);
+                low.set(u, Math.min(low.get(u), low.get(v)));
+                const uParent = parent.get(u) ?? null;
+                if (uParent === null && childCount > 1)
+                    articulation.add(u);
+                if (uParent !== null && low.get(v) >= disc.get(u))
+                    articulation.add(u);
+                if (low.get(v) > disc.get(u)) {
+                    const [from, to] = [u, v].sort();
+                    bridges.push({ from, to });
+                }
+            }
+            else if (v !== parent.get(u)) {
+                low.set(u, Math.min(low.get(u), disc.get(v)));
+            }
+        }
+    };
+    for (const id of [...nodes].sort()) {
+        if (!disc.has(id)) {
+            parent.set(id, null);
+            visit(id);
+        }
+    }
+    bridges.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+    return {
+        articulationPoints: [...articulation].sort(),
+        bridges,
+    };
+}
 /**
  * Compute a comprehensive offline graph-health report from a shaped graph.
  * All analytics operate on structural edges between item nodes only.
@@ -1155,6 +1209,7 @@ export function analyzeGraph(graph, topN = 10) {
         .map((id) => ({ id, depth: depths.get(id) ?? 0 }))
         .sort((a, b) => b.depth - a.depth || a.id.localeCompare(b.id));
     const maxDepth = depthByItem.reduce((max, d) => (d.depth > max ? d.depth : max), 0);
+    const connectors = criticalConnectors(items, edges);
     return {
         workspace: graph.workspace,
         projectKey: graph.projectKey,
@@ -1176,6 +1231,10 @@ export function analyzeGraph(graph, topN = 10) {
         topDegreeCentrality,
         maxDepth,
         depthByItem,
+        articulationPointCount: connectors.articulationPoints.length,
+        articulationPoints: connectors.articulationPoints,
+        bridgeEdgeCount: connectors.bridges.length,
+        bridgeEdges: connectors.bridges,
     };
 }
 async function syncNeo4j(graph, options) {
@@ -1595,7 +1654,7 @@ export function activate(api) {
     // --- pm-graph analyze ----------------------------------------------------
     api.registerCommand({
         name: "pm-graph analyze",
-        description: "Comprehensive offline graph-health report: cycles, orphans, roots, leaves, longest chain, degree centrality, components, blocked items.",
+        description: "Comprehensive offline graph-health report: cycles, orphans, roots, leaves, longest chain, bottleneck connectors, degree centrality, components, blocked items.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
                 return {
@@ -1620,6 +1679,8 @@ export function activate(api) {
                         topDegreeCentrality: "Top-N items by total degree",
                         maxDepth: "Longest dependency depth across all items (critical-path depth)",
                         depthByItem: "Per-item dependency depth (longest path from the item to a leaf), sorted deepest-first",
+                        articulationPoints: "Items whose removal disconnects part of the structural graph",
+                        bridgeEdges: "Structural item-to-item links whose removal disconnects part of the structural graph",
                     },
                 };
             }
