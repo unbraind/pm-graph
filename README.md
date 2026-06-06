@@ -6,7 +6,7 @@ The extension reads the current workspace through `pm list-all --json` and `pm d
 
 It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm graph export` — with neighborhood (`--root`/`--depth`) and edge-type (`--edges`) shaping.
 
-It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact` run dependency-cycle detection, shortest-path, longest-chain, topological ordering, downstream-impact, orphan/root/leaf and centrality analysis directly against your workspace.
+It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact` run dependency-cycle detection, shortest-path, longest-chain, topological ordering, downstream-impact, orphan/root/leaf, bottleneck connector, and centrality analysis directly against your workspace.
 
 ## Quick Start
 
@@ -296,7 +296,7 @@ Closed/canceled items are excluded by default; pass `--include-closed` to keep t
 
 ### `pm pm-graph analyze`
 
-Comprehensive graph-health report: dependency-cycle count, orphan items (no edges), root items (no incoming dependency), leaf items (no outgoing dependency), longest dependency chain, top-N degree-centrality items, connected-component count, and blocked-item count.
+Comprehensive graph-health report: dependency-cycle count, orphan items (no edges), root items (no incoming dependency), leaf items (no outgoing dependency), longest dependency chain, top-N degree-centrality items, connected-component count, blocked-item count, and bottleneck connectors.
 
 ```bash
 pm pm-graph analyze --json
@@ -322,11 +322,19 @@ Example output (abbreviated):
   "blockedItemCount": 5,
   "topDegreeCentrality": [{ "id": "pm-ep18", "degree": 2, "inDegree": 0, "outDegree": 2 }],
   "maxDepth": 3,
-  "depthByItem": [{ "id": "pm-hd71", "depth": 3 }, { "id": "pm-p2q3", "depth": 2 }]
+  "depthByItem": [{ "id": "pm-hd71", "depth": 3 }, { "id": "pm-p2q3", "depth": 2 }],
+  "articulationPoints": ["pm-p2q3"],
+  "bridgeEdges": [{ "from": "pm-k849", "to": "pm-p2q3" }]
 }
 ```
 
 The `maxDepth` and `depthByItem` fields report the **dependency depth** of each item — the number of edges on the longest directed structural path starting at the item (its distance to a leaf along blocker edges). A leaf has depth `0`; `maxDepth` equals the critical-path depth. `depthByItem` is sorted deepest-first. These fields are additive; all previously emitted fields are unchanged.
+
+The `articulationPoints` and `bridgeEdges` fields report bottlenecks in the
+undirected structural projection: an articulation point is an item whose removal
+disconnects part of the dependency context, and a bridge edge is a structural
+item-to-item link whose removal does the same. These are useful for spotting
+single points of coordination failure in a large pm workspace.
 
 ### `pm pm-graph cycles`
 
