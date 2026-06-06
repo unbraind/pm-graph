@@ -1,5 +1,10 @@
 node_modules/
 npm-debug.log*
 .DS_Store
+*.tgz
+RELEASE_NOTES.md
 
 dist-test/
+.agents/pm/locks/
+.agents/pm/runtime/
+.agents/pm/search/
