@@ -11,6 +11,7 @@ import {
   topoSort,
   reverseReachable,
   dependencyDepths,
+  criticalConnectors,
 } from "../dist/index.js";
 
 // The renderers and analytics helpers are exported from the compiled module.
@@ -137,6 +138,8 @@ test("analyzeGraph computes the expected health metrics", () => {
   assert.strictEqual(report.connectedComponents, 3);
   assert.deepStrictEqual(report.blockedItems.sort(), ["B", "C", "D", "E", "F"]);
   assert.ok(report.topDegreeCentrality.length > 0);
+  assert.deepStrictEqual(report.articulationPoints, ["B", "C"]);
+  assert.ok(report.bridgeEdges.some((e: { from: string; to: string }) => e.from === "A" && e.to === "B"));
 });
 
 test("analyzeGraph ignores facet/tag edges entirely", () => {
@@ -258,4 +261,23 @@ test("analyzeGraph exposes maxDepth and depthByItem", () => {
   const byId = new Map(report.depthByItem.map((d: { id: string; depth: number }) => [d.id, d.depth]));
   assert.strictEqual(byId.get("A"), 0);
   assert.strictEqual(byId.get("O"), 0, "orphan depth 0");
+});
+
+test("criticalConnectors finds articulation points and bridge edges in the undirected structural projection", () => {
+  const result = criticalConnectors(["A", "B", "C", "D"], chainEdges);
+  assert.deepStrictEqual(result.articulationPoints, ["B", "C"]);
+  assert.deepStrictEqual(result.bridges, [
+    { from: "A", to: "B" },
+    { from: "B", to: "C" },
+    { from: "C", to: "D" },
+  ]);
+
+  const triangle: Edge[] = [
+    { from: "A", to: "B", type: "BLOCKED_BY" },
+    { from: "B", to: "C", type: "BLOCKED_BY" },
+    { from: "C", to: "A", type: "BLOCKED_BY" },
+  ];
+  const noSingleConnector = criticalConnectors(["A", "B", "C"], triangle);
+  assert.deepStrictEqual(noSingleConnector.articulationPoints, []);
+  assert.deepStrictEqual(noSingleConnector.bridges, []);
 });
