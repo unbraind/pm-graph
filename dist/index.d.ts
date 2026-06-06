@@ -106,6 +106,13 @@ export declare function reverseReachable(edges: StructuralEdge[], start: string)
  * deepest node is exactly the far end of the critical path.
  */
 export declare function dependencyDepths(nodes: string[], edges: StructuralEdge[]): Map<string, number>;
+export declare function criticalConnectors(nodes: string[], edges: StructuralEdge[]): {
+    articulationPoints: string[];
+    bridges: Array<{
+        from: string;
+        to: string;
+    }>;
+};
 type AnalyzeReport = {
     workspace: string;
     projectKey: string;
@@ -134,6 +141,13 @@ type AnalyzeReport = {
     depthByItem: Array<{
         id: string;
         depth: number;
+    }>;
+    articulationPointCount: number;
+    articulationPoints: string[];
+    bridgeEdgeCount: number;
+    bridgeEdges: Array<{
+        from: string;
+        to: string;
     }>;
 };
 /**
