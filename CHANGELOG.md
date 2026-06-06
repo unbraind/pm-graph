@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Report bottleneck connectors in graph analytics ([pm-graph-zod7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-zod7.toon))
+
 ### Other
 
 - Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-graph-bnsw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-bnsw.toon))
