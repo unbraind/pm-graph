@@ -19,12 +19,12 @@
     "test": "npm run build && npm run build:test && node --test dist-test/*.js"
   },
   "dependencies": {
-    "neo4j-driver": "^5.28.1"
+    "neo4j-driver": "^6.1.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
-    "@unbrained/pm-cli": "^2026.5.31",
-    "pm-changelog": "^2026.6.2",
+    "@types/node": "^25.9.2",
+    "@unbrained/pm-cli": "^2026.6.6",
+    "pm-changelog": "^2026.6.6",
     "typescript": "^6.0.3"
   },
   "files": [
