@@ -23,8 +23,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
-    "@unbrained/pm-cli": "^2026.6.6",
-    "pm-changelog": "^2026.6.6",
+    "@unbrained/pm-cli": "^2026.6.7",
+    "pm-changelog": "^2026.6.7",
     "typescript": "^6.0.3"
   },
   "files": [
@@ -44,7 +44,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.5.31"
+    "@unbrained/pm-cli": ">=2026.6.7"
   },
   "engines": {
     "node": ">=20.0.0"
