@@ -16,6 +16,7 @@ import {
   criticalPathSubgraph,
   cyclesSubgraph,
   renderAnalysisDiagram,
+  explainItem,
 } from "../dist/index.js";
 
 // The renderers and analytics helpers are exported from the compiled module.
@@ -152,6 +153,33 @@ test("analyzeGraph ignores facet/tag edges entirely", () => {
   // and structuralEdgeCount would be 7 instead of 5.
   assert.strictEqual(report.structuralEdgeCount, 5);
   assert.ok(report.leaves.includes("A"), "A stays a leaf without facet edges");
+});
+
+test("explainItem reports blockers/dependents/impact for an acyclic item", () => {
+  const report = explainItem(syntheticGraph as any, "B");
+  assert.ok(report, "item should be explainable");
+  assert.strictEqual(report!.id, "B");
+  assert.deepStrictEqual(report!.blockers.map((n) => n.id), ["A"]);
+  assert.deepStrictEqual(report!.dependents.map((n) => n.id), ["C"]);
+  assert.deepStrictEqual(report!.transitiveDependents, ["C", "D"]);
+  assert.strictEqual(report!.dependencyDepth, 1);
+  assert.deepStrictEqual(report!.criticalChainFromItem, ["B", "A"]);
+  assert.strictEqual(report!.inCycle, false);
+  assert.strictEqual(report!.cycleCount, 0);
+});
+
+test("explainItem reports cycle participation for a cyclic item", () => {
+  const report = explainItem(syntheticGraph as any, "E");
+  assert.ok(report, "item should be explainable");
+  assert.strictEqual(report!.inCycle, true);
+  assert.strictEqual(report!.cycleCount, 1);
+  assert.deepStrictEqual([...new Set(report!.cycles[0])].sort(), ["E", "F"]);
+  assert.deepStrictEqual(report!.blockers.map((n) => n.id), ["F"]);
+  assert.deepStrictEqual(report!.dependents.map((n) => n.id), ["F"]);
+});
+
+test("explainItem returns null for unknown item ids", () => {
+  assert.strictEqual(explainItem(syntheticGraph as any, "missing-id"), null);
 });
 
 // --- renderers ------------------------------------------------------------

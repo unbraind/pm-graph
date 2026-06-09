@@ -176,6 +176,40 @@ type AnalyzeReport = {
         to: string;
     }>;
 };
+export type ExplainNeighbor = {
+    id: string;
+    title: string;
+    status: string | null;
+    relationTypes: string[];
+};
+export type ExplainReport = {
+    id: string;
+    item: {
+        id: string;
+        title: string;
+        type: string;
+        status: string;
+        priority: number | null;
+        assignee: string | null;
+        sprint: string | null;
+        release: string | null;
+        deadline: string | null;
+    };
+    blockers: ExplainNeighbor[];
+    dependents: ExplainNeighbor[];
+    transitiveDependents: string[];
+    dependencyDepth: number;
+    criticalChainFromItem: string[];
+    inCycle: boolean;
+    cycleCount: number;
+    cycles: string[][];
+};
+/**
+ * Build a focused, agent-friendly report for a single item id:
+ * immediate blockers/dependents, transitive impact, depth, critical chain
+ * from the item, and cycle participation.
+ */
+export declare function explainItem(graph: Graph, id: string): ExplainReport | null;
 /**
  * Compute a comprehensive offline graph-health report from a shaped graph.
  * All analytics operate on structural edges between item nodes only.
