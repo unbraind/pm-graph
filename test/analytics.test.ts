@@ -12,6 +12,10 @@ import {
   reverseReachable,
   dependencyDepths,
   criticalConnectors,
+  projectSubgraph,
+  criticalPathSubgraph,
+  cyclesSubgraph,
+  renderAnalysisDiagram,
 } from "../dist/index.js";
 
 // The renderers and analytics helpers are exported from the compiled module.
@@ -280,4 +284,100 @@ test("criticalConnectors finds articulation points and bridge edges in the undir
   const noSingleConnector = criticalConnectors(["A", "B", "C"], triangle);
   assert.deepStrictEqual(noSingleConnector.articulationPoints, []);
   assert.deepStrictEqual(noSingleConnector.bridges, []);
+});
+
+// --- analysis diagram subgraphs (critical-path / cycles --format) ---------
+
+// A graph with a 4-node dependency chain D->C->B->A, a separate E<->F cycle,
+// an orphan O, and facet/tag noise that must never leak into the subgraphs.
+const diagramGraph = {
+  generatedAt: "2026-06-02T00:00:00.000Z",
+  workspace: "/tmp/ws",
+  projectKey: "ws",
+  nodes: [
+    node("A"), node("B"), node("C"), node("D"),
+    node("E"), node("F"), node("O"),
+    { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
+  ],
+  relationships: [
+    rel("D", "C", "BLOCKED_BY"),
+    rel("C", "B", "BLOCKED_BY"),
+    rel("B", "A", "BLOCKED_BY"),
+    rel("E", "F", "BLOCKED_BY"),
+    rel("F", "E", "BLOCKED_BY"),
+    rel("A", "status:open", "HAS_STATUS"),
+    rel("B", "tag:backend", "TAGGED_WITH"),
+  ],
+};
+
+test("criticalPathSubgraph contains exactly the chain nodes and connecting edges", () => {
+  const chain = longestChain(["A", "B", "C", "D"], chainEdges); // D,C,B,A
+  const sub = criticalPathSubgraph(diagramGraph as any, chain);
+  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["D", "C", "B", "A"]);
+  assert.strictEqual(sub.relationships.length, 3, "three consecutive chain edges");
+  for (const r of sub.relationships) {
+    assert.strictEqual(r.type, "BLOCKED_BY");
+  }
+  // No cycle node, orphan, or facet node may appear.
+  for (const id of ["E", "F", "O", "status:open"]) {
+    assert.ok(!sub.nodes.some((n: any) => n.id === id), `${id} excluded`);
+  }
+});
+
+test("critical-path --format mermaid emits a mermaid graph with exactly the chain nodes", () => {
+  const chain = longestChain(["A", "B", "C", "D"], chainEdges);
+  const out = renderAnalysisDiagram("mermaid", criticalPathSubgraph(diagramGraph as any, chain));
+  assert.ok(out.startsWith("graph TD"), "is a mermaid graph");
+  for (const id of ["A", "B", "C", "D"]) {
+    assert.ok(out.includes(`n_${id}[`), `chain node ${id} present`);
+  }
+  for (const id of ["E", "F", "O"]) {
+    assert.ok(!new RegExp(`\\bn_${id}\\b`).test(out), `non-chain node ${id} absent`);
+  }
+  // Exactly the three chain edges, in chain order, no facet/tag edges.
+  const edgeLines = out.split("\n").filter((l) => l.includes("-->"));
+  assert.deepStrictEqual(edgeLines.map((l) => l.trim()), [
+    "n_D -->|BLOCKED_BY| n_C",
+    "n_C -->|BLOCKED_BY| n_B",
+    "n_B -->|BLOCKED_BY| n_A",
+  ]);
+});
+
+test("cyclesSubgraph contains only cycle-participating nodes and edges", () => {
+  const edges = [...chainEdges, ...cycleEdges];
+  const cycles = findCycles(["A", "B", "C", "D", "E", "F"], edges);
+  const sub = cyclesSubgraph(diagramGraph as any, cycles);
+  assert.deepStrictEqual([...sub.nodes.map((n: any) => n.id)].sort(), ["E", "F"]);
+  assert.strictEqual(sub.relationships.length, 2, "the two edges around the E<->F cycle");
+  for (const id of ["A", "B", "C", "D", "O", "status:open"]) {
+    assert.ok(!sub.nodes.some((n: any) => n.id === id), `${id} excluded`);
+  }
+});
+
+test("cycles --format graphml emits only the cycle-participating nodes/edges", () => {
+  const edges = [...chainEdges, ...cycleEdges];
+  const cycles = findCycles(["A", "B", "C", "D", "E", "F"], edges);
+  const xml = renderAnalysisDiagram("graphml", cyclesSubgraph(diagramGraph as any, cycles));
+  assert.ok(xml.startsWith('<?xml version="1.0"'), "is GraphML");
+  assert.ok(xml.includes('<node id="E">') && xml.includes('<node id="F">'), "both cycle nodes present");
+  for (const id of ["A", "B", "C", "D", "O"]) {
+    assert.ok(!xml.includes(`<node id="${id}">`), `non-cycle node ${id} absent`);
+  }
+  // Exactly two edges, both directed E<->F, no facet/tag edges.
+  const edgeCount = (xml.match(/<edge /g) ?? []).length;
+  assert.strictEqual(edgeCount, 2, "exactly the two cycle edges");
+  assert.ok(xml.includes('source="E" target="F"') && xml.includes('source="F" target="E"'));
+});
+
+test("projectSubgraph never invents edges absent from the source graph", () => {
+  // Ask for an edge key (A->D) that does not exist among structural edges.
+  const sub = projectSubgraph(diagramGraph as any, ["A", "D"], ["A->D"]);
+  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "D"]);
+  assert.strictEqual(sub.relationships.length, 0, "no fabricated edge");
+});
+
+test("renderAnalysisDiagram on the chain subgraph equals renderGraphml of the same subgraph (renderer reuse)", () => {
+  const chain = longestChain(["A", "B", "C", "D"], chainEdges);
+  const sub = criticalPathSubgraph(diagramGraph as any, chain);
+  assert.strictEqual(renderAnalysisDiagram("graphml", sub), renderGraphml(sub as any));
 });
