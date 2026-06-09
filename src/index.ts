@@ -693,19 +693,19 @@ function parseAnalyticsFlags(args: string[]): AnalyticsFlags {
  * Load a graph for a context and apply the shared analytics shaping
  * (structural edges only is enforced downstream; here we only honor
  * --include-closed and an optional --root/--depth neighborhood). Throws
- * NOT_FOUND when --root is absent from the workspace.
+ * NOT_FOUND when --root cannot be resolved to a unique workspace item id.
  */
 function shapedAnalyticsGraph(context: CommandContext, flags: AnalyticsFlags): Graph {
   const full = loadGraphForContext(context);
-  if (flags.root && !full.nodes.some((n) => n.id === flags.root)) {
-    throw new CommandError(`--root node "${flags.root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
-  }
+  const resolvedRoot = flags.root
+    ? resolveItemIdOrThrow([...itemNodeIds(full)].sort(), flags.root, "--root node").resolved
+    : undefined;
   // Restrict to structural edges so neighborhood shaping follows dependencies,
   // not facet/tag links. The analytics functions also re-filter defensively.
   return shapeGraph(full, {
     edges: "deps",
     includeClosed: flags.includeClosed,
-    rootId: flags.root,
+    rootId: resolvedRoot,
     depth: flags.depth,
   });
 }
@@ -1511,6 +1511,219 @@ type AnalyzeReport = {
   bridgeEdges: Array<{ from: string; to: string }>;
 };
 
+export type ExplainNeighbor = {
+  id: string;
+  title: string;
+  status: string | null;
+  relationTypes: string[];
+};
+
+export type ExplainReport = {
+  id: string;
+  item: {
+    id: string;
+    title: string;
+    type: string;
+    status: string;
+    priority: number | null;
+    assignee: string | null;
+    sprint: string | null;
+    release: string | null;
+    deadline: string | null;
+  };
+  blockers: ExplainNeighbor[];
+  dependents: ExplainNeighbor[];
+  transitiveDependents: string[];
+  dependencyDepth: number;
+  criticalChainFromItem: string[];
+  inCycle: boolean;
+  cycleCount: number;
+  cycles: string[][];
+};
+
+function readStringProperty(
+  properties: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = properties[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function readNumberProperty(
+  properties: Record<string, unknown>,
+  key: string,
+): number | null {
+  const value = properties[key];
+  if (typeof value === "number") return value;
+  if (
+    value &&
+    typeof value === "object" &&
+    "toNumber" in value &&
+    typeof (value as { toNumber?: unknown }).toNumber === "function"
+  ) {
+    return (value as { toNumber: () => number }).toNumber();
+  }
+  return null;
+}
+
+function itemTitle(node: GraphNode | undefined, fallbackId: string): string {
+  if (!node) return fallbackId;
+  const title = readStringProperty(node.properties, "title");
+  return title ?? node.id;
+}
+
+function itemStatus(node: GraphNode | undefined): string | null {
+  if (!node) return null;
+  return readStringProperty(node.properties, "status");
+}
+
+function itemNodeMap(graph: Graph): Map<string, GraphNode> {
+  const map = new Map<string, GraphNode>();
+  for (const node of graph.nodes) {
+    if (node.labels.includes("PmItem")) map.set(node.id, node);
+  }
+  return map;
+}
+
+/**
+ * Build a focused, agent-friendly report for a single item id:
+ * immediate blockers/dependents, transitive impact, depth, critical chain
+ * from the item, and cycle participation.
+ */
+export function explainItem(graph: Graph, id: string): ExplainReport | null {
+  const items = [...itemNodeIds(graph)].sort();
+  if (!items.includes(id)) return null;
+
+  const edges = structuralEdges(graph);
+  const nodesById = itemNodeMap(graph);
+  const node = nodesById.get(id);
+  if (!node) return null;
+
+  const blockerTypes = new Map<string, Set<string>>();
+  const dependentTypes = new Map<string, Set<string>>();
+  for (const edge of edges) {
+    if (edge.from === id) {
+      (blockerTypes.get(edge.to) ?? blockerTypes.set(edge.to, new Set()).get(edge.to)!).add(edge.type);
+    }
+    if (edge.to === id) {
+      (dependentTypes.get(edge.from) ?? dependentTypes.set(edge.from, new Set()).get(edge.from)!).add(edge.type);
+    }
+  }
+
+  const mapNeighbors = (index: Map<string, Set<string>>): ExplainNeighbor[] =>
+    [...index.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([neighborId, types]) => ({
+        id: neighborId,
+        title: itemTitle(nodesById.get(neighborId), neighborId),
+        status: itemStatus(nodesById.get(neighborId)),
+        relationTypes: [...types].sort(),
+      }));
+
+  const depths = dependencyDepths(items, edges);
+  const cycles = findCycles(items, edges).filter((cycle) => cycle.includes(id));
+
+  return {
+    id,
+    item: {
+      id: node.id,
+      title: itemTitle(node, id),
+      type: readStringProperty(node.properties, "type") ?? "Item",
+      status: readStringProperty(node.properties, "status") ?? "unknown",
+      priority: readNumberProperty(node.properties, "priority"),
+      assignee: readStringProperty(node.properties, "assignee"),
+      sprint: readStringProperty(node.properties, "sprint"),
+      release: readStringProperty(node.properties, "release"),
+      deadline: readStringProperty(node.properties, "deadline"),
+    },
+    blockers: mapNeighbors(blockerTypes),
+    dependents: mapNeighbors(dependentTypes),
+    transitiveDependents: reverseReachable(edges, id),
+    dependencyDepth: depths.get(id) ?? 0,
+    criticalChainFromItem: longestChain([id], edges),
+    inCycle: cycles.length > 0,
+    cycleCount: cycles.length,
+    cycles,
+  };
+}
+
+function sharedPrefixLength(a: string, b: string): number {
+  const max = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < max && a[i] === b[i]) i++;
+  return i;
+}
+
+function suggestItemIds(itemIds: string[], input: string, limit: number = 5): string[] {
+  const query = input.trim().toLowerCase();
+  if (!query) return [];
+  return itemIds
+    .map((id) => {
+      const value = id.toLowerCase();
+      const startsWith = value.startsWith(query);
+      const includes = value.includes(query);
+      const sharedPrefix = sharedPrefixLength(value, query);
+      return { id, startsWith, includes, sharedPrefix };
+    })
+    .filter((candidate) => candidate.includes || candidate.sharedPrefix >= 3)
+    .sort((a, b) =>
+      Number(b.startsWith) - Number(a.startsWith) ||
+      Number(b.includes) - Number(a.includes) ||
+      b.sharedPrefix - a.sharedPrefix ||
+      a.id.localeCompare(b.id)
+    )
+    .slice(0, limit)
+    .map((candidate) => candidate.id);
+}
+
+type ItemIdResolution = {
+  input: string;
+  resolved: string;
+  strategy: "exact" | "case-insensitive" | "prefix";
+};
+
+function ambiguousItemIdError(label: string, input: string, matches: string[]): CommandError {
+  const shown = matches.slice(0, 5);
+  const more = matches.length > shown.length ? ` (+${matches.length - shown.length} more)` : "";
+  return new CommandError(
+    `${label} "${input}" is ambiguous in the workspace graph. Matches: ${shown.join(", ")}${more}. Use a longer prefix or the full id.`,
+    EXIT_CODE.NOT_FOUND,
+  );
+}
+
+function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution {
+  const requested = input.trim();
+  const ids = [...new Set(itemIds)].sort((a, b) => a.localeCompare(b));
+
+  if (ids.includes(requested)) {
+    return { input: requested, resolved: requested, strategy: "exact" };
+  }
+
+  const query = requested.toLowerCase();
+  const caseInsensitive = ids.filter((id) => id.toLowerCase() === query);
+  if (caseInsensitive.length === 1) {
+    return { input: requested, resolved: caseInsensitive[0], strategy: "case-insensitive" };
+  }
+  if (caseInsensitive.length > 1) {
+    throw ambiguousItemIdError(label, requested, caseInsensitive);
+  }
+
+  const prefix = ids.filter((id) => id.toLowerCase().startsWith(query));
+  if (prefix.length === 1) {
+    return { input: requested, resolved: prefix[0], strategy: "prefix" };
+  }
+  if (prefix.length > 1) {
+    throw ambiguousItemIdError(label, requested, prefix);
+  }
+
+  const candidates = suggestItemIds(ids, requested);
+  const hint = candidates.length > 0 ? ` Did you mean: ${candidates.join(", ")}?` : "";
+  throw new CommandError(
+    `${label} "${requested}" was not found in the workspace graph.${hint}`,
+    EXIT_CODE.NOT_FOUND,
+  );
+}
+
 /**
  * Compute a comprehensive offline graph-health report from a shaped graph.
  * All analytics operate on structural edges between item nodes only.
@@ -2234,7 +2447,7 @@ export function activate(api: ExtensionApi): void {
         return {
           usage: "pm pm-graph path <from> <to> [--include-closed] [--json]",
           description:
-            "Compute the shortest directed dependency path from <from> to <to> via BFS over STRUCTURAL edges. Reports the ordered id path or that no path exists.",
+            "Compute the shortest directed dependency path from <from> to <to> via BFS over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
@@ -2258,19 +2471,15 @@ export function activate(api: ExtensionApi): void {
         );
       }
       const graph = shapedAnalyticsGraph(context, flags);
-      const items = itemNodeIds(graph);
-      if (!items.has(from)) {
-        throw new CommandError(`Item "${from}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
-      }
-      if (!items.has(to)) {
-        throw new CommandError(`Item "${to}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
-      }
+      const itemIds = [...itemNodeIds(graph)].sort();
+      const resolvedFrom = resolveItemIdOrThrow(itemIds, from, "Source item").resolved;
+      const resolvedTo = resolveItemIdOrThrow(itemIds, to, "Target item").resolved;
       const edges = structuralEdges(graph);
-      const path = shortestPath(edges, from, to);
+      const path = shortestPath(edges, resolvedFrom, resolvedTo);
       return {
         ok: true,
-        from,
-        to,
+        from: resolvedFrom,
+        to: resolvedTo,
         found: path !== null,
         path,
         length: path ? path.length - 1 : null,
@@ -2370,7 +2579,7 @@ export function activate(api: ExtensionApi): void {
         return {
           usage: "pm pm-graph impact <id> [--include-closed] [--json]",
           description:
-            "Compute the impact set of an item: every item that transitively depends on it (is blocked-by / downstream of it) over STRUCTURAL edges. Equivalent to the reverse-reachable set following edge direction. Complements `path` and `neighbors`. Reports the affected item ids and their count.",
+            "Compute the impact set of an item: every item that transitively depends on it (is blocked-by / downstream of it) over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
@@ -2392,13 +2601,61 @@ export function activate(api: ExtensionApi): void {
         );
       }
       const graph = shapedAnalyticsGraph(context, flags);
-      const items = itemNodeIds(graph);
-      if (!items.has(id)) {
-        throw new CommandError(`Item "${id}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
-      }
+      const itemIds = [...itemNodeIds(graph)].sort();
+      const resolvedId = resolveItemIdOrThrow(itemIds, id, "Item").resolved;
       const edges = structuralEdges(graph);
-      const impacted = reverseReachable(edges, id);
-      return { ok: true, id, count: impacted.length, impacted };
+      const impacted = reverseReachable(edges, resolvedId);
+      return { ok: true, id: resolvedId, count: impacted.length, impacted };
+    },
+  });
+
+  // --- pm-graph explain ----------------------------------------------------
+  api.registerCommand({
+    name: "pm-graph explain",
+    description:
+      "Explain a single item offline: blockers, dependents, transitive impact, depth, and cycle participation.",
+    run: async (context) => {
+      if (hasHelpFlag(context)) {
+        return {
+          usage: "pm pm-graph explain <id> [--include-closed] [--json]",
+          description:
+            "Build an offline item-centric dependency report for one id over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
+          flags: {
+            "--include-closed": "Include closed/canceled items",
+            "--json": "Output as JSON",
+          },
+          output: {
+            item: "Core item fields (id/title/type/status/priority/assignee/sprint/release/deadline)",
+            blockers: "Immediate blockers/dependencies with relation types",
+            dependents: "Immediate downstream dependents with relation types",
+            transitiveDependents: "All transitively downstream items",
+            dependencyDepth: "Longest directed blocker distance from the item to a leaf",
+            criticalChainFromItem: "Longest dependency chain starting at the item",
+            cycleCount: "Number of dependency cycles containing this item",
+          },
+        };
+      }
+      const flags = parseAnalyticsFlags(context.args ?? []);
+      const [id] = flags.positionals;
+      if (!id) {
+        throw new CommandError(
+          "Usage: pm pm-graph explain <id>\nExample: pm pm-graph explain pm-ep18",
+          EXIT_CODE.USAGE,
+        );
+      }
+      const graph = shapeGraph(loadGraphForContext(context), {
+        edges: "deps",
+        includeClosed: flags.includeClosed,
+      });
+      const resolvedId = resolveItemIdOrThrow([...itemNodeIds(graph)].sort(), id, "Item").resolved;
+      const report = explainItem(graph, resolvedId);
+      if (!report) {
+        throw new CommandError(
+          `Item "${resolvedId}" was not found in the workspace graph.`,
+          EXIT_CODE.NOT_FOUND,
+        );
+      }
+      return { ok: true, ...report };
     },
   });
 
