@@ -113,6 +113,32 @@ export declare function criticalConnectors(nodes: string[], edges: StructuralEdg
         to: string;
     }>;
 };
+/** Diagram output formats supported by the analysis commands. */
+export type AnalysisDiagramFormat = "mermaid" | "graphml";
+/**
+ * Project a subgraph of `graph` containing exactly the nodes in `nodeIds` (in
+ * the order given, de-duplicated) and exactly the relationships identified by
+ * `edgeKeys` (each `${from}->${to}`). Node properties/labels and relationship
+ * properties are preserved verbatim from the source graph so the existing
+ * renderers (renderMermaid / renderGraphml) produce labelled output. Edge keys
+ * that have no matching relationship in the source graph are skipped, so the
+ * subgraph never invents edges.
+ */
+export declare function projectSubgraph(graph: Graph, nodeIds: string[], edgeKeys: string[]): Graph;
+/**
+ * Build the subgraph for a critical-path `chain` (an ordered id list): the
+ * chain nodes plus the consecutive edges that connect them.
+ */
+export declare function criticalPathSubgraph(graph: Graph, chain: string[]): Graph;
+/**
+ * Build the subgraph for a set of detected `cycles` (each a closed id path
+ * whose first === last): the union of all participating nodes plus the
+ * consecutive edges around every cycle. Node order is the first-seen order
+ * across cycles for deterministic output.
+ */
+export declare function cyclesSubgraph(graph: Graph, cycles: string[][]): Graph;
+/** Render an analysis subgraph via the existing full-graph renderers. */
+export declare function renderAnalysisDiagram(format: AnalysisDiagramFormat, graph: Graph): string;
 type AnalyzeReport = {
     workspace: string;
     projectKey: string;
