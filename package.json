@@ -16,15 +16,16 @@
     "changelog:check": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --check",
     "release:check": "npm run typecheck && npm run build && npm test && npm run audit:prod && npm run pack:dry-run && npm run changelog:check",
     "prepack": "npm run build",
-    "test": "npm run build && npm run build:test && node --test dist-test/*.js"
+    "test": "npm run build && npm run build:test && node --test dist-test/*.js",
+    "prepublishOnly": "npm run release:check"
   },
   "dependencies": {
     "neo4j-driver": "^6.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
-    "@unbrained/pm-cli": "^2026.6.7",
-    "pm-changelog": "^2026.6.7",
+    "@unbrained/pm-cli": "^2026.6.9",
+    "pm-changelog": "^2026.6.8",
     "typescript": "^6.0.3"
   },
   "files": [
@@ -88,5 +89,8 @@
     "examples": [
       "README.md"
     ]
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
