@@ -292,7 +292,7 @@ Example output:
 
 These commands analyze the workspace dependency graph **entirely offline** — no Neo4j required. They operate on **structural edges only** (`BLOCKED_BY`, `CHILD_OF`, and dependency edges such as `BLOCKS`/`RELATED`) between real items; facet edges (type/status/assignee/sprint/release) and tag edges are deliberately excluded so cycle, path, and centrality results stay meaningful.
 
-Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood.
+Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood. `cycles` and `critical-path` additionally accept `--format <text|mermaid|graphml>` (default `text`) to render the relevant subgraph as a diagram for docs.
 
 ### `pm pm-graph analyze`
 
@@ -341,14 +341,18 @@ single points of coordination failure in a large pm workspace.
 Detect and list dependency cycles. Each cycle is printed as an ordered id path (first id equals last). **Exits with code 1 when any cycle exists** (so it can gate CI) and exits 0 when there are none.
 
 ```bash
-pm pm-graph cycles            # human-readable; exit 1 if cycles found
-pm pm-graph cycles --json     # machine-readable
+pm pm-graph cycles                     # human-readable; exit 1 if cycles found
+pm pm-graph cycles --json              # machine-readable
+pm pm-graph cycles --format mermaid    # render the cycle subgraph as Mermaid, then exit 1
+pm pm-graph cycles --format graphml    # render the cycle subgraph as GraphML, then exit 1
 ```
 
 ```jsonc
 // no cycles -> exit 0
 { "ok": true, "cycleCount": 0, "cycles": [] }
 ```
+
+Pass `--format mermaid` or `--format graphml` to visualize **only the cycle-participating** nodes and edges (the union of every detected cycle) as a diagram. The diagram is printed to stdout first, then the command still **exits 1** so it keeps gating CI. The subgraph is rendered with the same renderers as `pm graph export`, so it embeds directly in docs. `--format text` (the default) is unchanged. When there are no cycles, `--format` is a no-op (an empty diagram is meaningless) and the normal exit-0 result is returned.
 
 ### `pm pm-graph path`
 
@@ -368,11 +372,15 @@ The longest chain of blocking dependencies through the workspace — the critica
 
 ```bash
 pm pm-graph critical-path --json
+pm pm-graph critical-path --format mermaid     # render the critical-path chain as Mermaid
+pm pm-graph critical-path --format graphml     # render the critical-path chain as GraphML
 ```
 
 ```json
 { "ok": true, "length": 4, "path": ["pm-ep18", "pm-k849", "pm-p2q3", "pm-hd71"] }
 ```
+
+Pass `--format mermaid` or `--format graphml` to print the critical-path **chain** as a diagram — exactly the chain nodes plus the edges connecting them — to stdout, reusing the same renderers as `pm graph export`. `--format text` (the default) returns the result object unchanged.
 
 ### `pm pm-graph topo-sort`
 

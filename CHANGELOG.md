@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add --format mermaid/graphml to graph cycles and critical-path ([pm-graph-jqiv](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-jqiv.toon))
+
 ## 2026.06.07 - 2026-06-07
 
 ### Added
