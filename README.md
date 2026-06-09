@@ -6,7 +6,7 @@ The extension reads the current workspace through `pm list-all --json` and `pm d
 
 It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm graph export` — with neighborhood (`--root`/`--depth`) and edge-type (`--edges`) shaping.
 
-It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact` run dependency-cycle detection, shortest-path, longest-chain, topological ordering, downstream-impact, orphan/root/leaf, bottleneck connector, and centrality analysis directly against your workspace.
+It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `explain`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact` run dependency-cycle detection, item-centric dependency inspection, shortest-path, longest-chain, topological ordering, downstream-impact, orphan/root/leaf, bottleneck connector, and centrality analysis directly against your workspace.
 
 ## Quick Start
 
@@ -365,6 +365,33 @@ pm pm-graph path pm-ep18 pm-hd71 --json
 ```json
 { "ok": true, "from": "pm-ep18", "to": "pm-hd71", "found": true, "path": ["pm-ep18", "pm-hd71"], "length": 1 }
 ```
+
+### `pm pm-graph explain`
+
+Explain one item in a single offline report: immediate blockers, immediate dependents, transitive downstream impact, dependency depth, critical chain from the item, and cycle participation.
+
+```bash
+pm pm-graph explain pm-ep18 --json
+pm pm-graph explain pm-ep18 --include-closed --json
+```
+
+```json
+{
+  "ok": true,
+  "id": "pm-ep18",
+  "item": { "id": "pm-ep18", "title": "Platform baseline", "type": "Task", "status": "in_progress" },
+  "blockers": [{ "id": "pm-k849", "title": "Schema migration", "relationTypes": ["BLOCKED_BY"] }],
+  "dependents": [{ "id": "pm-y7ht", "title": "Write docs", "relationTypes": ["BLOCKED_BY"] }],
+  "transitiveDependents": ["pm-y7ht", "pm-z19r"],
+  "dependencyDepth": 2,
+  "criticalChainFromItem": ["pm-ep18", "pm-k849", "pm-p2q3"],
+  "inCycle": false,
+  "cycleCount": 0,
+  "cycles": []
+}
+```
+
+If the id is unknown, the command returns a not-found error and includes nearest id suggestions when available.
 
 ### `pm pm-graph critical-path`
 
