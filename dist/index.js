@@ -434,13 +434,22 @@ function loadGraphForContext(context) {
     }
     return graphFromItems(parsed.items ?? [], workspace, new Map());
 }
+/** Validate and normalise a `--format` value for the analysis commands. */
+function parseAnalysisFormat(value) {
+    const normalized = value.toLowerCase();
+    if (normalized === "text" || normalized === "mermaid" || normalized === "graphml") {
+        return normalized;
+    }
+    throw new CommandError(`Invalid --format "${value}" (expected: text | mermaid | graphml).`, EXIT_CODE.USAGE);
+}
 /**
- * Parse the shared analytics flags (--json, --include-closed, --root, --depth)
- * and collect remaining positional arguments. Throws a USAGE CommandError on a
- * malformed --depth or a value-less --root/--depth.
+ * Parse the shared analytics flags (--json, --include-closed, --root, --depth,
+ * --format) and collect remaining positional arguments. Throws a USAGE
+ * CommandError on a malformed --depth, an invalid --format, or a value-less
+ * --root/--depth/--format.
  */
 function parseAnalyticsFlags(args) {
-    const flags = { json: false, includeClosed: false, positionals: [] };
+    const flags = { json: false, includeClosed: false, format: "text", positionals: [] };
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg === "--json") {
@@ -475,6 +484,15 @@ function parseAnalyticsFlags(args) {
                 throw new CommandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
             flags.depth = parsed;
+        }
+        else if (arg === "--format") {
+            const value = args[++i];
+            if (value === undefined)
+                throw new CommandError("--format requires a value (text | mermaid | graphml).", EXIT_CODE.USAGE);
+            flags.format = parseAnalysisFormat(value);
+        }
+        else if (arg.startsWith("--format=")) {
+            flags.format = parseAnalysisFormat(arg.slice("--format=".length));
         }
         else if (arg === "--help" || arg === "-h") {
             // handled separately by hasHelpFlag
@@ -1140,6 +1158,85 @@ export function criticalConnectors(nodes, edges) {
     };
 }
 /**
+ * Project a subgraph of `graph` containing exactly the nodes in `nodeIds` (in
+ * the order given, de-duplicated) and exactly the relationships identified by
+ * `edgeKeys` (each `${from}->${to}`). Node properties/labels and relationship
+ * properties are preserved verbatim from the source graph so the existing
+ * renderers (renderMermaid / renderGraphml) produce labelled output. Edge keys
+ * that have no matching relationship in the source graph are skipped, so the
+ * subgraph never invents edges.
+ */
+export function projectSubgraph(graph, nodeIds, edgeKeys) {
+    const wanted = new Set(nodeIds);
+    const seenNode = new Set();
+    const nodesById = new Map();
+    for (const node of graph.nodes)
+        nodesById.set(node.id, node);
+    const nodes = [];
+    for (const id of nodeIds) {
+        if (seenNode.has(id))
+            continue;
+        seenNode.add(id);
+        const found = nodesById.get(id);
+        // Synthesize a minimal node if the source graph lacks it (defensive: keeps
+        // the diagram complete for ids that came from analytics but were pruned).
+        nodes.push(found ?? { id, labels: ["PmItem"], properties: { id, title: id } });
+    }
+    const keySet = new Set(edgeKeys);
+    const usedKey = new Set();
+    const relationships = [];
+    for (const rel of graph.relationships) {
+        if (!isStructuralEdge(rel.type))
+            continue;
+        if (!wanted.has(rel.from) || !wanted.has(rel.to))
+            continue;
+        const key = `${rel.from}->${rel.to}`;
+        if (!keySet.has(key) || usedKey.has(key))
+            continue;
+        usedKey.add(key);
+        relationships.push(rel);
+    }
+    return { ...graph, nodes, relationships };
+}
+/**
+ * Build the subgraph for a critical-path `chain` (an ordered id list): the
+ * chain nodes plus the consecutive edges that connect them.
+ */
+export function criticalPathSubgraph(graph, chain) {
+    const edgeKeys = [];
+    for (let i = 0; i < chain.length - 1; i++) {
+        edgeKeys.push(`${chain[i]}->${chain[i + 1]}`);
+    }
+    return projectSubgraph(graph, chain, edgeKeys);
+}
+/**
+ * Build the subgraph for a set of detected `cycles` (each a closed id path
+ * whose first === last): the union of all participating nodes plus the
+ * consecutive edges around every cycle. Node order is the first-seen order
+ * across cycles for deterministic output.
+ */
+export function cyclesSubgraph(graph, cycles) {
+    const nodeOrder = [];
+    const seen = new Set();
+    const edgeKeys = [];
+    for (const cycle of cycles) {
+        for (const id of cycle) {
+            if (!seen.has(id)) {
+                seen.add(id);
+                nodeOrder.push(id);
+            }
+        }
+        for (let i = 0; i < cycle.length - 1; i++) {
+            edgeKeys.push(`${cycle[i]}->${cycle[i + 1]}`);
+        }
+    }
+    return projectSubgraph(graph, nodeOrder, edgeKeys);
+}
+/** Render an analysis subgraph via the existing full-graph renderers. */
+export function renderAnalysisDiagram(format, graph) {
+    return format === "mermaid" ? renderMermaid(graph) : renderGraphml(graph);
+}
+/**
  * Compute a comprehensive offline graph-health report from a shaped graph.
  * All analytics operate on structural edges between item nodes only.
  */
@@ -1697,13 +1794,14 @@ export function activate(api) {
         run: async (context) => {
             if (hasHelpFlag(context)) {
                 return {
-                    usage: "pm pm-graph cycles [--root <id>] [--depth <n>] [--include-closed] [--json]",
-                    description: "Detect dependency cycles among STRUCTURAL edges (BLOCKED_BY + dependency edges, not facet/tag edges). Prints each cycle as an id path. Exits with code 1 when any cycle exists (so it can gate CI); exits 0 when there are none.",
+                    usage: "pm pm-graph cycles [--root <id>] [--depth <n>] [--include-closed] [--json] [--format <text|mermaid|graphml>]",
+                    description: "Detect dependency cycles among STRUCTURAL edges (BLOCKED_BY + dependency edges, not facet/tag edges). Prints each cycle as an id path. Exits with code 1 when any cycle exists (so it can gate CI); exits 0 when there are none. With --format mermaid|graphml, prints the cycle-participating subgraph (union of cycle nodes + their edges) as a diagram before exiting 1, for embedding in docs.",
                     flags: {
                         "--root <id>": "Restrict to the neighborhood of an item id",
                         "--depth <n>": "Max hop distance from --root",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
+                        "--format <text|mermaid|graphml>": "Output the cycle subgraph as a diagram (default text)",
                     },
                     output: {
                         cycleCount: "Number of distinct cycles",
@@ -1717,9 +1815,16 @@ export function activate(api) {
             const items = [...itemNodeIds(graph)].sort();
             const cycles = findCycles(items, edges);
             if (cycles.length > 0) {
+                if (flags.format !== "text") {
+                    // Emit the diagram first so users get the visualization, then exit 1
+                    // to preserve the CI-gating contract.
+                    console.log(renderAnalysisDiagram(flags.format, cyclesSubgraph(graph, cycles)));
+                }
                 const detail = cycles.map((c) => c.join(" -> ")).join("; ");
                 throw new CommandError(`Found ${cycles.length} dependency cycle(s): ${detail}`, EXIT_CODE.GENERIC_FAILURE);
             }
+            // No cycles: an empty diagram is meaningless, so the format flag is a
+            // no-op here and the text/JSON result is returned unchanged.
             return { ok: true, cycleCount: 0, cycles: [] };
         },
     });
@@ -1778,13 +1883,14 @@ export function activate(api) {
         run: async (context) => {
             if (hasHelpFlag(context)) {
                 return {
-                    usage: "pm pm-graph critical-path [--root <id>] [--depth <n>] [--include-closed] [--json]",
-                    description: "Compute the longest chain of structural (blocking) dependencies through the workspace — the critical path. Reports the ordered id list and its length. Cycle-safe.",
+                    usage: "pm pm-graph critical-path [--root <id>] [--depth <n>] [--include-closed] [--json] [--format <text|mermaid|graphml>]",
+                    description: "Compute the longest chain of structural (blocking) dependencies through the workspace — the critical path. Reports the ordered id list and its length. Cycle-safe. With --format mermaid|graphml, prints the critical-path chain as a diagram subgraph (chain nodes + connecting edges) for embedding in docs.",
                     flags: {
                         "--root <id>": "Restrict to the neighborhood of an item id",
                         "--depth <n>": "Max hop distance from --root",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
+                        "--format <text|mermaid|graphml>": "Output the critical-path subgraph as a diagram (default text)",
                     },
                     output: {
                         length: "Number of items on the critical path",
@@ -1797,6 +1903,11 @@ export function activate(api) {
             const edges = structuralEdges(graph);
             const items = [...itemNodeIds(graph)].sort();
             const chain = longestChain(items, edges);
+            if (flags.format !== "text") {
+                const diagram = renderAnalysisDiagram(flags.format, criticalPathSubgraph(graph, chain));
+                console.log(diagram);
+                return { ok: true, format: flags.format, length: chain.length, path: chain, diagram };
+            }
             return { ok: true, length: chain.length, path: chain };
         },
     });
