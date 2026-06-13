@@ -1,12 +1,12 @@
 # Changelog
 
-## 2026.06.09-1 - 2026-06-09
+## 2026.6.9-1 - 2026-06-09
 
 ### Added
 
 - Add --format mermaid/graphml to graph cycles and critical-path ([pm-graph-jqiv](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-jqiv.toon))
 
-## 2026.06.07 - 2026-06-07
+## 2026.6.7 - 2026-06-07
 
 ### Added
 
@@ -17,13 +17,13 @@
 - Harden release readiness checks ([pm-graph-uj77](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-uj77.toon))
 - Align package dependencies to pm CLI/SDK 2026.6.6 ([pm-graph-bnsw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-bnsw.toon))
 
-## 2026.06.04 - 2026-06-04
+## 2026.6.4 - 2026-06-04
 
 ### Added
 
 - Add topo-sort, impact, and dependency-depth analytics ([pm-graph-r5yz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-r5yz.toon))
 
-## 2026.06.02-1 - 2026-06-02
+## 2026.6.2-1 - 2026-06-02
 
 ### Added
 
@@ -39,13 +39,13 @@
 - pm-graph analyze: offline graph-health report ([pm-graph-d9tz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-d9tz.toon))
 - Decision: analytics operate on STRUCTURAL edges only ([pm-graph-89nw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-89nw.toon))
 
-## 2026.06.02 - 2026-06-02
+## 2026.6.2 - 2026-06-02
 
 ### Added
 
 - Add multi-format graph exporter \(pm graph export\): cypher, mermaid, dot, json-graph ([pm-graph-xii9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-xii9.toon))
 
-## 2026.05.28 - 2026-05-28
+## 2026.5.28 - 2026-05-28
 
 ### Added
 
@@ -55,13 +55,13 @@
 
 - Production-readiness audit 2026-05-28 ([pm-graph-41bm](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-41bm.toon))
 
-## 2026.05.27 - 2026-05-27
+## 2026.5.27 - 2026-05-27
 
 ### Added
 
 - Add bun-install verification to release workflow ([pm-graph-e063](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-e063.toon))
 
-## 2026.05.26 - 2026-05-26
+## 2026.5.26 - 2026-05-26
 
 ### Fixed
 
