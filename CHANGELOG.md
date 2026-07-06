@@ -8,6 +8,7 @@
 
 ### Other
 
+- Align Node engine with pm CLI runtime ([pm-graph-yrkr](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-yrkr.toon))
 - Regenerate CHANGELOG after pm close item ([pm-graph-ozh8](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-ozh8.toon))
 
 ## 2026.6.9-1 - 2026-06-09
