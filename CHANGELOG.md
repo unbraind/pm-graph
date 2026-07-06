@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026.7.6 - 2026-07-06
+
+### Fixed
+
+- Fix release CI ordering (publish-before-tag) ([pm-graph-cb1l](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-cb1l.toon))
+
+### Other
+
+- Align Node engine with pm CLI runtime ([pm-graph-yrkr](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-yrkr.toon))
+- Regenerate CHANGELOG after pm close item ([pm-graph-ozh8](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-ozh8.toon))
+
 ## 2026.6.9-1 - 2026-06-09
 
 ### Added
@@ -34,7 +45,7 @@
 ### Other
 
 - pm-graph critical-path: longest blocking chain ([pm-graph-f1k9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-f1k9.toon))
-- pm-graph path: shortest dependency path \(BFS\) ([pm-graph-vtlu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-vtlu.toon))
+- pm-graph path: shortest dependency path (BFS) ([pm-graph-vtlu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-vtlu.toon))
 - pm-graph cycles: detect dependency cycles, CI exit code ([pm-graph-h0xs](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-h0xs.toon))
 - pm-graph analyze: offline graph-health report ([pm-graph-d9tz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-d9tz.toon))
 - Decision: analytics operate on STRUCTURAL edges only ([pm-graph-89nw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-89nw.toon))
@@ -43,7 +54,7 @@
 
 ### Added
 
-- Add multi-format graph exporter \(pm graph export\): cypher, mermaid, dot, json-graph ([pm-graph-xii9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-xii9.toon))
+- Add multi-format graph exporter (pm graph export): cypher, mermaid, dot, json-graph ([pm-graph-xii9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-xii9.toon))
 
 ## 2026.5.28 - 2026-05-28
 
