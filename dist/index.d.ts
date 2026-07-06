@@ -34,6 +34,26 @@ type Graph = {
 };
 export type ExportFormat = "cypher" | "mermaid" | "dot" | "json" | "graphml" | "plantuml";
 export type EdgeFilter = "deps" | "tags" | "all";
+/** A single `--filter` term: keep PmItem nodes whose `key` property is one of `values`. */
+export type NodeFilterEntry = {
+    key: "type" | "status";
+    values: string[];
+};
+/** Node filter (AND across entries, OR within an entry's values). */
+export type NodeFilter = NodeFilterEntry[];
+/**
+ * Parse one or more `key=value[,value]` filter terms into a NodeFilter.
+ * Throws a USAGE CommandError on a missing `=`, an unsupported key, or an
+ * empty value list. Values are matched case-insensitively.
+ */
+export declare function parseNodeFilter(raw: string[]): NodeFilter;
+/**
+ * Whether a node survives a NodeFilter. Non-PmItem nodes (facets, tags,
+ * external items) always survive — the filter scopes workspace *items* only.
+ * For PmItem nodes, every entry must match (AND); an entry matches when the
+ * node's (lowercased) `key` property is one of the entry's values (OR).
+ */
+export declare function matchesNodeFilter(node: GraphNode, filter: NodeFilter): boolean;
 /**
  * Render a valid GraphML XML document (consumable by yEd / Gephi / NetworkX).
  * Declares string keys for node title/type/status/labels and edge type, then
@@ -114,7 +134,7 @@ export declare function criticalConnectors(nodes: string[], edges: StructuralEdg
     }>;
 };
 /** Diagram output formats supported by the analysis commands. */
-export type AnalysisDiagramFormat = "mermaid" | "graphml";
+export type AnalysisDiagramFormat = "mermaid" | "graphml" | "dot";
 /**
  * Project a subgraph of `graph` containing exactly the nodes in `nodeIds` (in
  * the order given, de-duplicated) and exactly the relationships identified by

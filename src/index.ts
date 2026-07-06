@@ -622,29 +622,35 @@ type AnalyticsFlags = {
   root?: string;
   depth?: number;
   format: "text" | AnalysisDiagramFormat;
+  filter: NodeFilter;
   positionals: string[];
 };
 
 /** Validate and normalise a `--format` value for the analysis commands. */
 function parseAnalysisFormat(value: string): "text" | AnalysisDiagramFormat {
   const normalized = value.toLowerCase();
-  if (normalized === "text" || normalized === "mermaid" || normalized === "graphml") {
+  if (
+    normalized === "text" ||
+    normalized === "mermaid" ||
+    normalized === "graphml" ||
+    normalized === "dot"
+  ) {
     return normalized;
   }
   throw new CommandError(
-    `Invalid --format "${value}" (expected: text | mermaid | graphml).`,
+    `Invalid --format "${value}" (expected: text | mermaid | graphml | dot).`,
     EXIT_CODE.USAGE,
   );
 }
 
 /**
  * Parse the shared analytics flags (--json, --include-closed, --root, --depth,
- * --format) and collect remaining positional arguments. Throws a USAGE
- * CommandError on a malformed --depth, an invalid --format, or a value-less
- * --root/--depth/--format.
+ * --format, --filter) and collect remaining positional arguments. Throws a USAGE
+ * CommandError on a malformed --depth, an invalid --format, a malformed
+ * --filter, or a value-less --root/--depth/--format/--filter.
  */
 function parseAnalyticsFlags(args: string[]): AnalyticsFlags {
-  const flags: AnalyticsFlags = { json: false, includeClosed: false, format: "text", positionals: [] };
+  const flags: AnalyticsFlags = { json: false, includeClosed: false, format: "text", filter: [], positionals: [] };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--json") {
@@ -674,10 +680,16 @@ function parseAnalyticsFlags(args: string[]): AnalyticsFlags {
       flags.depth = parsed;
     } else if (arg === "--format") {
       const value = args[++i];
-      if (value === undefined) throw new CommandError("--format requires a value (text | mermaid | graphml).", EXIT_CODE.USAGE);
+      if (value === undefined) throw new CommandError("--format requires a value (text | mermaid | graphml | dot).", EXIT_CODE.USAGE);
       flags.format = parseAnalysisFormat(value);
     } else if (arg.startsWith("--format=")) {
       flags.format = parseAnalysisFormat(arg.slice("--format=".length));
+    } else if (arg === "--filter") {
+      const value = args[++i];
+      if (value === undefined) throw new CommandError("--filter requires a value (type=... | status=...).", EXIT_CODE.USAGE);
+      flags.filter.push(...parseNodeFilter([value]));
+    } else if (arg.startsWith("--filter=")) {
+      flags.filter.push(...parseNodeFilter([arg.slice("--filter=".length)]));
     } else if (arg === "--help" || arg === "-h") {
       // handled separately by hasHelpFlag
     } else if (arg.startsWith("--")) {
@@ -707,6 +719,7 @@ function shapedAnalyticsGraph(context: CommandContext, flags: AnalyticsFlags): G
     includeClosed: flags.includeClosed,
     rootId: resolvedRoot,
     depth: flags.depth,
+    filter: flags.filter,
   });
 }
 
@@ -759,6 +772,68 @@ function cypherStatements(
 export type ExportFormat = "cypher" | "mermaid" | "dot" | "json" | "graphml" | "plantuml";
 export type EdgeFilter = "deps" | "tags" | "all";
 
+/** A single `--filter` term: keep PmItem nodes whose `key` property is one of `values`. */
+export type NodeFilterEntry = { key: "type" | "status"; values: string[] };
+/** Node filter (AND across entries, OR within an entry's values). */
+export type NodeFilter = NodeFilterEntry[];
+
+const NODE_FILTER_KEYS = new Set(["type", "status"]);
+
+/**
+ * Parse one or more `key=value[,value]` filter terms into a NodeFilter.
+ * Throws a USAGE CommandError on a missing `=`, an unsupported key, or an
+ * empty value list. Values are matched case-insensitively.
+ */
+export function parseNodeFilter(raw: string[]): NodeFilter {
+  const filter: NodeFilter = [];
+  for (const term of raw) {
+    const eq = term.indexOf("=");
+    if (eq <= 0) {
+      throw new CommandError(
+        `Invalid --filter "${term}" (expected key=value, e.g. type=Task or status=open,done).`,
+        EXIT_CODE.USAGE,
+      );
+    }
+    const key = term.slice(0, eq).trim().toLowerCase();
+    const valuePart = term.slice(eq + 1).trim();
+    if (!NODE_FILTER_KEYS.has(key)) {
+      throw new CommandError(
+        `Invalid --filter key "${key}" (supported keys: type, status).`,
+        EXIT_CODE.USAGE,
+      );
+    }
+    const values = valuePart
+      .split(",")
+      .map((v) => v.trim().toLowerCase())
+      .filter((v) => v.length > 0);
+    if (values.length === 0) {
+      throw new CommandError(
+        `Invalid --filter "${term}" (expected at least one value after "=").`,
+        EXIT_CODE.USAGE,
+      );
+    }
+    filter.push({ key: key as "type" | "status", values });
+  }
+  return filter;
+}
+
+/**
+ * Whether a node survives a NodeFilter. Non-PmItem nodes (facets, tags,
+ * external items) always survive — the filter scopes workspace *items* only.
+ * For PmItem nodes, every entry must match (AND); an entry matches when the
+ * node's (lowercased) `key` property is one of the entry's values (OR).
+ */
+export function matchesNodeFilter(node: GraphNode, filter: NodeFilter): boolean {
+  if (filter.length === 0) return true;
+  if (!node.labels.includes("PmItem")) return true;
+  for (const entry of filter) {
+    const raw = node.properties[entry.key];
+    const value = typeof raw === "string" ? raw.toLowerCase() : "";
+    if (!entry.values.includes(value)) return false;
+  }
+  return true;
+}
+
 // Relationships generated from item metadata facets (type/status/assignee/...).
 const FACET_REL_TYPES = new Set([
   "HAS_TYPE",
@@ -786,14 +861,23 @@ function edgeAllowed(type: string, filter: EdgeFilter): boolean {
  */
 function shapeGraph(
   graph: Graph,
-  opts: { edges: EdgeFilter; includeClosed: boolean; rootId?: string; depth?: number },
+  opts: { edges: EdgeFilter; includeClosed: boolean; rootId?: string; depth?: number; filter?: NodeFilter },
 ): Graph {
   // 1. Filter relationships by the --edges selector first.
   let relationships = graph.relationships.filter((r) => edgeAllowed(r.type, opts.edges));
 
-  // 2. Optionally drop closed PmItem nodes (facets/external nodes are kept).
+  // 2. Optionally drop PmItem nodes that fail --filter type=.../status=... and/or
+  // closed/canceled items (facets/external nodes are kept). Both selectors feed
+  // a single `dropped` set so their node/edge pruning happens in one pass.
   const dropped = new Set<string>();
   let nodes = graph.nodes;
+  if (opts.filter && opts.filter.length > 0) {
+    for (const node of graph.nodes) {
+      if (node.labels.includes("PmItem") && !matchesNodeFilter(node, opts.filter)) {
+        dropped.add(node.id);
+      }
+    }
+  }
   if (!opts.includeClosed) {
     for (const node of graph.nodes) {
       const status = node.properties.status;
@@ -802,10 +886,10 @@ function shapeGraph(
         dropped.add(node.id);
       }
     }
-    if (dropped.size > 0) {
-      nodes = nodes.filter((n) => !dropped.has(n.id));
-      relationships = relationships.filter((r) => !dropped.has(r.from) && !dropped.has(r.to));
-    }
+  }
+  if (dropped.size > 0) {
+    nodes = nodes.filter((n) => !dropped.has(n.id));
+    relationships = relationships.filter((r) => !dropped.has(r.from) && !dropped.has(r.to));
   }
 
   // 3. Neighborhood restriction from --root within --depth hops (undirected).
@@ -1398,7 +1482,7 @@ export function criticalConnectors(
 // ---------------------------------------------------------------------------
 
 /** Diagram output formats supported by the analysis commands. */
-export type AnalysisDiagramFormat = "mermaid" | "graphml";
+export type AnalysisDiagramFormat = "mermaid" | "graphml" | "dot";
 
 /**
  * Project a subgraph of `graph` containing exactly the nodes in `nodeIds` (in
@@ -1481,7 +1565,9 @@ export function cyclesSubgraph(graph: Graph, cycles: string[][]): Graph {
 
 /** Render an analysis subgraph via the existing full-graph renderers. */
 export function renderAnalysisDiagram(format: AnalysisDiagramFormat, graph: Graph): string {
-  return format === "mermaid" ? renderMermaid(graph) : renderGraphml(graph);
+  if (format === "mermaid") return renderMermaid(graph);
+  if (format === "dot") return renderDot(graph);
+  return renderGraphml(graph);
 }
 
 type AnalyzeReport = {
@@ -2356,12 +2442,13 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph analyze [--root <id>] [--depth <n>] [--include-closed] [--json]",
+          usage: "pm pm-graph analyze [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Build the workspace dependency graph offline (no Neo4j) and report its health: dependency cycle count, orphan/root/leaf items, longest dependency chain, top degree-centrality items, connected-component count, and blocked-item count. Operates on STRUCTURAL edges (BLOCKED_BY + CHILD_OF + dependency edges) only.",
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root (non-negative integer)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
             "--include-closed": "Include closed/canceled items (excluded by default)",
             "--json": "Output as JSON",
           },
@@ -2398,15 +2485,16 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph cycles [--root <id>] [--depth <n>] [--include-closed] [--json] [--format <text|mermaid|graphml>]",
+          usage: "pm pm-graph cycles [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json] [--format <text|mermaid|graphml|dot>]",
           description:
-            "Detect dependency cycles among STRUCTURAL edges (BLOCKED_BY + dependency edges, not facet/tag edges). Prints each cycle as an id path. Exits with code 1 when any cycle exists (so it can gate CI); exits 0 when there are none. With --format mermaid|graphml, prints the cycle-participating subgraph (union of cycle nodes + their edges) as a diagram before exiting 1, for embedding in docs.",
+            "Detect dependency cycles among STRUCTURAL edges (BLOCKED_BY + dependency edges, not facet/tag edges). Prints each cycle as an id path. Exits with code 1 when any cycle exists (so it can gate CI); exits 0 when there are none. With --format mermaid|graphml|dot, prints the cycle-participating subgraph (union of cycle nodes + their edges) as a diagram before exiting 1, for embedding in docs.",
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
-            "--format <text|mermaid|graphml>": "Output the cycle subgraph as a diagram (default text)",
+            "--format <text|mermaid|graphml|dot>": "Output the cycle subgraph as a diagram (default text)",
           },
           output: {
             cycleCount: "Number of distinct cycles",
@@ -2445,10 +2533,11 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph path <from> <to> [--include-closed] [--json]",
+          usage: "pm pm-graph path <from> <to> [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Compute the shortest directed dependency path from <from> to <to> via BFS over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
@@ -2495,15 +2584,16 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph critical-path [--root <id>] [--depth <n>] [--include-closed] [--json] [--format <text|mermaid|graphml>]",
+          usage: "pm pm-graph critical-path [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json] [--format <text|mermaid|graphml|dot>]",
           description:
-            "Compute the longest chain of structural (blocking) dependencies through the workspace — the critical path. Reports the ordered id list and its length. Cycle-safe. With --format mermaid|graphml, prints the critical-path chain as a diagram subgraph (chain nodes + connecting edges) for embedding in docs.",
+            "Compute the longest chain of structural (blocking) dependencies through the workspace — the critical path. Reports the ordered id list and its length. Cycle-safe. With --format mermaid|graphml|dot, prints the critical-path chain as a diagram subgraph (chain nodes + connecting edges) for embedding in docs.",
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
-            "--format <text|mermaid|graphml>": "Output the critical-path subgraph as a diagram (default text)",
+            "--format <text|mermaid|graphml|dot>": "Output the critical-path subgraph as a diagram (default text)",
           },
           output: {
             length: "Number of items on the critical path",
@@ -2533,12 +2623,13 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph topo-sort [--root <id>] [--depth <n>] [--include-closed] [--json]",
+          usage: "pm pm-graph topo-sort [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Emit a valid topological execution order of items over STRUCTURAL edges (BLOCKED_BY + dependency edges), so each item is listed only after the items it depends on. Uses Kahn's algorithm. Ties are broken by ascending id for deterministic output. Reports the resolvable prefix and the cycle members, and EXITS WITH CODE 1 when a dependency cycle prevents a complete ordering (CI-usable).",
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
@@ -2577,10 +2668,11 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph impact <id> [--include-closed] [--json]",
+          usage: "pm pm-graph impact <id> [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Compute the impact set of an item: every item that transitively depends on it (is blocked-by / downstream of it) over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
@@ -2617,10 +2709,11 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph explain <id> [--include-closed] [--json]",
+          usage: "pm pm-graph explain <id> [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Build an offline item-centric dependency report for one id over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
@@ -2646,6 +2739,7 @@ export function activate(api: ExtensionApi): void {
       const graph = shapeGraph(loadGraphForContext(context), {
         edges: "deps",
         includeClosed: flags.includeClosed,
+        filter: flags.filter,
       });
       const resolvedId = resolveItemIdOrThrow([...itemNodeIds(graph)].sort(), id, "Item").resolved;
       const report = explainItem(graph, resolvedId);
@@ -2708,7 +2802,15 @@ export function activate(api: ExtensionApi): void {
       throw new CommandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
     }
 
-    const graph = shapeGraph(fullGraph, { edges, includeClosed, rootId: root, depth });
+    const rawFilter = readExportOption(options, "filter");
+    const filterTerms = Array.isArray(rawFilter)
+      ? (rawFilter as unknown[]).map((v) => String(v))
+      : rawFilter !== undefined && rawFilter !== null && rawFilter !== ""
+        ? [String(rawFilter)]
+        : [];
+    const filter = parseNodeFilter(filterTerms);
+
+    const graph = shapeGraph(fullGraph, { edges, includeClosed, rootId: root, depth, filter });
     const output = renderExport(format, graph);
 
     const outputPath = readExportOption(options, "output") as string | undefined;
@@ -2733,6 +2835,7 @@ export function activate(api: ExtensionApi): void {
       ok: true,
       format,
       edges,
+      filter: filter.length > 0 ? filter : undefined,
       nodes: graph.nodes.length,
       relationships: graph.relationships.length,
       output,
