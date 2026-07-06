@@ -4,7 +4,7 @@ Knowledge graph and dependency graph extension for [pm CLI](https://github.com/u
 
 The extension reads the current workspace through `pm list-all --json` and `pm deps <id> --json`, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
 
-It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm graph export` — with neighborhood (`--root`/`--depth`) and edge-type (`--edges`) shaping.
+It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm graph export` — with neighborhood (`--root`/`--depth`), edge-type (`--edges`), and node (`--filter type=...|status=...`) shaping.
 
 It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `explain`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact` run dependency-cycle detection, item-centric dependency inspection, shortest-path, longest-chain, topological ordering, downstream-impact, orphan/root/leaf, bottleneck connector, and centrality analysis directly against your workspace.
 
@@ -156,6 +156,9 @@ pm graph export --format dot --root TASK-42 --depth 2
 
 # Include closed/canceled items (excluded by default)
 pm graph export --format json --include-closed
+
+# Scope to Task items that are open or in_progress
+pm graph export --format dot --filter type=Task --filter status=open,in_progress
 ```
 
 | Flag | Values | Default | Description |
@@ -165,6 +168,7 @@ pm graph export --format json --include-closed
 | `--root <id>` | item id | — | Restrict the graph to the neighborhood around this node. |
 | `--depth <n>` | non-negative integer | unlimited | Max hops from `--root` (undirected). Only meaningful with `--root`. |
 | `--include-closed` | flag | off | Include `closed`/`canceled` items (excluded by default). |
+| `--filter type=...\|status=...` | `key=value[,value]` (repeatable) | — | Keep only PmItem nodes matching the given `type`/`status`. Comma-list = OR within a key; repeating the flag = AND across keys. Non-item nodes (facets/tags) are always kept. Case-insensitive. |
 | `--edges <deps\|tags\|all>` | `deps` \| `tags` \| `all` | `all` | `deps` keeps dependency/structural edges (`BLOCKED_BY`, `CHILD_OF`, dependency kinds); `tags` keeps only `TAGGED_WITH`; `all` keeps everything including facet edges. |
 
 Example output (`--format mermaid --edges deps`):
@@ -292,7 +296,7 @@ Example output:
 
 These commands analyze the workspace dependency graph **entirely offline** — no Neo4j required. They operate on **structural edges only** (`BLOCKED_BY`, `CHILD_OF`, and dependency edges such as `BLOCKS`/`RELATED`) between real items; facet edges (type/status/assignee/sprint/release) and tag edges are deliberately excluded so cycle, path, and centrality results stay meaningful.
 
-Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood. `cycles` and `critical-path` additionally accept `--format <text|mermaid|graphml>` (default `text`) to render the relevant subgraph as a diagram for docs.
+Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood. All analytics commands accept `--filter type=...|status=...` to keep only items matching the given type/status (comma-list = OR, repeat the flag = AND); non-item nodes (facets/tags) are always kept. `cycles` and `critical-path` additionally accept `--format <text|mermaid|graphml|dot>` (default `text`) to render the relevant subgraph as a diagram for docs — `dot` emits a Graphviz `digraph` consumable by `dot`, `neato`, etc.
 
 ### `pm pm-graph analyze`
 
@@ -345,6 +349,8 @@ pm pm-graph cycles                     # human-readable; exit 1 if cycles found
 pm pm-graph cycles --json              # machine-readable
 pm pm-graph cycles --format mermaid    # render the cycle subgraph as Mermaid, then exit 1
 pm pm-graph cycles --format graphml    # render the cycle subgraph as GraphML, then exit 1
+pm pm-graph cycles --format dot       # render the cycle subgraph as a Graphviz digraph, then exit 1
+pm pm-graph cycles --filter type=Task # scope to Task items only before detecting cycles
 ```
 
 ```jsonc
@@ -352,7 +358,7 @@ pm pm-graph cycles --format graphml    # render the cycle subgraph as GraphML, t
 { "ok": true, "cycleCount": 0, "cycles": [] }
 ```
 
-Pass `--format mermaid` or `--format graphml` to visualize **only the cycle-participating** nodes and edges (the union of every detected cycle) as a diagram. The diagram is printed to stdout first, then the command still **exits 1** so it keeps gating CI. The subgraph is rendered with the same renderers as `pm graph export`, so it embeds directly in docs. `--format text` (the default) is unchanged. When there are no cycles, `--format` is a no-op (an empty diagram is meaningless) and the normal exit-0 result is returned.
+Pass `--format mermaid`, `--format graphml`, or `--format dot` to visualize **only the cycle-participating** nodes and edges (the union of every detected cycle) as a diagram. The diagram is printed to stdout first, then the command still **exits 1** so it keeps gating CI. The subgraph is rendered with the same renderers as `pm graph export`, so it embeds directly in docs. `--format text` (the default) is unchanged. When there are no cycles, `--format` is a no-op (an empty diagram is meaningless) and the normal exit-0 result is returned.
 
 ### `pm pm-graph path`
 
@@ -401,13 +407,15 @@ The longest chain of blocking dependencies through the workspace — the critica
 pm pm-graph critical-path --json
 pm pm-graph critical-path --format mermaid     # render the critical-path chain as Mermaid
 pm pm-graph critical-path --format graphml     # render the critical-path chain as GraphML
+pm pm-graph critical-path --format dot          # render the critical-path chain as a Graphviz digraph
+pm pm-graph critical-path --filter type=Epic    # scope the critical path to Epic items
 ```
 
 ```json
 { "ok": true, "length": 4, "path": ["pm-ep18", "pm-k849", "pm-p2q3", "pm-hd71"] }
 ```
 
-Pass `--format mermaid` or `--format graphml` to print the critical-path **chain** as a diagram — exactly the chain nodes plus the edges connecting them — to stdout, reusing the same renderers as `pm graph export`. `--format text` (the default) returns the result object unchanged.
+Pass `--format mermaid`, `--format graphml`, or `--format dot` to print the critical-path **chain** as a diagram — exactly the chain nodes plus the edges connecting them — to stdout, reusing the same renderers as `pm graph export`. `--format text` (the default) returns the result object unchanged.
 
 ### `pm pm-graph topo-sort`
 
