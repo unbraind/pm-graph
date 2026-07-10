@@ -2,16 +2,17 @@ id: pm-graph-n0nt
 title: Hands-on functional test pass 2026-05-29 (real data)
 description: ""
 type: Feature
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-05-29T21:21:30.357Z"
-updated_at: "2026-06-09T22:54:55.197Z"
-assignee: codex-5-3-sweep
+updated_at: "2026-07-10T18:59:10.944Z"
+closed_at: "2026-07-10T18:59:10.942Z"
 author: codex
 files[2]{path,scope,note}:
   src/index.ts,project,null
   test/id-resolution.test.ts,project,null
-tests[1]{command,path,scope,timeout_seconds,pm_context_mode,env_set,env_clear,shared_host_safe,assert_stdout_contains,assert_stdout_regex,assert_stderr_contains,assert_stderr_regex,assert_stdout_min_lines,assert_json_field_equals,assert_json_field_gte,note}:
-  PM_PATH=.agents/pm PM_GLOBAL_PATH=.agents/pm npm test,null,project,null,null,null,null,null,null,null,null,null,null,null,null,null
+tests[1]{command,scope}:
+  PM_PATH=.agents/pm PM_GLOBAL_PATH=.agents/pm npm test,project
+close_reason: "Hands-on functional test pass complete: all commands tested with real data, 54 tests pass."
 body: "Installed into a throwaway pm workspace seeded with real items (Epic>Feature, Tasks w/ deadlines, priority-1 Issue). Verified every command: ping (exit 0); export renders a real 10-node dependency+knowledge graph reflecting seeded items+type/status nodes (exit 0); cypher emits import statements (exit 0); status reports Neo4j config (exit 0). query + neighbors correctly fail with a clear 'Neo4j is not configured. Set NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD' message and exit 1 (graceful degradation, no crash). No code bugs found."

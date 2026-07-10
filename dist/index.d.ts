@@ -32,6 +32,22 @@ type Graph = {
     nodes: GraphNode[];
     relationships: GraphRelationship[];
 };
+type AnalyticsFlags = {
+    json: boolean;
+    includeClosed: boolean;
+    root?: string;
+    depth?: number;
+    format: "text" | AnalysisDiagramFormat;
+    filter: NodeFilter;
+    positionals: string[];
+};
+/**
+ * Parse the shared analytics flags (--json, --include-closed, --root, --depth,
+ * --format, --filter) and collect remaining positional arguments. Throws a USAGE
+ * CommandError on a malformed --depth, an invalid --format, a malformed
+ * --filter, or a value-less --root/--depth/--format/--filter.
+ */
+export declare function parseAnalyticsFlags(args: string[]): AnalyticsFlags;
 export type ExportFormat = "cypher" | "mermaid" | "dot" | "json" | "graphml" | "plantuml";
 export type EdgeFilter = "deps" | "tags" | "all";
 /** A single `--filter` term: keep PmItem nodes whose `key` property is one of `values`. */

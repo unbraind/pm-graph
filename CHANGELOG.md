@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Full pm ecosystem production pass for pm-graph ([pm-graph-dhzp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-dhzp.toon))
+- Hands-on functional test pass 2026-05-29 (real data) ([pm-graph-n0nt](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-n0nt.toon))
+
+### Fixed
+
+- Adversarial review pass 2026-07-10 ([pm-graph-3mny](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-3mny.toon))
+
+### Other
+
+- Production-readiness audit 2026-05-29 ([pm-graph-fq9w](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-fq9w.toon))
+- Full-cycle hardening wave: pm-graph ([pm-graph-4yd1](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-4yd1.toon))
+- Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-graph-avy6](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-avy6.toon))
+
 ## 2026.7.6 - 2026-07-06
 
 ### Fixed

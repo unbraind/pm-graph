@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.2.0";
+const EXTENSION_VERSION = "2026.7.10";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -451,8 +451,13 @@ function parseAnalysisFormat(value) {
  * CommandError on a malformed --depth, an invalid --format, a malformed
  * --filter, or a value-less --root/--depth/--format/--filter.
  */
-function parseAnalyticsFlags(args) {
+export function parseAnalyticsFlags(args) {
     const flags = { json: false, includeClosed: false, format: "text", filter: [], positionals: [] };
+    // Collect every --filter term first, then parse them in a single call so
+    // repeated same-key flags (e.g. --filter status=open --filter status=done)
+    // merge into one OR set instead of separate entries that AND to an
+    // impossible condition. This mirrors the `pm-graph export` filter path.
+    const filterTerms = [];
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg === "--json") {
@@ -501,10 +506,10 @@ function parseAnalyticsFlags(args) {
             const value = args[++i];
             if (value === undefined)
                 throw new CommandError("--filter requires a value (type=... | status=...).", EXIT_CODE.USAGE);
-            flags.filter.push(...parseNodeFilter([value]));
+            filterTerms.push(value);
         }
         else if (arg.startsWith("--filter=")) {
-            flags.filter.push(...parseNodeFilter([arg.slice("--filter=".length)]));
+            filterTerms.push(arg.slice("--filter=".length));
         }
         else if (arg === "--help" || arg === "-h") {
             // handled separately by hasHelpFlag
@@ -516,6 +521,7 @@ function parseAnalyticsFlags(args) {
             flags.positionals.push(arg);
         }
     }
+    flags.filter = parseNodeFilter(filterTerms);
     return flags;
 }
 /**
@@ -578,7 +584,7 @@ const NODE_FILTER_KEYS = new Set(["type", "status"]);
  * empty value list. Values are matched case-insensitively.
  */
 export function parseNodeFilter(raw) {
-    const filter = [];
+    const byKey = new Map();
     for (const term of raw) {
         const eq = term.indexOf("=");
         if (eq <= 0) {
@@ -596,9 +602,13 @@ export function parseNodeFilter(raw) {
         if (values.length === 0) {
             throw new CommandError(`Invalid --filter "${term}" (expected at least one value after "=").`, EXIT_CODE.USAGE);
         }
-        filter.push({ key: key, values });
+        const typedKey = key;
+        const merged = byKey.get(typedKey) ?? new Set();
+        for (const value of values)
+            merged.add(value);
+        byKey.set(typedKey, merged);
     }
-    return filter;
+    return [...byKey].map(([key, values]) => ({ key, values: [...values] }));
 }
 /**
  * Whether a node survives a NodeFilter. Non-PmItem nodes (facets, tags,
@@ -654,7 +664,7 @@ function shapeGraph(graph, opts) {
     let nodes = graph.nodes;
     if (opts.filter && opts.filter.length > 0) {
         for (const node of graph.nodes) {
-            if (node.labels.includes("PmItem") && !matchesNodeFilter(node, opts.filter)) {
+            if (!matchesNodeFilter(node, opts.filter)) {
                 dropped.add(node.id);
             }
         }
@@ -1983,7 +1993,7 @@ export function activate(api) {
                     flags: {
                         "--root <id>": "Restrict to the neighborhood of an item id",
                         "--depth <n>": "Max hop distance from --root (non-negative integer)",
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
                         "--include-closed": "Include closed/canceled items (excluded by default)",
                         "--json": "Output as JSON",
                     },
@@ -2023,7 +2033,7 @@ export function activate(api) {
                     flags: {
                         "--root <id>": "Restrict to the neighborhood of an item id",
                         "--depth <n>": "Max hop distance from --root",
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
                         "--format <text|mermaid|graphml|dot>": "Output the cycle subgraph as a diagram (default text)",
@@ -2063,7 +2073,7 @@ export function activate(api) {
                     usage: "pm pm-graph path <from> <to> [--filter type=...|status=...] [--include-closed] [--json]",
                     description: "Compute the shortest directed dependency path from <from> to <to> via BFS over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
                     flags: {
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
                     },
@@ -2110,7 +2120,7 @@ export function activate(api) {
                     flags: {
                         "--root <id>": "Restrict to the neighborhood of an item id",
                         "--depth <n>": "Max hop distance from --root",
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
                         "--format <text|mermaid|graphml|dot>": "Output the critical-path subgraph as a diagram (default text)",
@@ -2146,7 +2156,7 @@ export function activate(api) {
                     flags: {
                         "--root <id>": "Restrict to the neighborhood of an item id",
                         "--depth <n>": "Max hop distance from --root",
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
                     },
@@ -2183,7 +2193,7 @@ export function activate(api) {
                     usage: "pm pm-graph impact <id> [--filter type=...|status=...] [--include-closed] [--json]",
                     description: "Compute the impact set of an item: every item that transitively depends on it (is blocked-by / downstream of it) over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
                     flags: {
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
                     },
@@ -2218,7 +2228,7 @@ export function activate(api) {
                     usage: "pm pm-graph explain <id> [--filter type=...|status=...] [--include-closed] [--json]",
                     description: "Build an offline item-centric dependency report for one id over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
                     flags: {
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
                         "--include-closed": "Include closed/canceled items",
                         "--json": "Output as JSON",
                     },
