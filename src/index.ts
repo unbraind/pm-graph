@@ -649,8 +649,13 @@ function parseAnalysisFormat(value: string): "text" | AnalysisDiagramFormat {
  * CommandError on a malformed --depth, an invalid --format, a malformed
  * --filter, or a value-less --root/--depth/--format/--filter.
  */
-function parseAnalyticsFlags(args: string[]): AnalyticsFlags {
+export function parseAnalyticsFlags(args: string[]): AnalyticsFlags {
   const flags: AnalyticsFlags = { json: false, includeClosed: false, format: "text", filter: [], positionals: [] };
+  // Collect every --filter term first, then parse them in a single call so
+  // repeated same-key flags (e.g. --filter status=open --filter status=done)
+  // merge into one OR set instead of separate entries that AND to an
+  // impossible condition. This mirrors the `pm-graph export` filter path.
+  const filterTerms: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--json") {
@@ -687,9 +692,9 @@ function parseAnalyticsFlags(args: string[]): AnalyticsFlags {
     } else if (arg === "--filter") {
       const value = args[++i];
       if (value === undefined) throw new CommandError("--filter requires a value (type=... | status=...).", EXIT_CODE.USAGE);
-      flags.filter.push(...parseNodeFilter([value]));
+      filterTerms.push(value);
     } else if (arg.startsWith("--filter=")) {
-      flags.filter.push(...parseNodeFilter([arg.slice("--filter=".length)]));
+      filterTerms.push(arg.slice("--filter=".length));
     } else if (arg === "--help" || arg === "-h") {
       // handled separately by hasHelpFlag
     } else if (arg.startsWith("--")) {
@@ -698,6 +703,7 @@ function parseAnalyticsFlags(args: string[]): AnalyticsFlags {
       flags.positionals.push(arg);
     }
   }
+  flags.filter = parseNodeFilter(filterTerms);
   return flags;
 }
 
@@ -2451,7 +2457,7 @@ export function activate(api: ExtensionApi): void {
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root (non-negative integer)",
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
             "--include-closed": "Include closed/canceled items (excluded by default)",
             "--json": "Output as JSON",
           },
@@ -2494,7 +2500,7 @@ export function activate(api: ExtensionApi): void {
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root",
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
             "--format <text|mermaid|graphml|dot>": "Output the cycle subgraph as a diagram (default text)",
@@ -2540,7 +2546,7 @@ export function activate(api: ExtensionApi): void {
           description:
             "Compute the shortest directed dependency path from <from> to <to> via BFS over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
@@ -2593,7 +2599,7 @@ export function activate(api: ExtensionApi): void {
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root",
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
             "--format <text|mermaid|graphml|dot>": "Output the critical-path subgraph as a diagram (default text)",
@@ -2632,7 +2638,7 @@ export function activate(api: ExtensionApi): void {
           flags: {
             "--root <id>": "Restrict to the neighborhood of an item id",
             "--depth <n>": "Max hop distance from --root",
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
@@ -2675,7 +2681,7 @@ export function activate(api: ExtensionApi): void {
           description:
             "Compute the impact set of an item: every item that transitively depends on it (is blocked-by / downstream of it) over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
@@ -2716,7 +2722,7 @@ export function activate(api: ExtensionApi): void {
           description:
             "Build an offline item-centric dependency report for one id over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list = OR; repeat = AND)",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
             "--include-closed": "Include closed/canceled items",
             "--json": "Output as JSON",
           },
