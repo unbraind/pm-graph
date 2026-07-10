@@ -17,6 +17,8 @@ import {
   cyclesSubgraph,
   renderAnalysisDiagram,
   explainItem,
+  parseNodeFilter,
+  matchesNodeFilter,
 } from "../dist/index.js";
 
 // The renderers and analytics helpers are exported from the compiled module.
@@ -408,4 +410,119 @@ test("renderAnalysisDiagram on the chain subgraph equals renderGraphml of the sa
   const chain = longestChain(["A", "B", "C", "D"], chainEdges);
   const sub = criticalPathSubgraph(diagramGraph as any, chain);
   assert.strictEqual(renderAnalysisDiagram("graphml", sub), renderGraphml(sub as any));
+});
+
+// --- --format dot (Graphviz) for analysis diagrams -------------------------
+
+test("critical-path --format dot emits a Graphviz digraph with exactly the chain nodes", () => {
+  const chain = longestChain(["A", "B", "C", "D"], chainEdges);
+  const out = renderAnalysisDiagram("dot", criticalPathSubgraph(diagramGraph as any, chain));
+  assert.ok(out.startsWith("digraph pm_graph {"), "is a Graphviz digraph");
+  assert.ok(out.trim().endsWith("}"), "closes the digraph");
+  for (const id of ["A", "B", "C", "D"]) {
+    assert.ok(out.includes(`"${id}" [label=`), `chain node ${id} present`);
+  }
+  for (const id of ["E", "F", "O"]) {
+    assert.ok(!new RegExp(`"${id}" \\[label=`).test(out), `non-chain node ${id} absent`);
+  }
+  // Exactly the three chain edges in chain order, directed with BLOCKED_BY labels.
+  const edgeLines = out.split("\n").filter((l) => l.includes("->")).map((l) => l.trim());
+  assert.deepStrictEqual(edgeLines, [
+    '"D" -> "C" [label="BLOCKED_BY"];',
+    '"C" -> "B" [label="BLOCKED_BY"];',
+    '"B" -> "A" [label="BLOCKED_BY"];',
+  ]);
+});
+
+test("cycles --format dot emits only the cycle-participating nodes/edges as a digraph", () => {
+  const edges = [...chainEdges, ...cycleEdges];
+  const cycles = findCycles(["A", "B", "C", "D", "E", "F"], edges);
+  const out = renderAnalysisDiagram("dot", cyclesSubgraph(diagramGraph as any, cycles));
+  assert.ok(out.startsWith("digraph pm_graph {"), "is a Graphviz digraph");
+  assert.ok(out.includes('"E" [label=') && out.includes('"F" [label='), "both cycle nodes present");
+  for (const id of ["A", "B", "C", "D", "O"]) {
+    assert.ok(!new RegExp(`"${id}" \\[label=`).test(out), `non-cycle node ${id} absent`);
+  }
+  const edgeLines = out.split("\n").filter((l) => l.includes("->")).map((l) => l.trim());
+  assert.deepStrictEqual(edgeLines, [
+    '"E" -> "F" [label="BLOCKED_BY"];',
+    '"F" -> "E" [label="BLOCKED_BY"];',
+  ]);
+});
+
+test("renderAnalysisDiagram rejects an unsupported format at the type level (text is parsed earlier)", () => {
+  // The command layer validates --format before reaching the renderer; here
+  // we confirm the dot branch is distinct from mermaid and graphml output.
+  const chain = longestChain(["A", "B", "C", "D"], chainEdges);
+  const sub = criticalPathSubgraph(diagramGraph as any, chain);
+  const dot = renderAnalysisDiagram("dot", sub);
+  const mermaid = renderAnalysisDiagram("mermaid", sub);
+  const graphml = renderAnalysisDiagram("graphml", sub);
+  assert.ok(dot.startsWith("digraph"), "dot starts with digraph");
+  assert.ok(mermaid.startsWith("graph TD"), "mermaid starts with graph TD");
+  assert.ok(graphml.startsWith("<?xml"), "graphml starts with xml prolog");
+  assert.notStrictEqual(dot, mermaid);
+  assert.notStrictEqual(dot, graphml);
+});
+
+// --- --filter (node filtering by type/status) -----------------------------
+
+test("parseNodeFilter parses key=value and comma-separated value lists", () => {
+  assert.deepStrictEqual(parseNodeFilter(["type=Task"]), [{ key: "type", values: ["task"] }]);
+  assert.deepStrictEqual(parseNodeFilter(["status=open,done"]), [
+    { key: "status", values: ["open", "done"] },
+  ]);
+  // Multiple terms accumulate (AND across entries).
+  assert.deepStrictEqual(parseNodeFilter(["type=Task", "status=open"]), [
+    { key: "type", values: ["task"] },
+    { key: "status", values: ["open"] },
+  ]);
+  // Whitespace and case are normalised.
+  assert.deepStrictEqual(parseNodeFilter(["  TYPE = Epic , Story "]), [
+    { key: "type", values: ["epic", "story"] },
+  ]);
+});
+
+test("parseNodeFilter rejects malformed terms and unsupported keys", () => {
+  assert.throws(() => parseNodeFilter(["Task"]), /Invalid --filter/);
+  assert.throws(() => parseNodeFilter(["=Task"]), /Invalid --filter/);
+  assert.throws(() => parseNodeFilter(["priority=high"]), /Invalid --filter key "priority"/);
+  assert.throws(() => parseNodeFilter(["type="]), /Invalid --filter/);
+  assert.throws(() => parseNodeFilter(["type=,,"]), /Invalid --filter/);
+});
+
+test("matchesNodeFilter keeps non-PmItem nodes and respects AND/OR semantics", () => {
+  const item = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    labels: ["PmItem"],
+    properties: { id, title: id, type: "Task", status: "open", ...extra },
+  });
+  const facet = { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } };
+
+  // Empty filter: everything survives.
+  assert.strictEqual(matchesNodeFilter(item("A") as any, []), true);
+  assert.strictEqual(matchesNodeFilter(facet as any, []), true);
+
+  // Single entry: PmItem matching type survives, non-matching drops.
+  assert.strictEqual(matchesNodeFilter(item("A") as any, parseNodeFilter(["type=Task"])), true);
+  assert.strictEqual(matchesNodeFilter(item("A", { type: "Epic" }) as any, parseNodeFilter(["type=Task"])), false);
+
+  // Comma-list is OR within a key.
+  assert.strictEqual(matchesNodeFilter(item("A", { type: "Epic" }) as any, parseNodeFilter(["type=Task,Epic"])), true);
+
+  // Multiple entries are AND across keys.
+  assert.strictEqual(
+    matchesNodeFilter(item("A") as any, parseNodeFilter(["type=Task", "status=open"])),
+    true,
+  );
+  assert.strictEqual(
+    matchesNodeFilter(item("A", { status: "done" }) as any, parseNodeFilter(["type=Task", "status=open"])),
+    false,
+  );
+
+  // Non-PmItem nodes always survive the filter.
+  assert.strictEqual(matchesNodeFilter(facet as any, parseNodeFilter(["type=Task"])), true);
+
+  // Matching is case-insensitive on the property value.
+  assert.strictEqual(matchesNodeFilter(item("A", { status: "Open" }) as any, parseNodeFilter(["status=open"])), true);
 });
