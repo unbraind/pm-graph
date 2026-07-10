@@ -21,13 +21,13 @@
     "release:notes": "pm-changelog --pm-root .agents/pm --stdout --since-previous-tag --until-release-tag --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --pm-bin ./node_modules/.bin/pm --github-step-summary"
   },
   "dependencies": {
-    "neo4j-driver": "^6.1.0"
+    "neo4j-driver": "^6.2.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
-    "@unbrained/pm-cli": "^2026.7.5",
-    "pm-changelog": "^2026.6.30",
-    "typescript": "^6.0.3"
+    "@types/node": "^26.1.1",
+    "@unbrained/pm-cli": "^2026.7.10",
+    "pm-changelog": "^2026.7.10",
+    "typescript": "^7.0.2"
   },
   "files": [
     "dist/",
@@ -46,7 +46,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.7.5"
+    "@unbrained/pm-cli": ">=2026.7.10"
   },
   "engines": {
     "node": ">=22.18.0"
