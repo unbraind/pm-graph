@@ -19,6 +19,7 @@ import {
   explainItem,
   parseNodeFilter,
   matchesNodeFilter,
+  parseAnalyticsFlags,
 } from "../dist/index.js";
 
 // The renderers and analytics helpers are exported from the compiled module.
@@ -483,6 +484,23 @@ test("parseNodeFilter parses key=value and comma-separated value lists", () => {
   // Whitespace and case are normalised.
   assert.deepStrictEqual(parseNodeFilter(["  TYPE = Epic , Story "]), [
     { key: "type", values: ["epic", "story"] },
+  ]);
+});
+
+test("parseAnalyticsFlags merges repeated same-key --filter flags into one OR set", () => {
+  // Regression: previously each --filter flag was parsed independently and the
+  // results concatenated, so `--filter status=open --filter status=in_progress`
+  // produced two separate status entries that AND together to an impossible
+  // condition (dropping every item). They must collapse into a single OR set.
+  const flags = parseAnalyticsFlags(["--filter", "status=open", "--filter", "status=in_progress", "id-1"]);
+  assert.deepStrictEqual(flags.filter, [{ key: "status", values: ["open", "in_progress"] }]);
+  assert.deepStrictEqual(flags.positionals, ["id-1"]);
+
+  // The `--filter=` form and different keys still AND across distinct keys.
+  const mixed = parseAnalyticsFlags(["--filter=type=task,epic", "--filter=status=open"]);
+  assert.deepStrictEqual(mixed.filter, [
+    { key: "type", values: ["task", "epic"] },
+    { key: "status", values: ["open"] },
   ]);
 });
 
