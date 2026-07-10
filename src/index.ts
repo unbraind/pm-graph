@@ -10,7 +10,7 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
-const EXTENSION_VERSION = "0.2.0";
+const EXTENSION_VERSION = "2026.7.10";
 
 // ---------------------------------------------------------------------------
 // Error contract
@@ -785,7 +785,7 @@ const NODE_FILTER_KEYS = new Set(["type", "status"]);
  * empty value list. Values are matched case-insensitively.
  */
 export function parseNodeFilter(raw: string[]): NodeFilter {
-  const filter: NodeFilter = [];
+  const byKey = new Map<NodeFilterEntry["key"], Set<string>>();
   for (const term of raw) {
     const eq = term.indexOf("=");
     if (eq <= 0) {
@@ -812,9 +812,12 @@ export function parseNodeFilter(raw: string[]): NodeFilter {
         EXIT_CODE.USAGE,
       );
     }
-    filter.push({ key: key as "type" | "status", values });
+    const typedKey = key as NodeFilterEntry["key"];
+    const merged = byKey.get(typedKey) ?? new Set<string>();
+    for (const value of values) merged.add(value);
+    byKey.set(typedKey, merged);
   }
-  return filter;
+  return [...byKey].map(([key, values]) => ({ key, values: [...values] }));
 }
 
 /**
@@ -873,7 +876,7 @@ function shapeGraph(
   let nodes = graph.nodes;
   if (opts.filter && opts.filter.length > 0) {
     for (const node of graph.nodes) {
-      if (node.labels.includes("PmItem") && !matchesNodeFilter(node, opts.filter)) {
+      if (!matchesNodeFilter(node, opts.filter)) {
         dropped.add(node.id);
       }
     }

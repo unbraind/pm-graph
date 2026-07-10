@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "0.2.0";
+const EXTENSION_VERSION = "2026.7.10";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -578,7 +578,7 @@ const NODE_FILTER_KEYS = new Set(["type", "status"]);
  * empty value list. Values are matched case-insensitively.
  */
 export function parseNodeFilter(raw) {
-    const filter = [];
+    const byKey = new Map();
     for (const term of raw) {
         const eq = term.indexOf("=");
         if (eq <= 0) {
@@ -596,9 +596,13 @@ export function parseNodeFilter(raw) {
         if (values.length === 0) {
             throw new CommandError(`Invalid --filter "${term}" (expected at least one value after "=").`, EXIT_CODE.USAGE);
         }
-        filter.push({ key: key, values });
+        const typedKey = key;
+        const merged = byKey.get(typedKey) ?? new Set();
+        for (const value of values)
+            merged.add(value);
+        byKey.set(typedKey, merged);
     }
-    return filter;
+    return [...byKey].map(([key, values]) => ({ key, values: [...values] }));
 }
 /**
  * Whether a node survives a NodeFilter. Non-PmItem nodes (facets, tags,
@@ -654,7 +658,7 @@ function shapeGraph(graph, opts) {
     let nodes = graph.nodes;
     if (opts.filter && opts.filter.length > 0) {
         for (const node of graph.nodes) {
-            if (node.labels.includes("PmItem") && !matchesNodeFilter(node, opts.filter)) {
+            if (!matchesNodeFilter(node, opts.filter)) {
                 dropped.add(node.id);
             }
         }

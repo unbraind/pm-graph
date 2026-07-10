@@ -1,0 +1,13 @@
+id: pm-graph-4mil
+title: "Fix node filter dedup and application, update version constant"
+description: ""
+type: Task
+status: in_progress
+priority: 1
+tags[2]: "area:filter","area:graph"
+created_at: "2026-07-10T19:55:24.228Z"
+updated_at: "2026-07-10T19:55:24.751Z"
+author: codex
+acceptance_criteria: "parseNodeFilter deduplicates via Map+Set; filter applies to all nodes not just PmItem; EXTENSION_VERSION matches release; release:check green; Greptile clean; PR merged"
+why_now: Node filter had duplicate entries; filter only applied to PmItem nodes; version constant was outdated
+body: ""

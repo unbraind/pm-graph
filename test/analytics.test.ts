@@ -450,9 +450,7 @@ test("cycles --format dot emits only the cycle-participating nodes/edges as a di
   ]);
 });
 
-test("renderAnalysisDiagram rejects an unsupported format at the type level (text is parsed earlier)", () => {
-  // The command layer validates --format before reaching the renderer; here
-  // we confirm the dot branch is distinct from mermaid and graphml output.
+test("renderAnalysisDiagram dot output is structurally distinct from mermaid and graphml", () => {
   const chain = longestChain(["A", "B", "C", "D"], chainEdges);
   const sub = criticalPathSubgraph(diagramGraph as any, chain);
   const dot = renderAnalysisDiagram("dot", sub);
@@ -476,6 +474,11 @@ test("parseNodeFilter parses key=value and comma-separated value lists", () => {
   assert.deepStrictEqual(parseNodeFilter(["type=Task", "status=open"]), [
     { key: "type", values: ["task"] },
     { key: "status", values: ["open"] },
+  ]);
+  // Repeating a single-valued key extends its OR set instead of creating an
+  // impossible status=open AND status=in_progress condition.
+  assert.deepStrictEqual(parseNodeFilter(["status=open", "status=in_progress,open"]), [
+    { key: "status", values: ["open", "in_progress"] },
   ]);
   // Whitespace and case are normalised.
   assert.deepStrictEqual(parseNodeFilter(["  TYPE = Epic , Story "]), [
