@@ -2,14 +2,16 @@ id: pm-graph-4mil
 title: "Fix node filter dedup and application, update version constant"
 description: ""
 type: Task
-status: in_progress
+status: closed
 priority: 1
 tags[2]: "area:filter","area:graph"
 created_at: "2026-07-10T19:55:24.228Z"
-updated_at: "2026-07-10T20:52:36.643Z"
+updated_at: "2026-07-10T21:21:45.953Z"
+closed_at: "2026-07-10T21:21:45.952Z"
 author: codex
 acceptance_criteria: "parseNodeFilter deduplicates via Map+Set; filter applies to all nodes not just PmItem; EXTENSION_VERSION matches release; release:check green; Greptile clean; PR merged"
 why_now: Node filter had duplicate entries; filter only applied to PmItem nodes; version constant was outdated
 comments[1]{created_at,author,text}:
   "2026-07-10T20:52:36.642Z",claude-opus,"Follow-up fix during PR #19 verification: the same-key OR merge only worked on the export/shapeGraph path. The analytics path (explain/analyze/neighbors/cycles/path/impact) went through parseAnalyticsFlags, which called parseNodeFilter once PER --filter flag and concatenated results — so 'explain <id> --filter status=open --filter status=in_progress' produced two separate status entries that AND to an impossible condition, dropping the item (verified: item returned NOTFOUND despite matching). Fixed parseAnalyticsFlags to accumulate raw --filter terms and call parseNodeFilter once at the end; exported it and added a regression test. Also fixed the Greptile P1 release.yml bug (bash expanded $1 in the node -e EXTENSION_VERSION replacement, corrupting src to 'const \"<ver>\";' and breaking the release build) via a function replacement. Rebuilt, 55/55 tests pass, changelog check green, end-to-end explain OR filter now correct."
+close_reason: "Shipped in PR #19 (merged to main). Same-key --filter values now OR-merge across both export and analytics command paths (parseAnalyticsFlags accumulates raw terms and parses once); filter applies to all graph nodes; EXTENSION_VERSION aligned to 2026.7.10; release.yml version-bump escaped so it no longer corrupts source; package-lock peer range synced to >=2026.7.10. Verified end-to-end (55/55 tests, explain OR filter correct) + all PR bots green (CodeRabbit/Greptile/Hound/semgrep)."
 body: ""
