@@ -146,3 +146,129 @@ test("critical-path rejects an invalid --format value cleanly", { skip: !pmAvail
     rmSync(ws, { recursive: true, force: true });
   }
 });
+
+test("critical-path --format dot prints a Graphviz digraph and keeps the result object", { skip: !pmAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-dot-"));
+  try {
+    pm(ws, ["init"]);
+    const a = createItem(ws, "Alpha");
+    const b = createItem(ws, "Beta", a);
+    const c = createItem(ws, "Gamma", b);
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph critical-path")!;
+
+    const chain = (await run({ cwd: ws, args: [] }) as any).path as string[];
+    assert.deepStrictEqual(chain, [c, b, a], "baseline chain is the full dependency chain");
+
+    const dot = await captureStdout(() => run({ cwd: ws, args: ["--format", "dot"] }));
+    assert.ok(dot.stdout.startsWith("digraph pm_graph {"), "Graphviz digraph printed");
+    assert.ok(dot.stdout.trim().endsWith("}"), "digraph closes");
+    for (const id of chain) {
+      assert.ok(dot.stdout.includes(`"${id}" [label=`), `chain node ${id} present in dot`);
+    }
+    assert.strictEqual((dot.result as any).format, "dot");
+    assert.deepStrictEqual((dot.result as any).path, chain, "path unchanged under dot");
+    assert.ok((dot.result as any).diagram, "diagram field populated");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("cycles --format dot prints the cycle subgraph then exits non-zero", { skip: !pmAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-cydot-"));
+  try {
+    pm(ws, ["init"]);
+    const x = createItem(ws, "X");
+    const y = createItem(ws, "Y", x);
+    pm(ws, ["update", x, "--blocked-by", y]);
+
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph cycles")!;
+
+    let threw = false;
+    let captured = "";
+    const original = console.log;
+    console.log = (...parts: unknown[]) => { captured += parts.map(String).join(" ") + "\n"; };
+    try {
+      await run({ cwd: ws, args: ["--format", "dot"] });
+    } catch (err: any) {
+      threw = true;
+      assert.match(String(err?.message ?? err), /dependency cycle/i, "still reports the cycle");
+    } finally {
+      console.log = original;
+    }
+    assert.ok(threw, "cycles still exits non-zero (CI-gating preserved)");
+    assert.ok(captured.startsWith("digraph pm_graph {"), "Graphviz digraph printed before throwing");
+    assert.ok(captured.includes(`"${x}"`) && captured.includes(`"${y}"`), "both cycle nodes present");
+    const edgeCount = (captured.match(/->/g) ?? []).length;
+    assert.strictEqual(edgeCount, 2, "exactly the two cycle edges");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("analyze --filter type=... scopes the report to matching item types", { skip: !pmAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-ftype-"));
+  try {
+    pm(ws, ["init"]);
+    const t1 = createItem(ws, "Task One");
+    const t2 = createItem(ws, "Task Two", t1);
+    pm(ws, ["create", "Epic", "Epic One", "--json"]); // an Epic, not a Task
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph analyze")!;
+
+    const all = (await run({ cwd: ws, args: [] }) as any) as { itemCount: number };
+    assert.strictEqual(all.itemCount, 3, "three items total (2 Tasks + 1 Epic)");
+
+    const filtered = (await run({ cwd: ws, args: ["--filter", "type=Task"] }) as any) as { itemCount: number };
+    assert.strictEqual(filtered.itemCount, 2, "only the two Task items survive --filter type=Task");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("analyze --filter status=... scopes the report and AND-combines with type", { skip: !pmAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-fstat-"));
+  try {
+    pm(ws, ["init"]);
+    const a = createItem(ws, "Alpha");
+    const b = createItem(ws, "Beta", a);
+    // close Beta so it is excluded by default but retained with --include-closed.
+    pm(ws, ["close", b, "done"]);
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph analyze")!;
+
+    // default: closed Beta dropped, only Alpha remains.
+    const baseline = (await run({ cwd: ws, args: [] }) as any) as { itemCount: number };
+    assert.strictEqual(baseline.itemCount, 1, "closed item excluded by default");
+
+    // --include-closed: both items present.
+    const withClosed = (await run({ cwd: ws, args: ["--include-closed"] }) as any) as { itemCount: number };
+    assert.strictEqual(withClosed.itemCount, 2, "closed item retained with --include-closed");
+
+    // --filter status=open AND --include-closed: closed Beta is retained by
+    // --include-closed but then dropped by the status filter, leaving Alpha only.
+    const statusFiltered = (await run({ cwd: ws, args: ["--include-closed", "--filter", "status=open"] }) as any) as {
+      itemCount: number;
+    };
+    assert.strictEqual(statusFiltered.itemCount, 1, "status filter drops the closed item even with --include-closed");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("critical-path --filter rejects a malformed filter with a USAGE error", { skip: !pmAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-badfilt-"));
+  try {
+    pm(ws, ["init"]);
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph critical-path")!;
+    await assert.rejects(
+      () => run({ cwd: ws, args: ["--filter", "priority=high"] }),
+      /Invalid --filter key "priority"/,
+      "unsupported filter key is rejected with a USAGE error",
+    );
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
