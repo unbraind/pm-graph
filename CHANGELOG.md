@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- Fix node filter dedup and application, update version constant ([pm-graph-4mil](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-4mil.toon))
 - Adversarial review pass 2026-07-10 ([pm-graph-3mny](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-3mny.toon))
 
 ### Other
