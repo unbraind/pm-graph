@@ -10,7 +10,7 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
-const EXTENSION_VERSION = "2026.7.10";
+const EXTENSION_VERSION = "2026.7.10-1";
 
 // ---------------------------------------------------------------------------
 // Error contract
@@ -2232,7 +2232,7 @@ export function activate(api: ExtensionApi): void {
             nodeCount: "Number of PmGraphNode entries in Neo4j (if connected)",
             relationshipCount: "Number of relationships between PmGraphNode entries (if connected)",
             lastSyncedAt: "Timestamp of the most recent sync (or null)",
-            version: "Extension version",
+            version: "2026.7.10-1",
           },
         };
       }
