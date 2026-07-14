@@ -1736,6 +1736,9 @@ export function activate(api) {
                     };
                 }
                 catch (err) {
+                    // Preserve an already-typed CommandError (and its exit code) instead of flattening.
+                    if (err instanceof CommandError)
+                        throw err;
                     const msg = err instanceof Error ? err.message : String(err);
                     throw new CommandError(`Export failed: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
                 }
@@ -1761,6 +1764,9 @@ export function activate(api) {
                 };
             }
             catch (err) {
+                // Preserve an already-typed CommandError (and its exit code) instead of flattening.
+                if (err instanceof CommandError)
+                    throw err;
                 const msg = err instanceof Error ? err.message : String(err);
                 throw new CommandError(`Export failed: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
             }
