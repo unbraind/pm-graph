@@ -5,14 +5,34 @@ type CommandContext = {
     cwd?: string;
     workspaceRoot?: string;
 };
+type ExtensionCommandArgumentDefinition = {
+    name: string;
+    required?: boolean;
+    variadic?: boolean;
+    description?: string;
+};
 type RegisterCommand = {
     name: string;
     description: string;
     run: (context: CommandContext) => Promise<unknown>;
+    arguments?: ExtensionCommandArgumentDefinition[];
+    intent?: string;
+    examples?: string[];
+    failure_hints?: string[];
+};
+type ServiceOverrideContext = {
+    service: string;
+    command?: string;
+    args?: string[];
+    options?: Record<string, unknown>;
+    global?: Record<string, unknown>;
+    pm_root?: string;
+    payload?: unknown;
 };
 type ExtensionApi = {
     registerCommand(command: RegisterCommand): void;
     registerExporter(name: string, exporter: Exporter): void;
+    registerService(service: "output_format" | "error_format" | "help_format" | "lock_acquire" | "lock_release" | "history_append" | "item_store_write" | "item_store_delete" | "context_relevance", override: (context: ServiceOverrideContext) => unknown): void;
 };
 type GraphNode = {
     id: string;
