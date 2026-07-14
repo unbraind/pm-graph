@@ -31,10 +31,13 @@ class CommandError extends Error {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 // Exact flag tokens the `pm-graph query`/`neighbors` handlers strip from their
-// variadic positional args (the host may leave them in `context.args`). Matched
-// exactly rather than by dash-prefix so that valid Cypher dash tokens (`--`,
-// `-->`, `<--`, negative literals like `-1`) in a split query are preserved.
-const QUERY_FLAG_TOKENS = new Set(["--json", "--help", "-h"]);
+// variadic positional args (these commands read `--json` manually, so the host
+// leaves it in `context.args`). Matched exactly — never by dash-prefix — so all
+// valid Cypher dash tokens survive: `--` (undirected), `-->`/`<--` (directed),
+// `-1` (negative literals), and single-dash unary minus like `-h`. Only the
+// unambiguous double-dash flags are stripped (a standalone `--json`/`--help` is
+// not valid Cypher); the documented usage quotes the whole query into one arg.
+const QUERY_FLAG_TOKENS = new Set(["--json", "--help"]);
 let neo4jApi = null;
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1637,20 +1640,23 @@ function hasHelpFlag(context) {
  */
 function readFlagStringValue(args, longName) {
     const equalsForm = `${longName}=`;
+    // Scan all args and keep the LAST occurrence so a repeated flag follows the
+    // standard CLI last-wins convention (e.g. `--format md --format json` => json).
+    let resolved = undefined;
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg === longName) {
             // A trailing bare `--flag`, or one followed by another flag (e.g.
             // `--format --json`), has no value — don't swallow the next flag as the
-            // value. Return null so the caller falls back to its default.
+            // value; treat it as null so the caller falls back to its default.
             const next = args[i + 1];
-            return next === undefined || next.startsWith("-") ? null : next;
+            resolved = next === undefined || next.startsWith("-") ? null : next;
         }
-        if (arg.startsWith(equalsForm)) {
-            return arg.slice(equalsForm.length);
+        else if (arg.startsWith(equalsForm)) {
+            resolved = arg.slice(equalsForm.length);
         }
     }
-    return undefined;
+    return resolved;
 }
 // ---------------------------------------------------------------------------
 // Command registrations
