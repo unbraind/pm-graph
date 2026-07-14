@@ -1669,7 +1669,7 @@ function readFlagStringValue(args, longName) {
             // `--format --json`), has no value — don't swallow the next flag as the
             // value. Return null so the caller falls back to its default.
             const next = args[i + 1];
-            return next === undefined || next.startsWith("--") ? null : next;
+            return next === undefined || next.startsWith("-") ? null : next;
         }
         if (arg.startsWith(equalsForm)) {
             return arg.slice(equalsForm.length);
@@ -1972,7 +1972,7 @@ export function activate(api) {
             // Drop flag tokens (e.g. a trailing `--json`) that the host may leave in
             // args for a variadic positional; otherwise they get joined into the
             // Cypher string and Neo4j rejects `... LIMIT 10 --json` as a syntax error.
-            const query = (context.args ?? []).filter((arg) => !arg.startsWith("--")).join(" ").trim();
+            const query = (context.args ?? []).filter((arg) => !arg.startsWith("-")).join(" ").trim();
             if (!query) {
                 throw new CommandError('Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"', EXIT_CODE.USAGE);
             }
@@ -2030,7 +2030,7 @@ export function activate(api) {
             }
             // Skip flag tokens (e.g. a trailing `--json`) the host may leave in args
             // so the node id is never a flag.
-            const nodeId = (context.args ?? []).find((arg) => !arg.startsWith("--"));
+            const nodeId = (context.args ?? []).find((arg) => !arg.startsWith("-"));
             if (!nodeId) {
                 throw new CommandError("Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42", EXIT_CODE.USAGE);
             }
