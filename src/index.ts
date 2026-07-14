@@ -392,21 +392,6 @@ function relationshipTarget(dep: Record<string, unknown>): string | null {
   return null;
 }
 
-function dependencyRows(raw: unknown): Array<Record<string, unknown>> {
-  if (Array.isArray(raw)) {
-    return raw.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object");
-  }
-  if (!raw || typeof raw !== "object") return [];
-  const data = raw as Record<string, unknown>;
-  for (const key of ["deps", "dependencies", "items", "relationships"]) {
-    const value = data[key];
-    if (Array.isArray(value)) {
-      return value.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object");
-    }
-  }
-  return [];
-}
-
 function facetNodeId(kind: string, value: string): string {
   return `${kind}:${value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-")}`;
 }
@@ -527,23 +512,6 @@ function graphFromItems(
         ) === index,
     ),
   };
-}
-
-async function loadGraph(context: CommandContext): Promise<Graph> {
-  const result = await runPmJson<{ items?: PmItem[] }>(context, ["list-all"]);
-  const items = result.items ?? [];
-  const depsByItem = new Map<string, Array<Record<string, unknown>>>();
-  await Promise.all(
-    items.map(async (item) => {
-      try {
-        const deps = await runPmJson<unknown>(context, ["deps", item.id]);
-        depsByItem.set(item.id, dependencyRows(deps));
-      } catch {
-        depsByItem.set(item.id, []);
-      }
-    }),
-  );
-  return graphFromItems(items, getWorkspace(context), depsByItem);
 }
 
 /**
@@ -2194,7 +2162,7 @@ export function activate(api: ExtensionApi): void {
         try {
           return {
             ok: true,
-            graph: await loadGraph(context),
+            graph: loadGraphForContext(context),
           };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -2217,7 +2185,7 @@ export function activate(api: ExtensionApi): void {
       }
 
       try {
-        const graph = await loadGraph(context);
+        const graph = loadGraphForContext(context);
         const output = renderExport(format, graph);
         // Wrap the rendered payload in a marker the output_format service override
         // unwraps, so the host writes the raw string to stdout instead of
@@ -2253,7 +2221,7 @@ export function activate(api: ExtensionApi): void {
         };
       }
       try {
-        const graph = await loadGraph(context);
+        const graph = loadGraphForContext(context);
         return {
           ok: true,
           graph: {
@@ -2302,7 +2270,7 @@ export function activate(api: ExtensionApi): void {
 
       let graph: Graph;
       try {
-        graph = await loadGraph(context);
+        graph = loadGraphForContext(context);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to load workspace graph: ${msg}`);

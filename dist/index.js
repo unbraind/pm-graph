@@ -236,21 +236,6 @@ function relationshipTarget(dep) {
     }
     return null;
 }
-function dependencyRows(raw) {
-    if (Array.isArray(raw)) {
-        return raw.filter((entry) => Boolean(entry) && typeof entry === "object");
-    }
-    if (!raw || typeof raw !== "object")
-        return [];
-    const data = raw;
-    for (const key of ["deps", "dependencies", "items", "relationships"]) {
-        const value = data[key];
-        if (Array.isArray(value)) {
-            return value.filter((entry) => Boolean(entry) && typeof entry === "object");
-        }
-    }
-    return [];
-}
 function facetNodeId(kind, value) {
     return `${kind}:${value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-")}`;
 }
@@ -356,21 +341,6 @@ function graphFromItems(items, workspace, depsByItem) {
             candidate.to === relationship.to &&
             candidate.type === relationship.type) === index),
     };
-}
-async function loadGraph(context) {
-    const result = await runPmJson(context, ["list-all"]);
-    const items = result.items ?? [];
-    const depsByItem = new Map();
-    await Promise.all(items.map(async (item) => {
-        try {
-            const deps = await runPmJson(context, ["deps", item.id]);
-            depsByItem.set(item.id, dependencyRows(deps));
-        }
-        catch {
-            depsByItem.set(item.id, []);
-        }
-    }));
-    return graphFromItems(items, getWorkspace(context), depsByItem);
 }
 /**
  * Synchronously fetch all items for a given pm root using
@@ -1752,7 +1722,7 @@ export function activate(api) {
                 try {
                     return {
                         ok: true,
-                        graph: await loadGraph(context),
+                        graph: loadGraphForContext(context),
                     };
                 }
                 catch (err) {
@@ -1768,7 +1738,7 @@ export function activate(api) {
                 throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);
             }
             try {
-                const graph = await loadGraph(context);
+                const graph = loadGraphForContext(context);
                 const output = renderExport(format, graph);
                 // Wrap the rendered payload in a marker the output_format service override
                 // unwraps, so the host writes the raw string to stdout instead of
@@ -1804,7 +1774,7 @@ export function activate(api) {
                 };
             }
             try {
-                const graph = await loadGraph(context);
+                const graph = loadGraphForContext(context);
                 return {
                     ok: true,
                     graph: {
@@ -1848,7 +1818,7 @@ export function activate(api) {
             }
             let graph;
             try {
-                graph = await loadGraph(context);
+                graph = loadGraphForContext(context);
             }
             catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
