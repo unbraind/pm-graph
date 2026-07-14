@@ -169,6 +169,24 @@ test('query "<cypher>" reaches Neo4j-not-configured, not a contract rejection (G
   }
 });
 
+test('query with Cypher dash tokens (quoted, single arg) is not dropped or misread as a flag', { skip: !pmAvailable }, () => {
+  // Documented usage quotes the whole query into ONE arg, so no flag-stripping
+  // applies. Guards that a query containing dash tokens that resemble flags
+  // (`-h` unary minus, `--` undirected relationship) reaches Neo4j rather than
+  // being treated as --help or having tokens dropped.
+  const ws = freshWorkspace();
+  try {
+    ensureExtension(ws);
+    const res = pm(ws, ["pm-graph", "query", "MATCH (a) -- (b) WITH 1 AS h RETURN -h"]);
+    assert.notEqual(res.status, 0, "exits non-zero (no Neo4j configured)");
+    const combined = res.stdout + res.stderr;
+    assert.match(combined, /Neo4j is not configured/, "reaches Neo4j, not a help screen or usage error");
+    assert.doesNotMatch(combined, /Usage: pm pm-graph query/, "was not misread as --help");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
 test("neighbors with no arg is rejected by the contract layer (G1 regression guard)", { skip: !pmAvailable }, () => {
   const ws = freshWorkspace();
   try {
