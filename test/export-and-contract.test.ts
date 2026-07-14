@@ -4,8 +4,14 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import extension from "../dist/index.js";
+
+// Resolve this file's directory without relying on the CommonJS `__dirname`,
+// which is undefined in ES modules (referencing it throws on Node versions
+// where `import.meta.dirname` is also unavailable, i.e. < 20.11).
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Integration tests that exercise the REAL pm CLI contract layer (argument
 // validation + output rendering) against a throwaway workspace, covering the
@@ -23,12 +29,10 @@ function pm(cwd: string, args: string[]): { status: number; stdout: string; stde
   return { status: result.status ?? -1, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
-let pmAvailable = true;
-try {
-  spawnSync("pm", ["--version"], { encoding: "utf-8" });
-} catch {
-  pmAvailable = false;
-}
+// spawnSync does NOT throw when `pm` is missing (ENOENT) — it returns an
+// object with `error` set. Detect availability from the result, not a throw.
+const pmProbe = spawnSync("pm", ["--version"], { encoding: "utf-8" });
+const pmAvailable = !pmProbe.error && pmProbe.status === 0;
 
 function freshWorkspace(): string {
   return mkdtempSync(path.join(tmpdir(), "pmg-contract-"));
@@ -41,7 +45,7 @@ function ensureExtension(ws: string): void {
   assert.equal(init.status, 0, `pm init failed: ${init.stdout}\n${init.stderr}`);
   const install = spawnSync(
     "pm",
-    ["install", path.resolve(import.meta.dirname ?? __dirname, "..")],
+    ["install", path.resolve(HERE, "..")],
     { cwd: ws, encoding: "utf-8", maxBuffer: 50 * 1024 * 1024 },
   );
   assert.equal(install.status, 0, `pm install failed: ${install.stdout}\n${install.stderr}`);
