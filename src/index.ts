@@ -2282,6 +2282,9 @@ export function activate(api: ExtensionApi): void {
       try {
         graph = loadGraphForContext(context);
       } catch (err: unknown) {
+        // Preserve an already-typed CommandError (and its exitCode) rather than
+        // re-wrapping it and flattening the code to GENERIC_FAILURE.
+        if (err instanceof CommandError) throw err;
         const msg = err instanceof Error ? err.message : String(err);
         throw new CommandError(`Failed to load workspace graph: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
       }
