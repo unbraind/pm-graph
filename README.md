@@ -106,6 +106,13 @@ Example output (abbreviated):
 }
 ```
 
+Pass `--format <cypher|mermaid|dot|json|graphml|plantuml>` to render the graph into an offline format on stdout instead of the default graph object. `--format json` emits a valid JSON Graph (`nodes`/`edges`) document on stdout (parseable with `JSON.parse`), so it is the right choice for piping into other tools; the other formats mirror `pm graph export`. The default (no `--format`) and `--json` behaviours are unchanged.
+
+```bash
+pm pm-graph export --format json | jq '.graph.nodes | length'
+pm pm-graph export --format mermaid > graph.mmd
+```
+
 ### `pm pm-graph cypher`
 
 Render parameterized Cypher statements for importing the current workspace graph into Neo4j. Returns the statements without executing them. **Does not require Neo4j.**

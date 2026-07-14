@@ -5,7 +5,8 @@
   "entry": "./dist/index.js",
   "capabilities": [
     "commands",
-    "importers"
+    "importers",
+    "services"
   ],
   "pm": {
     "compatibility": "v2"

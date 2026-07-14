@@ -69,15 +69,37 @@ type CommandContext = {
   workspaceRoot?: string;
 };
 
+type ExtensionCommandArgumentDefinition = {
+  name: string;
+  required?: boolean;
+  variadic?: boolean;
+  description?: string;
+};
+
 type RegisterCommand = {
   name: string;
   description: string;
   run: (context: CommandContext) => Promise<unknown>;
+  arguments?: ExtensionCommandArgumentDefinition[];
+  intent?: string;
+  examples?: string[];
+  failure_hints?: string[];
+};
+
+type ServiceOverrideContext = {
+  service: string;
+  command?: string;
+  args?: string[];
+  options?: Record<string, unknown>;
+  global?: Record<string, unknown>;
+  pm_root?: string;
+  payload?: unknown;
 };
 
 type ExtensionApi = {
   registerCommand(command: RegisterCommand): void;
   registerExporter(name: string, exporter: Exporter): void;
+  registerService(service: "output_format" | "error_format" | "help_format" | "lock_acquire" | "lock_release" | "history_append" | "item_store_write" | "item_store_delete" | "context_relevance", override: (context: ServiceOverrideContext) => unknown): void;
 };
 
 type PmItem = {
@@ -2067,11 +2089,54 @@ function hasHelpFlag(context: CommandContext): boolean {
   return args.includes("--help") || args.includes("-h");
 }
 
+/**
+ * Read the value of a string flag from a raw args array. Handles both the
+ * `--flag value` (two-token) and `--flag=value` (single-token) forms. Returns
+ * `undefined` when the flag is absent, and `null` when it was given without a
+ * value (e.g. a trailing bare `--flag`).
+ */
+function readFlagStringValue(args: string[], longName: string): string | null | undefined {
+  const equalsForm = `${longName}=`;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === longName) {
+      return args[i + 1] ?? null;
+    }
+    if (arg.startsWith(equalsForm)) {
+      return arg.slice(equalsForm.length);
+    }
+  }
+  return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Command registrations
 // ---------------------------------------------------------------------------
 
 export function activate(api: ExtensionApi): void {
+  // The `pm-graph export --format <fmt>` handler renders the graph into a
+  // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
+  // and returns it wrapped in a marker object. The host renders command
+  // results itself (TOON/JSON), which would re-encode the raw string — so we
+  // register an `output_format` service override that unwraps the marker and
+  // hands the raw string straight to stdout. `output_format` is a chained
+  // service (multiple overrides coexist by design), and this override is a
+  // strict no-op for every other command/result.
+  api.registerService("output_format", (ctx) => {
+    const result = (ctx.payload as { result?: unknown } | undefined)?.result;
+    if (
+      ctx.command === "pm-graph export" &&
+      result !== null &&
+      typeof result === "object" &&
+      result !== undefined &&
+      "__pmGraphRawOutput" in result
+    ) {
+      const raw = (result as { __pmGraphRawOutput?: unknown }).__pmGraphRawOutput;
+      if (typeof raw === "string") return raw;
+    }
+    return ctx.payload;
+  });
+
   // --- pm-graph ping -------------------------------------------------------
   api.registerCommand({
     name: "pm-graph ping",
@@ -2099,28 +2164,69 @@ export function activate(api: ExtensionApi): void {
   // --- pm-graph export -----------------------------------------------------
   api.registerCommand({
     name: "pm-graph export",
-    description: "Export the current workspace as dependency and knowledge graph JSON.",
+    description: "Export the current workspace as a dependency and knowledge graph (JSON by default, or another offline format with --format).",
     run: async (context) => {
+      const args = context.args ?? [];
+      const rawFormat = readFlagStringValue(args, "--format");
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph export [--json]",
-          description: "Export the current workspace as a dependency and knowledge graph. Does not require Neo4j.",
+          usage: "pm pm-graph export [--format <cypher|mermaid|dot|json|graphml|plantuml>] [--json]",
+          description:
+            "Export the current workspace as a dependency and knowledge graph. Does not require Neo4j. By default emits the graph object (TOON, or JSON with --json). With --format, renders the graph into the given offline format on stdout (valid JSON for --format json).",
           flags: {
+            "--format <fmt>": "Render the graph as cypher | mermaid | dot | json | graphml | plantuml on stdout (default: the graph object)",
             "--json": "Output as JSON",
           },
           output: {
-            graph: "Object containing nodes[], relationships[], projectKey, workspace, generatedAt",
+            graph: "Object containing nodes[], relationships[], projectKey, workspace, generatedAt (default, no --format)",
+            "--format": "Raw rendered format written to stdout",
           },
         };
       }
+
+      // No --format: preserve the original behaviour (graph object rendered by
+      // the host as TOON, or JSON with --json).
+      if (rawFormat === undefined) {
+        try {
+          return {
+            ok: true,
+            graph: await loadGraph(context),
+          };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new CommandError(`Export failed: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+        }
+      }
+
+      if (rawFormat === null || rawFormat.trim().length === 0) {
+        throw new CommandError(
+          "--format requires a value (cypher | mermaid | dot | json | graphml | plantuml).",
+          EXIT_CODE.USAGE,
+        );
+      }
+      const format = rawFormat.trim().toLowerCase() as ExportFormat;
+      if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(format)) {
+        throw new CommandError(
+          `Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`,
+          EXIT_CODE.USAGE,
+        );
+      }
+
       try {
+        const graph = await loadGraph(context);
+        const output = renderExport(format, graph);
+        // Wrap the rendered payload in a marker the output_format service override
+        // unwraps, so the host writes the raw string to stdout instead of
+        // re-encoding it as TOON/JSON.
         return {
-          ok: true,
-          graph: await loadGraph(context),
+          __pmGraphRawOutput: output,
+          format,
+          nodes: graph.nodes.length,
+          relationships: graph.relationships.length,
         };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Export failed: ${msg}`);
+        throw new CommandError(`Export failed: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
       }
     },
   });
@@ -2316,6 +2422,12 @@ export function activate(api: ExtensionApi): void {
     name: "pm-graph query",
     description:
       "Run a read-only Cypher query against Neo4j and return JSON results. Destructive keywords are blocked.",
+    arguments: [
+      { name: "cypher-query", required: true, variadic: true, description: "A read-only Cypher query (quote it on the shell)" },
+    ],
+    examples: [
+      'pm pm-graph query "MATCH (n:PmGraphNode {projectKey: \'my-project\'}) RETURN n.id, n.title LIMIT 10" --json',
+    ],
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
@@ -2334,18 +2446,22 @@ export function activate(api: ExtensionApi): void {
 
       const query = (context.args ?? []).join(" ").trim();
       if (!query) {
-        throw new Error('Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"');
+        throw new CommandError(
+          'Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"',
+          EXIT_CODE.USAGE,
+        );
       }
 
       const destructive = findDestructiveKeyword(query);
       if (destructive) {
-        throw new Error(
+        throw new CommandError(
           `Blocked destructive Cypher keyword "${destructive}". Only read-only queries (MATCH / RETURN / WITH / ORDER BY / LIMIT / SKIP / WHERE) are allowed.`,
+          EXIT_CODE.USAGE,
         );
       }
 
       if (!neo4jConfigured()) {
-        throw new Error(neo4jMissingMessage());
+        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.GENERIC_FAILURE);
       }
 
       const driver = await createDriver();
@@ -2376,6 +2492,10 @@ export function activate(api: ExtensionApi): void {
     name: "pm-graph neighbors",
     description:
       "Return all 1-hop neighbors with relationships for a given node ID.",
+    arguments: [
+      { name: "node-id", required: true, description: "The PmGraphNode id to inspect (e.g. TASK-42)" },
+    ],
+    examples: ["pm pm-graph neighbors TASK-42 --json"],
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
@@ -2394,11 +2514,14 @@ export function activate(api: ExtensionApi): void {
 
       const nodeId = (context.args ?? [])[0];
       if (!nodeId) {
-        throw new Error("Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42");
+        throw new CommandError(
+          "Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42",
+          EXIT_CODE.USAGE,
+        );
       }
 
       if (!neo4jConfigured()) {
-        throw new Error(neo4jMissingMessage());
+        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.GENERIC_FAILURE);
       }
 
       const projectKey = projectKeyForWorkspace(getWorkspace(context));
