@@ -2098,9 +2098,8 @@ export function activate(api: ExtensionApi): void {
     const result = (ctx.payload as { result?: unknown } | undefined)?.result;
     if (
       ctx.command === "pm-graph export" &&
-      result !== null &&
+      result &&
       typeof result === "object" &&
-      result !== undefined &&
       "__pmGraphRawOutput" in result
     ) {
       const raw = (result as { __pmGraphRawOutput?: unknown }).__pmGraphRawOutput;
