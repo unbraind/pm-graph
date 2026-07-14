@@ -1969,10 +1969,13 @@ export function activate(api) {
                     },
                 };
             }
-            // Drop flag tokens (e.g. a trailing `--json`) that the host may leave in
-            // args for a variadic positional; otherwise they get joined into the
-            // Cypher string and Neo4j rejects `... LIMIT 10 --json` as a syntax error.
-            const query = (context.args ?? []).filter((arg) => !arg.startsWith("-")).join(" ").trim();
+            // Drop `--`-prefixed flag tokens (e.g. a trailing `--json`) that the host
+            // may leave in args for a variadic positional; otherwise they get joined
+            // into the Cypher string and Neo4j rejects `... LIMIT 10 --json` as a
+            // syntax error. Only two-dash tokens are stripped: Cypher never uses `--`
+            // tokens, but a single-dash token can be valid query text (e.g. a negative
+            // literal `n.score < -1`), so those must be preserved.
+            const query = (context.args ?? []).filter((arg) => !arg.startsWith("--")).join(" ").trim();
             if (!query) {
                 throw new CommandError('Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"', EXIT_CODE.USAGE);
             }
@@ -2030,7 +2033,7 @@ export function activate(api) {
             }
             // Skip flag tokens (e.g. a trailing `--json`) the host may leave in args
             // so the node id is never a flag.
-            const nodeId = (context.args ?? []).find((arg) => !arg.startsWith("-"));
+            const nodeId = (context.args ?? []).find((arg) => !arg.startsWith("--"));
             if (!nodeId) {
                 throw new CommandError("Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42", EXIT_CODE.USAGE);
             }
