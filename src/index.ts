@@ -39,6 +39,12 @@ class CommandError extends Error {
 }
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
+
+// Exact flag tokens the `pm-graph query`/`neighbors` handlers strip from their
+// variadic positional args (the host may leave them in `context.args`). Matched
+// exactly rather than by dash-prefix so that valid Cypher dash tokens (`--`,
+// `-->`, `<--`, negative literals like `-1`) in a split query are preserved.
+const QUERY_FLAG_TOKENS = new Set(["--json", "--help", "-h"]);
 type Neo4jApi = {
   driver: (uri: string, authToken: unknown, config?: Record<string, unknown>) => unknown;
   auth: {
@@ -2272,7 +2278,7 @@ export function activate(api: ExtensionApi): void {
         graph = loadGraphForContext(context);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Failed to load workspace graph: ${msg}`);
+        throw new CommandError(`Failed to load workspace graph: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
       }
 
       const result = await syncNeo4j(graph, { fullSync });
@@ -2415,13 +2421,14 @@ export function activate(api: ExtensionApi): void {
         };
       }
 
-      // Drop `--`-prefixed flag tokens (e.g. a trailing `--json`) that the host
-      // may leave in args for a variadic positional; otherwise they get joined
-      // into the Cypher string and Neo4j rejects `... LIMIT 10 --json` as a
-      // syntax error. Only two-dash tokens are stripped: Cypher never uses `--`
-      // tokens, but a single-dash token can be valid query text (e.g. a negative
-      // literal `n.score < -1`), so those must be preserved.
-      const query = (context.args ?? []).filter((arg) => !arg.startsWith("--")).join(" ").trim();
+      // Drop only the exact flag tokens this command accepts (`--json`, and the
+      // `--help`/`-h` the host may surface) that can be left in args for a
+      // variadic positional; otherwise they get joined into the Cypher string
+      // and Neo4j rejects e.g. `... LIMIT 10 --json`. A prefix-based filter is
+      // unsafe here because Cypher legitimately uses dash tokens — `--` for
+      // undirected relationships (`MATCH (a) -- (b)`), `-->`/`<--` for directed,
+      // and `-1` for negative literals — so we match flags exactly.
+      const query = (context.args ?? []).filter((arg) => !QUERY_FLAG_TOKENS.has(arg)).join(" ").trim();
       if (!query) {
         throw new CommandError(
           'Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"',
@@ -2489,9 +2496,9 @@ export function activate(api: ExtensionApi): void {
         };
       }
 
-      // Skip flag tokens (e.g. a trailing `--json`) the host may leave in args
-      // so the node id is never a flag.
-      const nodeId = (context.args ?? []).find((arg) => !arg.startsWith("--"));
+      // Skip the exact flag tokens the host may leave in args so the node id is
+      // never a flag. (A node id never equals one of these literals.)
+      const nodeId = (context.args ?? []).find((arg) => !QUERY_FLAG_TOKENS.has(arg));
       if (!nodeId) {
         throw new CommandError(
           "Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42",
