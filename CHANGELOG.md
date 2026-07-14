@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- pm-graph export --format json emits TOON; neighbors/query reject positional args at contract layer ([pm-graph-1fr9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fr9.toon))
+
 ## 2026.7.10-1 - 2026-07-10
 
 ### Added
