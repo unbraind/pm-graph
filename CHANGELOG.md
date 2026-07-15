@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Classify missing optional Neo4j configuration as an expected CLI error ([pm-graph-4hs4](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-4hs4.toon))
+
 ## 2026.7.14-1 - 2026-07-14
 
 ### Fixed
