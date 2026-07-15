@@ -155,6 +155,19 @@ test("neighbors <node-id> reaches Neo4j-not-configured, not a contract rejection
   }
 });
 
+test("sync classifies missing Neo4j configuration as expected usage", { skip: !pmAvailable }, () => {
+  const ws = freshWorkspace();
+  try {
+    ensureExtension(ws);
+    const res = pm(ws, ["pm-graph", "sync"]);
+    assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
+    const combined = res.stdout + res.stderr;
+    assert.match(combined, /Neo4j is not configured/, "reaches the shared Neo4j configuration guard");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
 test('query "<cypher>" reaches Neo4j-not-configured, not a contract rejection (G1)', { skip: !pmAvailable }, () => {
   const ws = freshWorkspace();
   try {
