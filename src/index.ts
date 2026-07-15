@@ -33,7 +33,7 @@ class CommandError extends Error {
   exitCode: number;
   constructor(message: string, exitCode: number = EXIT_CODE.GENERIC_FAILURE) {
     super(message);
-    this.name = "CommandError";
+    this.name = "PmCliError";
     this.exitCode = exitCode;
   }
 }
@@ -2457,7 +2457,7 @@ export function activate(api: ExtensionApi): void {
       }
 
       if (!neo4jConfigured()) {
-        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.GENERIC_FAILURE);
+        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.USAGE);
       }
 
       const driver = await createDriver();
@@ -2519,7 +2519,7 @@ export function activate(api: ExtensionApi): void {
       }
 
       if (!neo4jConfigured()) {
-        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.GENERIC_FAILURE);
+        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.USAGE);
       }
 
       const projectKey = projectKeyForWorkspace(getWorkspace(context));
