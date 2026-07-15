@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "2026.7.14";
+const EXTENSION_VERSION = "2026.7.14-1";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -122,7 +122,7 @@ async function createDriver() {
     const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME;
     const password = process.env.NEO4J_PASSWORD;
     if (!uri || !user || !password) {
-        throw new Error(neo4jMissingMessage());
+        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.USAGE);
     }
     const neo4j = await loadNeo4j();
     return neo4j.driver(uri, neo4j.auth.basic(user, password), {
@@ -1829,9 +1829,6 @@ export function activate(api) {
                 };
             }
             const fullSync = args.includes("--full");
-            if (!neo4jConfigured()) {
-                throw new Error(neo4jMissingMessage());
-            }
             let graph;
             try {
                 graph = loadGraphForContext(context);
@@ -1875,7 +1872,7 @@ export function activate(api) {
                         nodeCount: "Number of PmGraphNode entries in Neo4j (if connected)",
                         relationshipCount: "Number of relationships between PmGraphNode entries (if connected)",
                         lastSyncedAt: "Timestamp of the most recent sync (or null)",
-                        version: "2026.7.14",
+                        version: "2026.7.14-1",
                     },
                 };
             }
@@ -1974,9 +1971,6 @@ export function activate(api) {
             if (destructive) {
                 throw new CommandError(`Blocked destructive Cypher keyword "${destructive}". Only read-only queries (MATCH / RETURN / WITH / ORDER BY / LIMIT / SKIP / WHERE) are allowed.`, EXIT_CODE.USAGE);
             }
-            if (!neo4jConfigured()) {
-                throw new CommandError(neo4jMissingMessage(), EXIT_CODE.GENERIC_FAILURE);
-            }
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
             try {
@@ -2027,9 +2021,6 @@ export function activate(api) {
             const nodeId = (context.args ?? []).find((arg) => !QUERY_FLAG_TOKENS.has(arg));
             if (!nodeId) {
                 throw new CommandError("Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42", EXIT_CODE.USAGE);
-            }
-            if (!neo4jConfigured()) {
-                throw new CommandError(neo4jMissingMessage(), EXIT_CODE.GENERIC_FAILURE);
             }
             const projectKey = projectKeyForWorkspace(getWorkspace(context));
             const driver = await createDriver();

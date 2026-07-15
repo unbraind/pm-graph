@@ -146,10 +146,23 @@ test("neighbors <node-id> reaches Neo4j-not-configured, not a contract rejection
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "neighbors", "TASK-42"]);
-    assert.notEqual(res.status, 0, "exits non-zero (no Neo4j configured)");
+    assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
     const combined = res.stdout + res.stderr;
     assert.match(combined, /Neo4j is not configured/, "reaches the clear Neo4j error");
     assert.doesNotMatch(combined, /Too many arguments/, "NOT a contract/usage rejection");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("sync classifies missing Neo4j configuration as expected usage", { skip: !pmAvailable }, () => {
+  const ws = freshWorkspace();
+  try {
+    ensureExtension(ws);
+    const res = pm(ws, ["pm-graph", "sync"]);
+    assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
+    const combined = res.stdout + res.stderr;
+    assert.match(combined, /Neo4j is not configured/, "reaches the shared Neo4j configuration guard");
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -160,7 +173,7 @@ test('query "<cypher>" reaches Neo4j-not-configured, not a contract rejection (G
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "query", "MATCH (n) RETURN n LIMIT 5"]);
-    assert.notEqual(res.status, 0, "exits non-zero (no Neo4j configured)");
+    assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
     const combined = res.stdout + res.stderr;
     assert.match(combined, /Neo4j is not configured/, "reaches the clear Neo4j error");
     assert.doesNotMatch(combined, /Too many arguments/, "NOT a contract/usage rejection");
@@ -178,9 +191,9 @@ test('query with Cypher dash tokens (quoted, single arg) is not dropped or misre
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "query", "MATCH (a) -- (b) WITH 1 AS h RETURN -h"]);
-    assert.notEqual(res.status, 0, "exits non-zero (no Neo4j configured)");
+    assert.equal(res.status, 2, "uses the expected configuration/usage exit code (no Neo4j configured)");
     const combined = res.stdout + res.stderr;
-    assert.match(combined, /Neo4j is not configured/, "reaches Neo4j, not a help screen or usage error");
+    assert.match(combined, /Neo4j is not configured/, "reaches Neo4j rather than a help screen");
     assert.doesNotMatch(combined, /Usage: pm pm-graph query/, "was not misread as --help");
   } finally {
     rmSync(ws, { recursive: true, force: true });
