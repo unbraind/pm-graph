@@ -178,9 +178,9 @@ test('query with Cypher dash tokens (quoted, single arg) is not dropped or misre
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "query", "MATCH (a) -- (b) WITH 1 AS h RETURN -h"]);
-    assert.notEqual(res.status, 0, "exits non-zero (no Neo4j configured)");
+    assert.equal(res.status, 2, "uses the expected configuration/usage exit code (no Neo4j configured)");
     const combined = res.stdout + res.stderr;
-    assert.match(combined, /Neo4j is not configured/, "reaches Neo4j, not a help screen or usage error");
+    assert.match(combined, /Neo4j is not configured/, "reaches Neo4j rather than a help screen");
     assert.doesNotMatch(combined, /Usage: pm pm-graph query/, "was not misread as --help");
   } finally {
     rmSync(ws, { recursive: true, force: true });

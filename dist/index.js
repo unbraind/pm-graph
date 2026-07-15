@@ -24,7 +24,7 @@ class CommandError extends Error {
     exitCode;
     constructor(message, exitCode = EXIT_CODE.GENERIC_FAILURE) {
         super(message);
-        this.name = "PmCliError";
+        this.name = "CommandError";
         this.exitCode = exitCode;
     }
 }

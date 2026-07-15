@@ -33,7 +33,7 @@ class CommandError extends Error {
   exitCode: number;
   constructor(message: string, exitCode: number = EXIT_CODE.GENERIC_FAILURE) {
     super(message);
-    this.name = "PmCliError";
+    this.name = "CommandError";
     this.exitCode = exitCode;
   }
 }
