@@ -246,3 +246,107 @@ test("path/impact still accept positionals through the contract layer (G1 siblin
     rmSync(ws, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// pm-cli 2026.7.18 core `pm graph` collision + pm_root fixes
+// ---------------------------------------------------------------------------
+
+test("exporter adapter is registered as graph-export (core `pm graph` collision guard)", () => {
+  const exporters: string[] = [];
+  const api = {
+    registerCommand: () => {},
+    registerExporter: (name: string) => exporters.push(name),
+    registerImporter: () => {},
+    registerHook: () => {},
+    registerSchema: () => {},
+    registerRenderer: () => {},
+    registerSearchProvider: () => {},
+    registerPreflight: () => {},
+    registerService: () => {},
+  };
+  extension.activate(api as any);
+  assert.ok(exporters.includes("graph-export"), "graph-export adapter registered");
+  assert.ok(!exporters.includes("graph"), 'legacy "graph" adapter no longer registered (pm-cli 2026.7.18 owns `pm graph`)');
+});
+
+test("export shaping: --edges deps drops facet edges on the canonical command", { skip: !pmAvailable }, () => {
+  const ws = freshWorkspace();
+  try {
+    ensureExtension(ws);
+    const a = pm(ws, ["create", "task", "alpha", "--json"]);
+    assert.equal(a.status, 0, `create alpha: ${a.stderr}`);
+    const b = pm(ws, ["create", "task", "beta", "--json"]);
+    assert.equal(b.status, 0, `create beta: ${b.stderr}`);
+    const aId = (JSON.parse(a.stdout) as { item: { id: string } }).item.id;
+    const bId = (JSON.parse(b.stdout) as { item: { id: string } }).item.id;
+    const link = pm(ws, ["update", bId, "--blocked-by", aId]);
+    assert.equal(link.status, 0, `blocked-by link: ${link.stderr}`);
+
+    const deps = pm(ws, ["pm-graph", "export", "--format", "mermaid", "--edges", "deps"]);
+    assert.equal(deps.status, 0, `exit 0\nstdout:\n${deps.stdout.slice(0, 500)}\nstderr:\n${deps.stderr.slice(0, 500)}`);
+    assert.match(deps.stdout, /BLOCKED_BY/, "structural edge kept");
+    assert.doesNotMatch(deps.stdout, /HAS_TYPE|HAS_STATUS|TAGGED_WITH/, "facet/tag edges dropped");
+
+    const all = pm(ws, ["pm-graph", "export", "--format", "mermaid"]);
+    assert.equal(all.status, 0);
+    assert.match(all.stdout, /HAS_TYPE/, "no shaping flags keeps the full legacy graph");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("export shaping: invalid --edges and --output without --format are USAGE errors", { skip: !pmAvailable }, () => {
+  const ws = freshWorkspace();
+  try {
+    ensureExtension(ws);
+    const badEdges = pm(ws, ["pm-graph", "export", "--edges", "everything"]);
+    assert.notEqual(badEdges.status, 0, "invalid --edges exits non-zero");
+    assert.match(badEdges.stdout + badEdges.stderr, /Unknown --edges "everything"/);
+
+    const badOutput = pm(ws, ["pm-graph", "export", "--output", "g.json"]);
+    assert.notEqual(badOutput.status, 0, "--output without --format exits non-zero");
+    assert.match(badOutput.stdout + badOutput.stderr, /--output requires --format/);
+
+    const badDepth = pm(ws, ["pm-graph", "export", "--format", "dot", "--depth", "2"]);
+    assert.notEqual(badDepth.status, 0, "--depth without --root exits non-zero");
+    assert.match(badDepth.stdout + badDepth.stderr, /--depth requires --root/);
+
+    const fuzzyDepth = pm(ws, ["pm-graph", "export", "--format", "dot", "--root", "x", "--depth", "2abc"]);
+    assert.notEqual(fuzzyDepth.status, 0, "partially-numeric --depth exits non-zero");
+    assert.match(fuzzyDepth.stdout + fuzzyDepth.stderr, /Invalid --depth "2abc"/, "strict integer validation (not parseInt)");
+
+    const bareFilter = pm(ws, ["pm-graph", "export", "--json", "--filter"]);
+    assert.notEqual(bareFilter.status, 0, "valueless --filter exits non-zero");
+    assert.match(bareFilter.stdout + bareFilter.stderr, /--filter requires a value/, "bare --filter is rejected, not silently dropped");
+
+    // --include-closed alone is a no-op modifier, NOT a shaping trigger: the
+    // full legacy graph (closed included) comes back unchanged.
+    const ic = pm(ws, ["pm-graph", "export", "--json", "--include-closed"]);
+    assert.equal(ic.status, 0, `--include-closed alone stays legacy: ${ic.stderr}`);
+    const icParsed = JSON.parse(ic.stdout) as { ok: boolean };
+    assert.equal(icParsed.ok, true);
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("analytics honour a custom tracker path via pm_root (--pm-path fix)", { skip: !pmAvailable }, () => {
+  const ws = freshWorkspace();
+  try {
+    const init = pm(ws, ["init", "--pm-path", ".pmx"]);
+    assert.equal(init.status, 0, `pm init --pm-path failed: ${init.stdout}\n${init.stderr}`);
+    const install = pm(ws, ["install", path.resolve(HERE, ".."), "--pm-path", ".pmx"]);
+    assert.equal(install.status, 0, `pm install failed: ${install.stdout}\n${install.stderr}`);
+    const created = pm(ws, ["create", "task", "gamma", "--pm-path", ".pmx"]);
+    assert.equal(created.status, 0, `create failed: ${created.stderr}`);
+
+    const analyze = pm(ws, ["pm-graph", "analyze", "--json", "--pm-path", ".pmx"]);
+    assert.equal(analyze.status, 0, `analyze under custom --pm-path: ${analyze.stdout.slice(0, 300)}\n${analyze.stderr.slice(0, 300)}`);
+    const parsed = JSON.parse(analyze.stdout) as { ok: boolean; itemCount: number; projectKey: string };
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.itemCount, 1, "sees the item stored under the custom tracker path");
+    assert.equal(parsed.projectKey, path.basename(ws), "projectKey derives from the workspace, not the hidden storage dir");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});

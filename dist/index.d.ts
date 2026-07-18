@@ -4,6 +4,10 @@ type CommandContext = {
     args?: string[];
     cwd?: string;
     workspaceRoot?: string;
+    /** Resolved tracker storage path the CLI passes to extension commands (honours --pm-path/--path). */
+    pm_root?: string;
+    options?: Record<string, unknown>;
+    global?: Record<string, unknown>;
 };
 type ExtensionCommandArgumentDefinition = {
     name: string;
