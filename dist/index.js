@@ -474,16 +474,16 @@ export function parseAnalyticsFlags(args) {
             const value = args[++i];
             if (value === undefined)
                 throw new CommandError("--depth requires an integer.", EXIT_CODE.USAGE);
-            const parsed = parseInt(value, 10);
-            if (Number.isNaN(parsed) || parsed < 0) {
+            const parsed = parseNonNegativeInt(value);
+            if (parsed === undefined) {
                 throw new CommandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
             flags.depth = parsed;
         }
         else if (arg.startsWith("--depth=")) {
             const value = arg.slice("--depth=".length);
-            const parsed = parseInt(value, 10);
-            if (Number.isNaN(parsed) || parsed < 0) {
+            const parsed = parseNonNegativeInt(value);
+            if (parsed === undefined) {
                 throw new CommandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
             flags.depth = parsed;
@@ -1675,7 +1675,12 @@ function readFlagStringValue(args, longName) {
     }
     return resolved;
 }
-/** Collect ALL occurrences of a repeatable string flag (`--flag value` / `--flag=value`). */
+/**
+ * Collect ALL occurrences of a repeatable string flag (`--flag value` /
+ * `--flag=value`). A `null` entry marks an occurrence with a missing value
+ * (bare trailing flag, or one followed by another flag) so callers can reject
+ * it instead of silently dropping the flag.
+ */
 function readFlagStringValues(args, longName) {
     const equalsForm = `${longName}=`;
     const values = [];
@@ -1687,12 +1692,25 @@ function readFlagStringValues(args, longName) {
                 values.push(next);
                 i++;
             }
+            else {
+                values.push(null);
+            }
         }
         else if (arg.startsWith(equalsForm)) {
             values.push(arg.slice(equalsForm.length));
         }
     }
     return values;
+}
+/** Strictly parse a non-negative integer (""/"2abc"/"2.5" are rejected, unlike parseInt). */
+function parseNonNegativeInt(raw) {
+    const text = String(raw).trim();
+    if (text.length === 0)
+        return undefined;
+    const parsed = Number(text);
+    if (!Number.isInteger(parsed) || parsed < 0)
+        return undefined;
+    return parsed;
 }
 /** True when a bare boolean flag is present in the raw args. */
 function argsHaveFlag(args, longName) {
@@ -1805,11 +1823,13 @@ export function activate(api) {
                 if (rawRoot === undefined) {
                     throw new CommandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
                 }
-                const parsed = parseInt(String(rawDepth), 10);
-                if (Number.isNaN(parsed) || parsed < 0) {
+                depth = parseNonNegativeInt(rawDepth);
+                if (depth === undefined) {
                     throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
                 }
-                depth = parsed;
+            }
+            if (filterTerms.some((t) => t === null)) {
+                throw new CommandError("--filter requires a value (key=value[,value]).", EXIT_CODE.USAGE);
             }
             const filter = parseNodeFilter(filterTerms);
             if (outputPath !== undefined && (outputPath === null || outputPath.trim().length === 0)) {
@@ -2481,11 +2501,10 @@ export function activate(api) {
             if (!root) {
                 throw new CommandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
             }
-            const parsed = parseInt(String(rawDepth), 10);
-            if (Number.isNaN(parsed) || parsed < 0) {
+            depth = parseNonNegativeInt(rawDepth);
+            if (depth === undefined) {
                 throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
-            depth = parsed;
         }
         // The export pipeline provides pm_root; fall back to the cwd-based fetch
         // (same as the command path) if a host ever omits it.

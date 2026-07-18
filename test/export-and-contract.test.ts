@@ -311,6 +311,14 @@ test("export shaping: invalid --edges and --output without --format are USAGE er
     assert.notEqual(badDepth.status, 0, "--depth without --root exits non-zero");
     assert.match(badDepth.stdout + badDepth.stderr, /--depth requires --root/);
 
+    const fuzzyDepth = pm(ws, ["pm-graph", "export", "--format", "dot", "--root", "x", "--depth", "2abc"]);
+    assert.notEqual(fuzzyDepth.status, 0, "partially-numeric --depth exits non-zero");
+    assert.match(fuzzyDepth.stdout + fuzzyDepth.stderr, /Invalid --depth "2abc"/, "strict integer validation (not parseInt)");
+
+    const bareFilter = pm(ws, ["pm-graph", "export", "--json", "--filter"]);
+    assert.notEqual(bareFilter.status, 0, "valueless --filter exits non-zero");
+    assert.match(bareFilter.stdout + bareFilter.stderr, /--filter requires a value/, "bare --filter is rejected, not silently dropped");
+
     // --include-closed alone is a no-op modifier, NOT a shaping trigger: the
     // full legacy graph (closed included) comes back unchanged.
     const ic = pm(ws, ["pm-graph", "export", "--json", "--include-closed"]);
