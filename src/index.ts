@@ -3036,6 +3036,9 @@ export function activate(api: ExtensionApi): void {
     const rawDepth = readExportOption(options, "depth");
     let depth: number | undefined;
     if (rawDepth !== undefined) {
+      if (!root) {
+        throw new CommandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
+      }
       const parsed = parseInt(String(rawDepth), 10);
       if (Number.isNaN(parsed) || parsed < 0) {
         throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
@@ -3043,7 +3046,9 @@ export function activate(api: ExtensionApi): void {
       depth = parsed;
     }
 
-    const fullGraph = loadGraphFromPath(ctx.pm_root);
+    // The export pipeline provides pm_root; fall back to the cwd-based fetch
+    // (same as the command path) if a host ever omits it.
+    const fullGraph = ctx.pm_root ? loadGraphFromPath(ctx.pm_root) : loadGraphForContext({});
 
     if (root && !fullGraph.nodes.some((n) => n.id === root)) {
       throw new CommandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
@@ -3060,7 +3065,11 @@ export function activate(api: ExtensionApi): void {
     const graph = shapeGraph(fullGraph, { edges, includeClosed, rootId: root, depth, filter });
     const output = renderExport(format, graph);
 
-    const outputPath = readExportOption(options, "output") as string | undefined;
+    const rawOutput = readExportOption(options, "output");
+    const outputPath = typeof rawOutput === "string" && rawOutput.trim().length > 0 ? rawOutput.trim() : undefined;
+    if (rawOutput !== undefined && outputPath === undefined) {
+      throw new CommandError("--output requires a file path.", EXIT_CODE.USAGE);
+    }
     if (outputPath) {
       const absolutePath = path.resolve(outputPath);
       writeFileSync(absolutePath, output + "\n", "utf-8");
