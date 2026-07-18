@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Canonical pm pm-graph export gains shaping flags (--output/--edges/--root/--depth/--filter/--include-closed) ([pm-graph-83ev](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-83ev.toon))
+- Exporter adapter 'graph' collides with new core pm graph command group (pm-cli 2026.7.18) ([pm-graph-3svp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-3svp.toon))
+
+### Fixed
+
+- Analytics and sync ignore ctx.pm_root: tracker_not_initialized under custom --pm-path ([pm-graph-swfx](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-swfx.toon))
+
 ## 2026.7.15 - 2026-07-15
 
 ### Fixed

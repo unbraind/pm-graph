@@ -76,6 +76,10 @@ type CommandContext = {
   args?: string[];
   cwd?: string;
   workspaceRoot?: string;
+  /** Resolved tracker storage path the CLI passes to extension commands (honours --pm-path/--path). */
+  pm_root?: string;
+  options?: Record<string, unknown>;
+  global?: Record<string, unknown>;
 };
 
 type ExtensionCommandArgumentDefinition = {
@@ -160,6 +164,7 @@ type Graph = {
 // ---------------------------------------------------------------------------
 
 function getWorkspace(context: CommandContext): string {
+  if (context.pm_root) return workspaceFromPmRoot(context.pm_root);
   return context.workspaceRoot ?? context.cwd ?? process.cwd();
 }
 
@@ -370,7 +375,10 @@ function toNumber(value: unknown): number {
 async function runPmJson<T>(context: CommandContext, args: string[]): Promise<T> {
   const cliEntry = process.argv[1];
   const command = cliEntry ? process.execPath : "pm";
-  const commandArgs = cliEntry ? [cliEntry, ...args, "--json"] : [...args, "--json"];
+  const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
+  const commandArgs = cliEntry
+    ? [cliEntry, ...pathArgs, ...args, "--json"]
+    : [...pathArgs, ...args, "--json"];
   try {
     const { stdout } = await execFileAsync(command, commandArgs, {
       cwd: getWorkspace(context),
@@ -568,6 +576,12 @@ function workspaceFromPmRoot(pmRoot: string): string {
   if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
     return parts.slice(0, -2).join(path.sep) || path.sep;
   }
+  // Custom hidden storage dirs (e.g. `<workspace>/.pm` via --pm-path): treat
+  // the parent as the logical workspace so projectKey doesn't become ".pm".
+  const last = parts[parts.length - 1];
+  if (parts.length >= 2 && last.startsWith(".") && last.length > 1) {
+    return parts.slice(0, -1).join(path.sep) || path.sep;
+  }
   return normalized;
 }
 
@@ -585,6 +599,12 @@ function loadGraphFromPath(pmRoot: string): Graph {
  * analytics commands (analyze/cycles/path/critical-path).
  */
 function loadGraphForContext(context: CommandContext): Graph {
+  // Prefer the resolved tracker path the CLI hands to extension commands so
+  // custom --pm-path/--path workspaces resolve correctly; fall back to a
+  // cwd-relative fetch for older CLI versions that omit pm_root.
+  if (context.pm_root) {
+    return loadGraphFromPath(context.pm_root);
+  }
   const workspace = getWorkspace(context);
   const result = spawnSync(
     "pm",
@@ -2092,6 +2112,30 @@ function readFlagStringValue(args: string[], longName: string): string | null | 
   return resolved;
 }
 
+/** Collect ALL occurrences of a repeatable string flag (`--flag value` / `--flag=value`). */
+function readFlagStringValues(args: string[], longName: string): string[] {
+  const equalsForm = `${longName}=`;
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === longName) {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        values.push(next);
+        i++;
+      }
+    } else if (arg.startsWith(equalsForm)) {
+      values.push(arg.slice(equalsForm.length));
+    }
+  }
+  return values;
+}
+
+/** True when a bare boolean flag is present in the raw args. */
+function argsHaveFlag(args: string[], longName: string): boolean {
+  return args.includes(longName);
+}
+
 // ---------------------------------------------------------------------------
 // Command registrations
 // ---------------------------------------------------------------------------
@@ -2152,19 +2196,89 @@ export function activate(api: ExtensionApi): void {
       const rawFormat = readFlagStringValue(args, "--format");
       if (hasHelpFlag(context)) {
         return {
-          usage: "pm pm-graph export [--format <cypher|mermaid|dot|json|graphml|plantuml>] [--json]",
+          usage:
+            "pm pm-graph export [--format <cypher|mermaid|dot|json|graphml|plantuml>] [--output <file>] [--edges <deps|tags|all>] [--root <id> [--depth <n>]] [--filter key=value[,value]] [--include-closed] [--json]",
           description:
-            "Export the current workspace as a dependency and knowledge graph. Does not require Neo4j. By default emits the graph object (TOON, or JSON with --json). With --format, renders the graph into the given offline format on stdout (valid JSON for --format json).",
+            "Export the current workspace as a dependency and knowledge graph. Does not require Neo4j. By default emits the graph object (TOON, or JSON with --json). With --format, renders the graph into the given offline format on stdout (valid JSON for --format json). Shaping flags (--edges/--root/--depth/--filter/--include-closed) restrict the exported graph; when any shaping flag is given, closed/canceled items are excluded unless --include-closed is set.",
           flags: {
             "--format <fmt>": "Render the graph as cypher | mermaid | dot | json | graphml | plantuml on stdout (default: the graph object)",
+            "--output <file>": "Write the rendered format to this file instead of stdout (requires --format)",
+            "--edges <deps|tags|all>": "Keep only dependency/structural edges (deps), only tag edges (tags), or everything (all, default)",
+            "--root <id>": "Restrict the graph to the undirected neighborhood around this node",
+            "--depth <n>": "Max hops from --root (non-negative integer; requires --root)",
+            "--filter <key=value[,value]>": "Keep only PmItem nodes matching type=/status= terms (repeatable; same-key values OR, distinct keys AND)",
+            "--include-closed": "Keep closed/canceled items when shaping (they are dropped by default once any shaping flag is used)",
             "--json": "Output as JSON",
           },
           output: {
             graph: "Object containing nodes[], relationships[], projectKey, workspace, generatedAt (default, no --format)",
-            "--format": "Raw rendered format written to stdout",
+            "--format": "Raw rendered format written to stdout (or to --output file)",
           },
         };
       }
+
+      // --- Shaping flags (previously only reachable through the exporter
+      // adapter alias, whose flattened CLI form drops option contracts —
+      // upstream pm-cli#574). Legacy calls without shaping flags stay
+      // byte-identical: the full graph, closed items included.
+      const rawEdges = readFlagStringValue(args, "--edges");
+      const rawRoot = readFlagStringValue(args, "--root");
+      const rawDepth = readFlagStringValue(args, "--depth");
+      const filterTerms = readFlagStringValues(args, "--filter");
+      const includeClosed = argsHaveFlag(args, "--include-closed");
+      const outputPath = readFlagStringValue(args, "--output");
+
+      // --include-closed is an opt-in modifier, not a shaping trigger: alone
+      // it leaves the full legacy graph untouched.
+      const shapingRequested =
+        rawEdges !== undefined ||
+        rawRoot !== undefined ||
+        rawDepth !== undefined ||
+        filterTerms.length > 0;
+
+      let edges: EdgeFilter = "all";
+      if (rawEdges !== undefined) {
+        const normalized = String(rawEdges ?? "").toLowerCase();
+        if (!["deps", "tags", "all"].includes(normalized)) {
+          throw new CommandError(`Unknown --edges "${rawEdges}". Valid: deps | tags | all.`, EXIT_CODE.USAGE);
+        }
+        edges = normalized as EdgeFilter;
+      }
+
+      const root = typeof rawRoot === "string" && rawRoot.trim().length > 0 ? rawRoot.trim() : undefined;
+      if (rawRoot !== undefined && !root) {
+        throw new CommandError("--root requires an item id.", EXIT_CODE.USAGE);
+      }
+
+      let depth: number | undefined;
+      if (rawDepth !== undefined) {
+        if (rawRoot === undefined) {
+          throw new CommandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
+        }
+        const parsed = parseInt(String(rawDepth), 10);
+        if (Number.isNaN(parsed) || parsed < 0) {
+          throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+        }
+        depth = parsed;
+      }
+
+      const filter = parseNodeFilter(filterTerms);
+
+      if (outputPath !== undefined && (outputPath === null || outputPath.trim().length === 0)) {
+        throw new CommandError("--output requires a file path.", EXIT_CODE.USAGE);
+      }
+      if (outputPath && rawFormat === undefined) {
+        throw new CommandError("--output requires --format (the graph-object output is written by the host).", EXIT_CODE.USAGE);
+      }
+
+      const buildGraph = (): Graph => {
+        const fullGraph = loadGraphForContext(context);
+        if (!shapingRequested) return fullGraph;
+        if (root && !fullGraph.nodes.some((n) => n.id === root)) {
+          throw new CommandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+        }
+        return shapeGraph(fullGraph, { edges, includeClosed, rootId: root, depth, filter });
+      };
 
       // No --format: preserve the original behaviour (graph object rendered by
       // the host as TOON, or JSON with --json).
@@ -2172,7 +2286,7 @@ export function activate(api: ExtensionApi): void {
         try {
           return {
             ok: true,
-            graph: loadGraphForContext(context),
+            graph: buildGraph(),
           };
         } catch (err: unknown) {
           // Preserve an already-typed CommandError (and its exit code) instead of flattening.
@@ -2197,8 +2311,20 @@ export function activate(api: ExtensionApi): void {
       }
 
       try {
-        const graph = loadGraphForContext(context);
+        const graph = buildGraph();
         const output = renderExport(format, graph);
+        if (outputPath) {
+          const absolutePath = path.resolve(outputPath.trim());
+          writeFileSync(absolutePath, output + "\n", "utf-8");
+          return {
+            ok: true,
+            format,
+            edges,
+            nodes: graph.nodes.length,
+            relationships: graph.relationships.length,
+            file: absolutePath,
+          };
+        }
         // Wrap the rendered payload in a marker the output_format service override
         // unwraps, so the host writes the raw string to stdout instead of
         // re-encoding it as TOON/JSON.
@@ -2871,13 +2997,16 @@ export function activate(api: ExtensionApi): void {
     },
   });
 
-  // --- pm graph export -----------------------------------------------------
-  // registerExporter("graph") auto-creates the `pm graph export` command (the
-  // `<name> export` form). It does NOT collide with the existing
-  // `pm pm-graph cypher` command (different name). The export pipeline builds
-  // the workspace graph from a single `pm list-all --json --include-body`
-  // call and renders it to one of six offline formats (cypher | mermaid | dot |
-  // json | graphml | plantuml). No Neo4j required.
+  // --- pm graph-export export ----------------------------------------------
+  // registerExporter("graph-export") auto-creates the `pm graph-export export`
+  // command (the `<name> export` form), mirroring pm-csv's `csv-export`
+  // adapter naming. The adapter was previously named "graph", but pm-cli
+  // 2026.7.18 introduced a core `pm graph` command group (traversals,
+  // analytics, governance audit) and the old alias grafted onto it. The
+  // export pipeline builds the workspace graph from a single
+  // `pm list-all --json --include-body` call and renders it to one of six
+  // offline formats (cypher | mermaid | dot | json | graphml | plantuml).
+  // No Neo4j required. Rich flags live on the canonical `pm pm-graph export`.
   const exporter: Exporter = (ctx: ImportExportContext) => {
     const options = ctx.options ?? {};
 
@@ -2960,7 +3089,7 @@ export function activate(api: ExtensionApi): void {
     };
   };
 
-  api.registerExporter("graph", exporter);
+  api.registerExporter("graph-export", exporter);
 }
 
 export default { activate };
