@@ -4,7 +4,9 @@ Knowledge graph and dependency graph extension for [pm CLI](https://github.com/u
 
 The extension reads the current workspace through `pm list-all --json` and `pm deps <id> --json`, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
 
-It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm graph export` — with neighborhood (`--root`/`--depth`), edge-type (`--edges`), and node (`--filter type=...|status=...`) shaping.
+It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm pm-graph export` — with neighborhood (`--root`/`--depth`), edge-type (`--edges`), and node (`--filter type=...|status=...`) shaping.
+
+> **Note:** pm-cli 2026.7.18 introduced a built-in `pm graph` command group (bounded traversals, analytics, and governance audit over the workspace relationship graph). pm-graph complements it with Neo4j sync and multi-format visual/diagram exports. The package's exporter adapter is registered as `graph-export` (`pm graph-export export`) so it does not collide with the core command.
 
 It also ships **offline graph analytics** (no Neo4j required): `pm pm-graph analyze`, `explain`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact` run dependency-cycle detection, item-centric dependency inspection, shortest-path, longest-chain, topological ordering, downstream-impact, orphan/root/leaf, bottleneck connector, and centrality analysis directly against your workspace.
 
@@ -56,7 +58,7 @@ pm install github.com/unbraind/pm-graph --force
 | `NEO4J_DATABASE` | No | Target database (defaults to server default) |
 | `PM_GRAPH_PROJECT_KEY` | No | Override the project key (defaults to workspace directory name) |
 
-The commands `export`, `cypher`, `analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact`, plus the `pm graph export` exporter, do not require Neo4j at all.
+The commands `export`, `cypher`, `analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact`, plus the `graph-export` exporter adapter, do not require Neo4j at all.
 
 ## Commands
 
@@ -106,12 +108,44 @@ Example output (abbreviated):
 }
 ```
 
-Pass `--format <cypher|mermaid|dot|json|graphml|plantuml>` to render the graph into an offline format on stdout instead of the default graph object. `--format json` emits a valid JSON Graph (`nodes`/`edges`) document on stdout (parseable with `JSON.parse`), so it is the right choice for piping into other tools; the other formats mirror `pm graph export`. The default (no `--format`) and `--json` behaviours are unchanged.
+Pass `--format <cypher|mermaid|dot|json|graphml|plantuml>` to render the graph into an offline format on stdout instead of the default graph object. `--format json` emits a valid JSON Graph (`nodes`/`edges`) document on stdout (parseable with `JSON.parse`), so it is the right choice for piping into other tools. The default (no `--format`) and `--json` behaviours are unchanged.
 
 ```bash
 pm pm-graph export --format json | jq '.graph.nodes | length'
 pm pm-graph export --format mermaid > graph.mmd
+pm pm-graph export --format dot --output graph.dot        # write to a file
+pm pm-graph export --format graphml --output graph.graphml # GraphML XML for yEd / Gephi / NetworkX
+pm pm-graph export --format plantuml --output graph.puml   # PlantUML object diagram
 ```
+
+Shape the exported graph (works with and without `--format`; once any shaping flag is used, closed/canceled items are excluded unless `--include-closed` is set):
+
+```bash
+# Dependency edges only (drop facet + tag edges)
+pm pm-graph export --format mermaid --edges deps
+
+# Only tag relationships
+pm pm-graph export --format mermaid --edges tags
+
+# 2-hop neighborhood around one item (undirected reachability)
+pm pm-graph export --format dot --root TASK-42 --depth 2
+
+# Include closed/canceled items (excluded once shaping is requested)
+pm pm-graph export --format json --include-closed
+
+# Scope to Task items that are open or in_progress
+pm pm-graph export --format dot --filter type=Task --filter status=open,in_progress
+```
+
+| Flag | Values | Default | Description |
+|---|---|---|---|
+| `--format` | `cypher` \| `mermaid` \| `dot` \| `json` \| `graphml` \| `plantuml` | graph object | Output format. `mermaid` emits a `graph TD` flowchart; `dot` emits Graphviz `digraph`; `json` emits a JSON Graph (`nodes`/`edges`) document; `cypher` reuses the parameterized Neo4j import statements; `graphml` emits a valid GraphML XML document for yEd / Gephi / NetworkX; `plantuml` emits a `@startuml`…`@enduml` object diagram. |
+| `--output <file>` | path | — | Write the rendered format to this file instead of stdout (requires `--format`). |
+| `--edges <deps\|tags\|all>` | `deps` \| `tags` \| `all` | `all` | `deps` keeps dependency/structural edges (`BLOCKED_BY`, `CHILD_OF`, dependency kinds); `tags` keeps only `TAGGED_WITH`; `all` keeps everything including facet edges. |
+| `--root <id>` | item id | — | Restrict the graph to the neighborhood around this node. |
+| `--depth <n>` | non-negative integer | unlimited | Max hops from `--root` (undirected). Requires `--root`. |
+| `--filter type=...\|status=...` | `key=value[,value]` (repeatable) | — | Keep only PmItem nodes matching the given `type`/`status`. Values for the same key are ORed (including repeated flags); distinct keys are ANDed. Non-item nodes (facets/tags) are always kept. Case-insensitive. |
+| `--include-closed` | flag | off (when shaping) | Keep `closed`/`canceled` items once a shaping flag (`--edges`/`--root`/`--depth`/`--filter`) is used. On its own it is a no-op: calls without shaping flags keep the full legacy graph, closed items included. |
 
 ### `pm pm-graph cypher`
 
@@ -136,49 +170,13 @@ Example output (abbreviated):
 }
 ```
 
-### `pm graph export`
+### `graph-export` exporter adapter (`pm graph-export export`)
 
-Export the current workspace graph to a portable file format for diagramming or import into other graph tooling. Builds the graph from a single `pm list-all --json --include-body` call. **Does not require Neo4j.**
+The same offline export pipeline is also registered with pm's native exporter registry under the adapter name `graph-export` (mirroring pm-csv's `csv-export`), which auto-creates the `pm graph-export export [file]` command. It is fully offline and never touches Neo4j.
 
-```bash
-pm graph export --format mermaid                       # Mermaid graph TD to stdout
-pm graph export --format dot --output graph.dot        # Graphviz DOT to a file
-pm graph export --format json --output graph.json      # JSON Graph (nodes/edges)
-pm graph export --format cypher                         # parameterized Cypher (commented params)
-pm graph export --format graphml --output graph.graphml # GraphML XML for yEd / Gephi / NetworkX
-pm graph export --format plantuml --output graph.puml   # PlantUML object diagram
-```
+> Before pm-graph 2026.7.18 the adapter was named `graph` (invoked as `pm graph export`). pm-cli 2026.7.18 introduced a built-in `pm graph` command group, so the adapter was renamed to avoid grafting extension subcommands onto the core command. Note that the auto-generated adapter command currently drops its option contracts on the CLI surface (upstream [pm-cli#574](https://github.com/unbraind/pm-cli/issues/574)) — prefer the canonical `pm pm-graph export`, which exposes the full `--format`/`--output`/shaping flag set documented above.
 
-Shape the exported graph:
-
-```bash
-# Dependency edges only (drop facet + tag edges)
-pm graph export --format mermaid --edges deps
-
-# Only tag relationships
-pm graph export --format mermaid --edges tags
-
-# 2-hop neighborhood around one item (undirected reachability)
-pm graph export --format dot --root TASK-42 --depth 2
-
-# Include closed/canceled items (excluded by default)
-pm graph export --format json --include-closed
-
-# Scope to Task items that are open or in_progress
-pm graph export --format dot --filter type=Task --filter status=open,in_progress
-```
-
-| Flag | Values | Default | Description |
-|---|---|---|---|
-| `--format` | `cypher` \| `mermaid` \| `dot` \| `json` \| `graphml` \| `plantuml` | `json` | Output format. `mermaid` emits a `graph TD` flowchart; `dot` emits Graphviz `digraph`; `json` emits a JSON Graph (`nodes`/`edges`) document; `cypher` reuses the parameterized Neo4j import statements; `graphml` emits a valid GraphML XML document for yEd / Gephi / NetworkX; `plantuml` emits a `@startuml`…`@enduml` object diagram. |
-| `--output <file>` | path | — | Write to this file instead of stdout. |
-| `--root <id>` | item id | — | Restrict the graph to the neighborhood around this node. |
-| `--depth <n>` | non-negative integer | unlimited | Max hops from `--root` (undirected). Only meaningful with `--root`. |
-| `--include-closed` | flag | off | Include `closed`/`canceled` items (excluded by default). |
-| `--filter type=...\|status=...` | `key=value[,value]` (repeatable) | — | Keep only PmItem nodes matching the given `type`/`status`. Values for the same key are ORed (including repeated flags); distinct keys are ANDed. Non-item nodes (facets/tags) are always kept. Case-insensitive. |
-| `--edges <deps\|tags\|all>` | `deps` \| `tags` \| `all` | `all` | `deps` keeps dependency/structural edges (`BLOCKED_BY`, `CHILD_OF`, dependency kinds); `tags` keeps only `TAGGED_WITH`; `all` keeps everything including facet edges. |
-
-Example output (`--format mermaid --edges deps`):
+Example output (`pm pm-graph export --format mermaid --edges deps`):
 
 ```mermaid
 graph TD
@@ -186,8 +184,6 @@ graph TD
   n_TASK_1["Design schema [TASK-1] (closed)"]
   n_TASK_2 -->|BLOCKED_BY| n_TASK_1
 ```
-
-`pm graph export` is provided through pm's exporter pipeline, so it is invoked as `pm graph export` (the `<name> export` form). It is fully offline and never touches Neo4j.
 
 ### `pm pm-graph sync`
 

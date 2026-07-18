@@ -1,0 +1,13 @@
+id: pm-graph-swfx
+title: "Analytics and sync ignore ctx.pm_root: tracker_not_initialized under custom --pm-path"
+description: ""
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-18T06:17:22.498Z"
+updated_at: "2026-07-18T06:17:39.773Z"
+closed_at: "2026-07-18T06:17:39.770Z"
+author: claude
+close_reason: loadGraphForContext/runPmJson/getWorkspace now honor ctx.pm_root; workspaceFromPmRoot strips hidden storage dirs; verified analyze works under --pm-path .pm with correct projectKey; integration test added.
+body: "loadGraphForContext() and runPmJson() spawned `pm list-all` from the workspace cwd without forwarding the tracker path, so every analytics command (analyze/cycles/path/critical-path/explain/topo-sort/impact) and sync failed with tracker_not_initialized in workspaces initialized with a custom --pm-path. The CLI passes the resolved pm_root to extension command contexts (verified empirically; all sibling fleet packages already forward --path). Fix: honor ctx.pm_root in loadGraphForContext/runPmJson/getWorkspace; also derive the logical workspace (and projectKey) from the parent of hidden storage dirs like .pm."

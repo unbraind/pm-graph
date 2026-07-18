@@ -1,0 +1,13 @@
+id: pm-graph-3svp
+title: Exporter adapter 'graph' collides with new core pm graph command group (pm-cli 2026.7.18)
+description: ""
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-18T06:17:18.312Z"
+updated_at: "2026-07-18T06:17:39.428Z"
+closed_at: "2026-07-18T06:17:39.426Z"
+author: claude
+close_reason: Renamed exporter adapter to graph-export; core pm graph help is clean again; README repositioned vs core command; regression test guards the adapter name.
+body: "pm-cli 2026.7.18 introduced a built-in `pm graph` command group (traversals, analytics, governance audit). Our registerExporter(\"graph\") auto-created `pm graph export`, which now grafts an extension subcommand onto the core group: merged confusing help, and the alias path drops option contracts (upstream pm-cli#574), so `pm graph export --format mermaid` fails with 'Too many arguments'. Fix: rename the adapter to graph-export (mirrors pm-csv csv-export), update README positioning vs the core command. Tracked in companion repo (pm-cli-website) 2026-07-18 session."

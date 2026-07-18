@@ -1,0 +1,13 @@
+id: pm-graph-83ev
+title: Canonical pm pm-graph export gains shaping flags (--output/--edges/--root/--depth/--filter/--include-closed)
+description: ""
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-18T06:17:26.087Z"
+updated_at: "2026-07-18T06:17:40.271Z"
+closed_at: "2026-07-18T06:17:40.269Z"
+author: claude
+close_reason: "Shaping flags shipped on canonical export with zero-regression default; --edges/--root/--depth/--filter/--include-closed/--output; integration tests cover deps-filtering, usage errors, and legacy byte-identical default."
+body: "The graph-shaping flags were previously reachable only through the exporter adapter alias, whose flattened CLI form drops option contracts (upstream pm-cli#574) — making shaping unusable from the CLI. Port them to the canonical `pm pm-graph export` with a zero-regression contract: calls without shaping flags stay byte-identical (full legacy graph, closed items included); once any shaping flag is used, closed/canceled items are excluded unless --include-closed. --output requires --format. Covered by new integration tests."
