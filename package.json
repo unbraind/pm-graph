@@ -7,7 +7,7 @@
     "build": "tsc",
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc --noEmit",
-    "prepare": "npm run build",
+    "prepare": "if command -v pm >/dev/null 2>&1; then pm merge install; fi",
     "check": "npm run typecheck",
     "audit:prod": "npm audit --omit=dev",
     "pack:dry-run": "npm pack --dry-run",
@@ -18,7 +18,8 @@
     "prepack": "npm run build",
     "test": "npm run build && npm run build:test && node --test dist-test/*.js",
     "prepublishOnly": "npm run release:check",
-    "release:notes": "pm-changelog --pm-root .agents/pm --stdout --since-previous-tag --until-release-tag --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --pm-bin ./node_modules/.bin/pm --github-step-summary"
+    "release:notes": "pm-changelog --pm-root .agents/pm --stdout --since-previous-tag --until-release-tag --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --pm-bin ./node_modules/.bin/pm --github-step-summary",
+    "merge:install": "pm merge install"
   },
   "dependencies": {
     "neo4j-driver": "^6.2.0"
