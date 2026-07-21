@@ -41,7 +41,8 @@ function createItem(cwd: string, title: string, blockedBy?: string): string {
   const args = ["create", "Task", title, "--json"];
   if (blockedBy) args.push("--blocked-by", blockedBy);
   const out = pm(cwd, args);
-  return JSON.parse(out).item.id as string;
+  const created = JSON.parse(out) as { id?: string; item?: { id: string } };
+  return (created.item?.id ?? created.id) as string;
 }
 
 /** Capture console.log output produced while running `fn`. */
