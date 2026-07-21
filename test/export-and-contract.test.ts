@@ -277,8 +277,11 @@ test("export shaping: --edges deps drops facet edges on the canonical command", 
     assert.equal(a.status, 0, `create alpha: ${a.stderr}`);
     const b = pm(ws, ["create", "task", "beta", "--json"]);
     assert.equal(b.status, 0, `create beta: ${b.stderr}`);
-    const aId = (JSON.parse(a.stdout) as { item: { id: string } }).item.id;
-    const bId = (JSON.parse(b.stdout) as { item: { id: string } }).item.id;
+    type CreateResult = { id?: string; item?: { id: string } };
+    const aParsed = JSON.parse(a.stdout) as CreateResult;
+    const bParsed = JSON.parse(b.stdout) as CreateResult;
+    const aId = (aParsed.item?.id ?? aParsed.id) as string;
+    const bId = (bParsed.item?.id ?? bParsed.id) as string;
     const link = pm(ws, ["update", bId, "--blocked-by", aId]);
     assert.equal(link.status, 0, `blocked-by link: ${link.stderr}`);
 
