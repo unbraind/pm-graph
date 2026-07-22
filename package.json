@@ -7,7 +7,7 @@
     "build": "tsc",
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc --noEmit",
-    "prepare": "if command -v pm >/dev/null 2>&1; then pm merge install; fi",
+    "prepare": "node scripts/prepare-merge-driver.mjs",
     "check": "npm run typecheck",
     "audit:prod": "npm audit --omit=dev",
     "pack:dry-run": "npm pack --dry-run",
