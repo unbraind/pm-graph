@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt pm field-aware merge driver for multi-agent branch-merge safety ([pm-graph-tjqb](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-tjqb.toon))
+
 ## 2026.7.18 - 2026-07-18
 
 ### Added
