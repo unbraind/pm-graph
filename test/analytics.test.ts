@@ -20,6 +20,9 @@ import {
   parseNodeFilter,
   matchesNodeFilter,
   parseAnalyticsFlags,
+  mapImpactDirection,
+  impactSubgraph,
+  impactSubgraphFromNodeSet,
 } from "../dist/index.js";
 
 // The renderers and analytics helpers are exported from the compiled module.
@@ -546,4 +549,145 @@ test("matchesNodeFilter keeps non-PmItem nodes and respects AND/OR semantics", (
 
   // Matching is case-insensitive on the property value.
   assert.strictEqual(matchesNodeFilter(item("A", { status: "Open" }) as any, parseNodeFilter(["status=open"])), true);
+});
+
+// --- mapImpactDirection (downstream -> incoming canonical mapping) -------
+
+test("mapImpactDirection maps logical directions to canonical edge orientations", () => {
+  assert.strictEqual(mapImpactDirection("downstream"), "incoming");
+  assert.strictEqual(mapImpactDirection("upstream"), "outgoing");
+  assert.strictEqual(mapImpactDirection("both"), "both");
+  // case-insensitive
+  assert.strictEqual(mapImpactDirection("Downstream"), "incoming");
+  assert.strictEqual(mapImpactDirection("UPSTREAM"), "outgoing");
+});
+
+test("mapImpactDirection rejects unknown directions", () => {
+  assert.throws(() => mapImpactDirection("sideways"), /Invalid --direction "sideways"/);
+  assert.throws(() => mapImpactDirection(""), /Invalid --direction/);
+});
+
+// --- parseAnalyticsFlags --direction / --limit ----------------------------
+
+test("parseAnalyticsFlags consumes --direction and --limit without polluting positionals", () => {
+  const flags = parseAnalyticsFlags(["pm-ep18", "--direction", "upstream", "--limit", "3"]);
+  assert.strictEqual(flags.direction, "upstream");
+  assert.strictEqual(flags.limit, 3);
+  assert.deepStrictEqual(flags.positionals, ["pm-ep18"], "direction/limit values do not leak into positionals");
+});
+
+test("parseAnalyticsFlags accepts --direction=/--limit= equals forms", () => {
+  const flags = parseAnalyticsFlags(["pm-ep18", "--direction=both", "--limit=0"]);
+  assert.strictEqual(flags.direction, "both");
+  assert.strictEqual(flags.limit, 0);
+  assert.deepStrictEqual(flags.positionals, ["pm-ep18"]);
+});
+
+test("parseAnalyticsFlags rejects a malformed --limit", () => {
+  assert.throws(() => parseAnalyticsFlags(["pm-ep18", "--limit", "abc"]), /Invalid --limit "abc"/);
+  assert.throws(() => parseAnalyticsFlags(["pm-ep18", "--limit", "-1"]), /Invalid --limit "-1"/);
+  assert.throws(() => parseAnalyticsFlags(["pm-ep18", "--limit"]), /--limit requires a non-negative integer/);
+});
+
+test("parseAnalyticsFlags treats --format json as the text default (no diagram)", () => {
+  assert.strictEqual(parseAnalyticsFlags(["pm-ep18", "--format", "json"]).format, "text");
+  assert.strictEqual(parseAnalyticsFlags(["pm-ep18", "--format", "text"]).format, "text");
+  assert.strictEqual(parseAnalyticsFlags(["pm-ep18", "--format", "mermaid"]).format, "mermaid");
+});
+
+// --- impactSubgraph (path-based projector for canonical impact) -----------
+
+// A graph with a 3-node chain C -> B -> A (C blocked_by B, B blocked_by A) so
+// the downstream dependents of A are B and C, plus a disconnected orphan O.
+const impactGraph = {
+  generatedAt: "2026-06-02T00:00:00.000Z",
+  workspace: "/tmp/ws",
+  projectKey: "ws",
+  nodes: [
+    node("A"), node("B"), node("C"), node("O"),
+    { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
+  ],
+  relationships: [
+    rel("B", "A", "BLOCKED_BY"),
+    rel("C", "B", "BLOCKED_BY"),
+    rel("A", "status:open", "HAS_STATUS"),
+  ],
+};
+
+test("impactSubgraph includes the root, all path nodes, and the connecting structural edges", () => {
+  // Canonical incoming (downstream) traversal of A: affected B (path [A,B]) and
+  // C (path [A,B,C]). The structural edges are C->B and B->A (item -> blocker).
+  const affected = [
+    { id: "B", distance: 1, path: ["A", "B"] },
+    { id: "C", distance: 2, path: ["A", "B", "C"] },
+  ];
+  const sub = impactSubgraph(impactGraph as any, "A", affected);
+  // Root first, then affected/path nodes in first-seen order; no orphan/facet.
+  assert.deepStrictEqual([...sub.nodes.map((n: any) => n.id)], ["A", "B", "C"]);
+  assert.strictEqual(sub.relationships.length, 2, "exactly the two chain edges in their real direction");
+  assert.deepStrictEqual(
+    sub.relationships.map((r: any) => `${r.from}->${r.to}`),
+    ["B->A", "C->B"],
+    "edges retain the real structural direction (item -> blocker)",
+  );
+});
+
+test("impactSubgraph anchors the root even when the engine omits it from a path", () => {
+  const sub = impactSubgraph(impactGraph as any, "A", [{ id: "B", distance: 1, path: ["B"] }]);
+  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "B"]);
+  assert.strictEqual(sub.relationships.length, 1);
+  assert.strictEqual(sub.relationships[0].from, "B");
+  assert.strictEqual(sub.relationships[0].to, "A");
+});
+
+test("impactSubgraph never invents edges absent from the source graph", () => {
+  // Path claims an A->C edge that does not exist structurally; only the real
+  // B->A edge survives because both directions are offered and filtered.
+  const sub = impactSubgraph(impactGraph as any, "A", [{ id: "C", distance: 2, path: ["A", "C"] }]);
+  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "C"]);
+  assert.strictEqual(sub.relationships.length, 0, "no fabricated A->C edge");
+});
+
+test("impactSubgraph with an empty affected set yields just the root node", () => {
+  const sub = impactSubgraph(impactGraph as any, "A", []);
+  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A"]);
+  assert.strictEqual(sub.relationships.length, 0);
+});
+
+// --- impactSubgraphFromNodeSet (fallback projector) -----------------------
+
+test("impactSubgraphFromNodeSet keeps all structural edges among the impact node set", () => {
+  // Fallback for downstream impact of A: impacted = [B, C]; node set {A,B,C};
+  // both structural edges (B->A, C->B) lie inside the set, the facet edge does not.
+  const sub = impactSubgraphFromNodeSet(impactGraph as any, "A", ["B", "C"]);
+  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "B", "C"]);
+  assert.deepStrictEqual(
+    sub.relationships.map((r: any) => `${r.from}->${r.to}`),
+    ["B->A", "C->B"],
+  );
+});
+
+test("impactSubgraphFromNodeSet excludes edges with an endpoint outside the set", () => {
+  // Only B is impacted; C->B has an endpoint (C) outside {A,B}, so it is dropped.
+  const sub = impactSubgraphFromNodeSet(impactGraph as any, "A", ["B"]);
+  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "B"]);
+  assert.strictEqual(sub.relationships.length, 1);
+  assert.strictEqual(`${sub.relationships[0].from}->${sub.relationships[0].to}`, "B->A");
+});
+
+// --- impact --format mermaid via the projector ----------------------------
+
+test("impactSubgraph rendered as mermaid contains the root and affected node ids only", () => {
+  const affected = [
+    { id: "B", distance: 1, path: ["A", "B"] },
+    { id: "C", distance: 2, path: ["A", "B", "C"] },
+  ];
+  const out = renderAnalysisDiagram("mermaid", impactSubgraph(impactGraph as any, "A", affected));
+  assert.ok(out.startsWith("graph TD"), "is a mermaid graph");
+  for (const id of ["A", "B", "C"]) {
+    assert.ok(out.includes(`n_${id}[`), `impact node ${id} present`);
+  }
+  for (const id of ["O", "status"]) {
+    assert.ok(!new RegExp(`\\bn_${id}\\b`).test(out), `non-impact node ${id} absent`);
+  }
 });
