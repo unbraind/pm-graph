@@ -64,6 +64,10 @@ type AnalyticsFlags = {
     format: "text" | AnalysisDiagramFormat;
     filter: NodeFilter;
     positionals: string[];
+    /** Logical impact direction (downstream|upstream|both); consumed by `pm-graph impact`. */
+    direction?: string;
+    /** Row cap for bounded collections; consumed by `pm-graph impact`. */
+    limit?: number;
 };
 /**
  * Parse the shared analytics flags (--json, --include-closed, --root, --depth,
@@ -197,6 +201,38 @@ export declare function criticalPathSubgraph(graph: Graph, chain: string[]): Gra
  * across cycles for deterministic output.
  */
 export declare function cyclesSubgraph(graph: Graph, cycles: string[][]): Graph;
+/**
+ * Map a logical `pm-graph impact` direction to the canonical `pm graph impact`
+ * `--direction` value. The canonical engine uses edge-orientation terms:
+ * `incoming` = downstream dependents (items that break if <id> changes —
+ * exactly the legacy `reverseReachable` semantics), `outgoing` = upstream
+ * prerequisites/blockers, `both` = union. Throws a USAGE `CommandError` on an
+ * unknown logical direction.
+ */
+export declare function mapImpactDirection(logical: string): "incoming" | "outgoing" | "both";
+/**
+ * Build the impact subgraph for the canonical `pm graph impact` result: the
+ * root node plus every node on every returned `path` (affected items and their
+ * intermediate hops) and the structural edges along those paths. Each
+ * consecutive path pair contributes both `u->v` and `v->u` candidate edge
+ * keys; `projectSubgraph` keeps only the keys that match a real structural
+ * relationship in the source graph, so the traversal direction of the path
+ * (which differs between `incoming`/`outgoing`) never fabricates edges. The
+ * root is always the first node so diagrams anchor on it.
+ */
+export declare function impactSubgraph(graph: Graph, rootId: string, affected: Array<{
+    id: string;
+    distance?: number;
+    path?: string[];
+}>): Graph;
+/**
+ * Build the impact subgraph for the legacy fallback path (no traversal
+ * paths available): the root plus the impacted node set, with every
+ * structural edge whose endpoints both fall inside that set. Used when the
+ * canonical `pm graph` engine is unavailable and the diagram format is still
+ * requested. Mirrors `impactSubgraph`'s node anchoring (root first).
+ */
+export declare function impactSubgraphFromNodeSet(graph: Graph, rootId: string, nodeIds: string[]): Graph;
 /** Render an analysis subgraph via the existing full-graph renderers. */
 export declare function renderAnalysisDiagram(format: AnalysisDiagramFormat, graph: Graph): string;
 type AnalyzeReport = {

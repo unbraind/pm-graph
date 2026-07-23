@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "2026.7.15";
+const EXTENSION_VERSION = "2026.7.23";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -234,6 +234,69 @@ async function runPmJson(context, args) {
         throw new Error(`Failed to run pm ${args.join(" ")}: ${msg}`);
     }
 }
+/**
+ * Process-lifetime cache for the `pm graph` availability probe. Probed once
+ * per process so the `impact` command can gracefully degrade on older pm-cli
+ * builds that predate the registry-aware `pm graph` group (2026.7.18+).
+ */
+let pmGraphAvailableCache = null;
+/**
+ * Detect whether the host pm-cli exposes the canonical `pm graph` command
+ * group with an `impact` subcommand. Runs `pm [--path <pm_root>] graph --help`
+ * once and caches the result; a non-zero exit or a missing `impact` listing is
+ * treated as "unavailable" so the `impact` command falls back to the legacy
+ * structural reverse-reachable path.
+ */
+async function pmGraphAvailable(context) {
+    if (pmGraphAvailableCache !== null)
+        return pmGraphAvailableCache;
+    const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
+    const commandArgs = [...pathArgs, "graph", "--help"];
+    try {
+        const { stdout } = await execFileAsync("pm", commandArgs, {
+            cwd: getWorkspace(context),
+            timeout: 15_000,
+            maxBuffer: 2 * 1024 * 1024,
+        });
+        // `pm graph --help` enumerates the registered subcommands; `impact` is
+        // present once the registry-aware engine is available.
+        pmGraphAvailableCache = /\bimpact\b/.test(stdout);
+    }
+    catch {
+        pmGraphAvailableCache = false;
+    }
+    return pmGraphAvailableCache;
+}
+/**
+ * Shell out to the canonical registry-aware `pm graph <subcommand> [id] --json`
+ * engine, mirroring `runPmJson` (honours `--path <pm_root>` and the in-process
+ * `node` entry point). Parses JSON and throws a typed `CommandError` with a
+ * clear message on any failure so callers can surface it cleanly.
+ */
+async function runPmGraph(subcommand, id, flags, context) {
+    const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
+    const idArgs = id ? [id] : [];
+    const flagArgs = [];
+    if (flags.direction)
+        flagArgs.push("--direction", flags.direction);
+    if (flags.maxDepth !== undefined)
+        flagArgs.push("--max-depth", String(flags.maxDepth));
+    if (flags.limit !== undefined)
+        flagArgs.push("--limit", String(flags.limit));
+    const commandArgs = [...pathArgs, "graph", subcommand, ...idArgs, "--json", ...flagArgs];
+    try {
+        const { stdout } = await execFileAsync("pm", commandArgs, {
+            cwd: getWorkspace(context),
+            timeout: 30_000,
+            maxBuffer: 20 * 1024 * 1024,
+        });
+        return JSON.parse(stdout);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new CommandError(`Failed to run pm graph ${subcommand}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+    }
+}
 // ---------------------------------------------------------------------------
 // Graph construction
 // ---------------------------------------------------------------------------
@@ -432,13 +495,18 @@ function loadGraphForContext(context) {
 /** Validate and normalise a `--format` value for the analysis commands. */
 function parseAnalysisFormat(value) {
     const normalized = value.toLowerCase();
+    // `json` is accepted as a synonym for `text` (both mean "return the result
+    // object, render no diagram") so `pm-graph impact --format json` mirrors the
+    // default object output without inventing a new diagram format.
+    if (normalized === "json")
+        return "text";
     if (normalized === "text" ||
         normalized === "mermaid" ||
         normalized === "graphml" ||
         normalized === "dot") {
         return normalized;
     }
-    throw new CommandError(`Invalid --format "${value}" (expected: text | mermaid | graphml | dot).`, EXIT_CODE.USAGE);
+    throw new CommandError(`Invalid --format "${value}" (expected: text | json | mermaid | graphml | dot).`, EXIT_CODE.USAGE);
 }
 /**
  * Parse the shared analytics flags (--json, --include-closed, --root, --depth,
@@ -491,11 +559,38 @@ export function parseAnalyticsFlags(args) {
         else if (arg === "--format") {
             const value = args[++i];
             if (value === undefined)
-                throw new CommandError("--format requires a value (text | mermaid | graphml | dot).", EXIT_CODE.USAGE);
+                throw new CommandError("--format requires a value (text | json | mermaid | graphml | dot).", EXIT_CODE.USAGE);
             flags.format = parseAnalysisFormat(value);
         }
         else if (arg.startsWith("--format=")) {
             flags.format = parseAnalysisFormat(arg.slice("--format=".length));
+        }
+        else if (arg === "--direction") {
+            const value = args[++i];
+            if (value === undefined)
+                throw new CommandError("--direction requires a value (downstream | upstream | both).", EXIT_CODE.USAGE);
+            flags.direction = value;
+        }
+        else if (arg.startsWith("--direction=")) {
+            flags.direction = arg.slice("--direction=".length);
+        }
+        else if (arg === "--limit") {
+            const value = args[++i];
+            if (value === undefined)
+                throw new CommandError("--limit requires a non-negative integer.", EXIT_CODE.USAGE);
+            const parsed = parseNonNegativeInt(value);
+            if (parsed === undefined) {
+                throw new CommandError(`Invalid --limit "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+            }
+            flags.limit = parsed;
+        }
+        else if (arg.startsWith("--limit=")) {
+            const value = arg.slice("--limit=".length);
+            const parsed = parseNonNegativeInt(value);
+            if (parsed === undefined) {
+                throw new CommandError(`Invalid --limit "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+            }
+            flags.limit = parsed;
         }
         else if (arg === "--filter") {
             const value = args[++i];
@@ -1307,6 +1402,95 @@ export function cyclesSubgraph(graph, cycles) {
     }
     return projectSubgraph(graph, nodeOrder, edgeKeys);
 }
+/**
+ * Map a logical `pm-graph impact` direction to the canonical `pm graph impact`
+ * `--direction` value. The canonical engine uses edge-orientation terms:
+ * `incoming` = downstream dependents (items that break if <id> changes —
+ * exactly the legacy `reverseReachable` semantics), `outgoing` = upstream
+ * prerequisites/blockers, `both` = union. Throws a USAGE `CommandError` on an
+ * unknown logical direction.
+ */
+export function mapImpactDirection(logical) {
+    const normalized = String(logical ?? "").toLowerCase();
+    if (normalized === "downstream")
+        return "incoming";
+    if (normalized === "upstream")
+        return "outgoing";
+    if (normalized === "both")
+        return "both";
+    throw new CommandError(`Invalid --direction "${logical}" (expected: downstream | upstream | both).`, EXIT_CODE.USAGE);
+}
+/**
+ * Build the impact subgraph for the canonical `pm graph impact` result: the
+ * root node plus every node on every returned `path` (affected items and their
+ * intermediate hops) and the structural edges along those paths. Each
+ * consecutive path pair contributes both `u->v` and `v->u` candidate edge
+ * keys; `projectSubgraph` keeps only the keys that match a real structural
+ * relationship in the source graph, so the traversal direction of the path
+ * (which differs between `incoming`/`outgoing`) never fabricates edges. The
+ * root is always the first node so diagrams anchor on it.
+ */
+export function impactSubgraph(graph, rootId, affected) {
+    const nodeOrder = [];
+    const seenNode = new Set();
+    const addNode = (id) => {
+        if (!seenNode.has(id)) {
+            seenNode.add(id);
+            nodeOrder.push(id);
+        }
+    };
+    addNode(rootId);
+    const edgeKeys = [];
+    const seenEdge = new Set();
+    const addEdge = (u, v) => {
+        const key = `${u}->${v}`;
+        if (!seenEdge.has(key)) {
+            seenEdge.add(key);
+            edgeKeys.push(key);
+        }
+    };
+    for (const row of affected) {
+        const rawPath = Array.isArray(row.path) && row.path.length > 0 ? row.path : [rootId, row.id];
+        // Defensive: ensure the path starts at the root so the root anchors the
+        // diagram even when the engine omits it.
+        const path = rawPath[0] === rootId ? rawPath : [rootId, ...rawPath];
+        for (const id of path)
+            addNode(id);
+        for (let i = 0; i < path.length - 1; i++) {
+            addEdge(path[i], path[i + 1]);
+            addEdge(path[i + 1], path[i]);
+        }
+    }
+    return projectSubgraph(graph, nodeOrder, edgeKeys);
+}
+/**
+ * Build the impact subgraph for the legacy fallback path (no traversal
+ * paths available): the root plus the impacted node set, with every
+ * structural edge whose endpoints both fall inside that set. Used when the
+ * canonical `pm graph` engine is unavailable and the diagram format is still
+ * requested. Mirrors `impactSubgraph`'s node anchoring (root first).
+ */
+export function impactSubgraphFromNodeSet(graph, rootId, nodeIds) {
+    const nodeOrder = [];
+    const seenNode = new Set();
+    const addNode = (id) => {
+        if (!seenNode.has(id)) {
+            seenNode.add(id);
+            nodeOrder.push(id);
+        }
+    };
+    addNode(rootId);
+    for (const id of nodeIds)
+        if (id !== rootId)
+            addNode(id);
+    const set = new Set(nodeOrder);
+    const edgeKeys = [];
+    for (const e of structuralEdges(graph)) {
+        if (set.has(e.from) && set.has(e.to))
+            edgeKeys.push(`${e.from}->${e.to}`);
+    }
+    return projectSubgraph(graph, nodeOrder, edgeKeys);
+}
 /** Render an analysis subgraph via the existing full-graph renderers. */
 export function renderAnalysisDiagram(format, graph) {
     if (format === "mermaid")
@@ -2005,7 +2189,7 @@ export function activate(api) {
                         nodeCount: "Number of PmGraphNode entries in Neo4j (if connected)",
                         relationshipCount: "Number of relationships between PmGraphNode entries (if connected)",
                         lastSyncedAt: "Timestamp of the most recent sync (or null)",
-                        version: "2026.7.15",
+                        version: "2026.7.23",
                     },
                 };
             }
@@ -2395,22 +2579,31 @@ export function activate(api) {
     // --- pm-graph impact -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph impact",
-        description: "List all items transitively blocked-by / downstream of an item id (reverse-reachable set) with a count.",
+        description: "List all items transitively impacted by an item id (downstream dependents by default), with a count. Uses the canonical registry-aware pm graph engine when available, falling back to the legacy structural reverse-reachable set on older pm-cli.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
                 return {
-                    usage: "pm pm-graph impact <id> [--filter type=...|status=...] [--include-closed] [--json]",
-                    description: "Compute the impact set of an item: every item that transitively depends on it (is blocked-by / downstream of it) over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
+                    usage: "pm pm-graph impact <id> [--direction <downstream|upstream|both>] [--depth <n>] [--limit <n>] [--filter type=...|status=...] [--include-closed] [--json] [--format <text|json|mermaid|graphml|dot>]",
+                    description: "Compute the impact set of an item over STRUCTURAL edges. By default lists every item that transitively depends on it (downstream dependents — the items that would break if <id> changes; equals the legacy reverse-reachable set). When the canonical `pm graph impact` engine is available (pm-cli >= 2026.7.18), delegates to it so custom relationship kinds and ordering classification are honoured, and returns rich per-row distance/path data plus traversal cost. On older pm-cli, falls back to the legacy reverse-reachable path (downstream only). Item ids resolve by exact match, case-insensitive match, then unique prefix.",
                     flags: {
-                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
-                        "--include-closed": "Include closed/canceled items",
+                        "--direction <downstream|upstream|both>": "Logical impact direction. downstream (default) = dependents that break if <id> changes; upstream = prerequisites/blockers of <id>; both = union. NOTE: upstream/both require the canonical pm graph engine (pm-cli >= 2026.7.18); on the fallback path they raise a clear error.",
+                        "--depth <n>": "Maximum traversal depth (non-negative integer; forwarded as --max-depth to the canonical engine)",
+                        "--limit <n>": "Cap the number of returned impact rows (non-negative integer; forwarded as --limit to the canonical engine)",
+                        "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND). Applied on both engines (post-filtered on the canonical path).",
+                        "--include-closed": "Include closed/canceled items in the impact set. Runs on the structural fallback path (the canonical engine traverses active items only), so it is supported only with --direction downstream.",
                         "--json": "Output as JSON",
+                        "--format <text|json|mermaid|graphml|dot>": "Render the impact subgraph (root + affected nodes + the edges along the returned paths) as a diagram. text/json (default) return the result object; mermaid/graphml/dot print the diagram on stdout.",
                     },
-                    example: "pm pm-graph impact pm-ep18 --json",
+                    example: "pm pm-graph impact pm-ep18 --json\npm pm-graph impact pm-ep18 --direction upstream --depth 2\npm pm-graph impact pm-ep18 --format mermaid",
                     output: {
-                        id: "The item whose downstream impact was computed",
-                        count: "Number of items transitively affected",
-                        impacted: "Sorted ids of all items transitively blocked-by/downstream of <id>",
+                        id: "The resolved item whose impact was computed",
+                        count: "Number of items in the impact set (after --limit, the returned row count)",
+                        impacted: "Sorted ids of all items in the impact set",
+                        direction: "The resolved logical direction (downstream|upstream|both) — canonical engine only",
+                        affected: "Per-row {id,distance,path} from the canonical engine",
+                        truncated: "Whether --depth/--limit truncated the result (canonical engine only)",
+                        cost: "Traversal cost {visited_nodes,inspected_edges} (canonical engine only)",
+                        engine: "core-graph when the canonical engine was used, fallback when it was unavailable",
                     },
                 };
             }
@@ -2419,12 +2612,87 @@ export function activate(api) {
             if (!id) {
                 throw new CommandError("Usage: pm pm-graph impact <id>\nExample: pm pm-graph impact pm-ep18", EXIT_CODE.USAGE);
             }
+            const rawDirection = flags.direction ?? "downstream";
+            const canonicalDirection = mapImpactDirection(rawDirection);
+            const logicalDirection = canonicalDirection === "both" ? "both" : canonicalDirection === "incoming" ? "downstream" : "upstream";
             const graph = shapedAnalyticsGraph(context, flags);
             const itemIds = [...itemNodeIds(graph)].sort();
             const resolvedId = resolveItemIdOrThrow(itemIds, id, "Item").resolved;
             const edges = structuralEdges(graph);
+            const wantDiagram = flags.format !== "text";
+            // Try the canonical registry-aware `pm graph impact` engine first. The
+            // canonical engine traverses only ACTIVE items and exposes no
+            // include-closed switch, so `--include-closed` (which must *expand* the
+            // set to terminal items) can only be honored by the shaped-graph fallback
+            // below; route those invocations there for behavior parity.
+            if (!flags.includeClosed && (await pmGraphAvailable(context))) {
+                const pmGraphFlags = { direction: canonicalDirection };
+                if (flags.depth !== undefined)
+                    pmGraphFlags.maxDepth = flags.depth;
+                if (flags.limit !== undefined)
+                    pmGraphFlags.limit = flags.limit;
+                const result = await runPmGraph("impact", resolvedId, pmGraphFlags, context);
+                // The canonical engine traverses the FULL workspace graph and never
+                // sees pm-graph's presentation flags. Post-filter the returned rows to
+                // the same shaped item-id universe that `--filter` (and the default
+                // active-item shaping) produced for id resolution and the fallback path,
+                // so those flags behave identically on both engines.
+                //
+                // A row is kept only when its own id AND every node on its explaining
+                // path survive the filter. The fallback shapes the graph by removing
+                // filtered-out nodes *and their incident edges* before traversing, so a
+                // node reachable only THROUGH a filtered-out intermediary is not
+                // impacted there — an id-only post-filter would wrongly retain it (and
+                // leave the diagram's paths referencing absent nodes). Validating the
+                // full path against the shaped set reproduces the edge-removal
+                // semantics exactly.
+                const shapedItemIds = new Set(itemIds);
+                const rawAffected = Array.isArray(result.affected) ? result.affected : [];
+                const affected = rawAffected.filter((row) => {
+                    if (!shapedItemIds.has(row.id))
+                        return false;
+                    const rowPath = Array.isArray(row.path) ? row.path : [];
+                    return rowPath.every((node) => shapedItemIds.has(node));
+                });
+                const impacted = affected.map((a) => a.id).sort();
+                const base = {
+                    ok: true,
+                    id: resolvedId,
+                    // Derive count from the (post-filtered) impacted set so the
+                    // count === impacted.length back-compat invariant holds regardless of
+                    // how the engine reports its own count.
+                    count: impacted.length,
+                    impacted,
+                    direction: logicalDirection,
+                    affected,
+                    truncated: Boolean(result.truncated),
+                    cost: result.cost ?? null,
+                    engine: "core-graph",
+                };
+                if (!wantDiagram)
+                    return base;
+                const sub = impactSubgraph(graph, resolvedId, affected);
+                const diagram = renderAnalysisDiagram(flags.format, sub);
+                console.log(diagram);
+                return { ...base, format: flags.format, diagram };
+            }
+            // Fallback: legacy structural reverse-reachable path (downstream only).
+            // Reached when the canonical engine is unavailable OR when --include-closed
+            // forced this path. Only downstream is expressible here.
+            if (logicalDirection !== "downstream") {
+                const detail = flags.includeClosed
+                    ? "--include-closed is only supported with --direction downstream (the canonical pm graph engine, which handles upstream/both, cannot include closed items in traversal)."
+                    : `--direction ${rawDirection} requires the canonical pm graph engine (pm-cli >= 2026.7.18); the installed pm-cli does not expose \`pm graph impact\`. Use --direction downstream (the default) or upgrade pm-cli.`;
+                throw new CommandError(detail, EXIT_CODE.USAGE);
+            }
             const impacted = reverseReachable(edges, resolvedId);
-            return { ok: true, id: resolvedId, count: impacted.length, impacted };
+            const base = { ok: true, id: resolvedId, count: impacted.length, impacted, engine: "fallback" };
+            if (!wantDiagram)
+                return base;
+            const sub = impactSubgraphFromNodeSet(graph, resolvedId, impacted);
+            const diagram = renderAnalysisDiagram(flags.format, sub);
+            console.log(diagram);
+            return { ...base, format: flags.format, diagram };
         },
     });
     // --- pm-graph explain ----------------------------------------------------
