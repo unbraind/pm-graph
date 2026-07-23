@@ -1,0 +1,14 @@
+id: pm-graph-bfal
+title: Enhance pm-graph impact to use canonical registry-aware pm graph engine with graceful fallback and diagram rendering
+description: "Delegate pm pm-graph impact to the canonical pm graph impact engine (registry-aware, honors custom relationship kinds) with graceful fallback to the existing reverseReachable path on older pm-cli. Add --direction/--depth/--limit/--format flags, build an impact subgraph projector for --format mermaid|dot|graphml diagrams, and keep the back-compat result shape."
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-23T17:54:47.224Z"
+updated_at: "2026-07-23T18:11:09.508Z"
+closed_at: "2026-07-23T18:11:09.507Z"
+author: pi-agent
+resolution: "pm pm-graph impact now delegates to the canonical registry-aware pm graph engine (rich affected rows + cost), preserves the back-compat shape, supports --direction/--depth/--limit/--format, renders mermaid/dot/graphml diagrams, and falls back to reverseReachable on older pm-cli. devDependency bumped to ^2026.7.23; peer floor unchanged."
+close_reason: "Implemented canonical pm graph impact engine delegation with graceful fallback, direction mapping, impact subgraph projectors, and diagram rendering"
+body: ""

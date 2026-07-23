@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Enhance pm-graph impact to use canonical registry-aware pm graph engine with graceful fallback and diagram rendering ([pm-graph-bfal](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-bfal.toon))
+
 ## 2026.7.23 - 2026-07-23
 
 ### Fixed
