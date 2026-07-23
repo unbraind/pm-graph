@@ -6,11 +6,12 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-07-23T17:54:47.224Z"
-updated_at: "2026-07-23T19:12:47.203Z"
+updated_at: "2026-07-23T19:20:09.967Z"
 closed_at: "2026-07-23T18:11:09.507Z"
 author: pi-agent
 resolution: "pm pm-graph impact now delegates to the canonical registry-aware pm graph engine (rich affected rows + cost), preserves the back-compat shape, supports --direction/--depth/--limit/--format, renders mermaid/dot/graphml diagrams, and falls back to reverseReachable on older pm-cli. devDependency bumped to ^2026.7.23; peer floor unchanged."
-notes[1]{created_at,author,text}:
+notes[2]{created_at,author,text}:
   "2026-07-23T19:12:47.203Z",claude-orchestrator,"Review round 1 (CodeRabbit, 3 valid findings) addressed: (1) canonical path now post-filters affected rows by the shaped item-id set so --filter/--include-closed apply on both engines; (2) count derived from impacted.length (back-compat invariant); (3) canonical-only tests gated on pmGraphImpactAvailable. --include-closed routed to shaped-graph fallback (canonical engine is active-only, no closed switch); upstream/both + --include-closed fails loud with an accurate message. Added 2 regression tests (--filter type parity + include-closed routing/error). 94/94 tests pass."
+  "2026-07-23T19:20:09.966Z",claude-orchestrator,"Review round 2 (CodeRabbit): confirmed count + test-gating fixes correct; fixed one remaining filter parity gap — the canonical post-filter now validates each affected row's FULL explaining path against the shaped item-id set (not just the row id), so endpoints reachable only through a filtered-out intermediary drop out exactly as they do on the fallback (which removes filtered nodes' edges). Also fixes the diagram referencing absent nodes. Added intermediary-parity regression test. 95/95 tests pass."
 close_reason: "Implemented canonical pm graph impact engine delegation with graceful fallback, direction mapping, impact subgraph projectors, and diagram rendering"
 body: ""

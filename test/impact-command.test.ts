@@ -174,6 +174,39 @@ test("impact --filter restricts the canonical result set (post-filter engine par
   }
 });
 
+test("impact --filter drops endpoints reachable only through a filtered-out intermediary (traversal parity)", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-impact-inter-"));
+  try {
+    pm(ws, ["init"]);
+    // Chain A <- B <- C: A is a Task, B (the intermediary) is an Issue, C is a Task.
+    const a = createItem(ws, "AlphaTask");
+    const bout = pm(ws, ["create", "Issue", "BetaIssue", "--blocked-by", a, "--json"]);
+    const bParsed = JSON.parse(bout) as { id?: string; item?: { id: string } };
+    const b = (bParsed.item?.id ?? bParsed.id) as string;
+    const c = createItem(ws, "CharlieTask", b);
+
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph impact")!;
+
+    // Unfiltered downstream impact of A includes B and the transitive C.
+    const all = (await run!({ cwd: ws, args: [a, "--format", "json"] })) as any;
+    assert.ok(all.impacted.includes(b) && all.impacted.includes(c), "B and transitive C impacted unfiltered");
+
+    // --filter type=task removes the Issue intermediary B. The fallback removes
+    // B's edges with it, so C — reachable from A only through B — is NOT impacted
+    // even though C itself is a Task. The canonical path validates each row's
+    // full explaining path against the shaped set to reproduce this exactly, so
+    // both engines agree that only-through-a-filtered-node endpoints drop out.
+    const filtered = (await run!({ cwd: ws, args: [a, "--filter", "type=task", "--format", "json"] })) as any;
+    assert.ok(!filtered.impacted.includes(b), "filtered-out Issue intermediary B absent");
+    assert.ok(!filtered.impacted.includes(c), "Task C reachable only via filtered B is not impacted");
+    assert.strictEqual(filtered.count, filtered.impacted.length, "count === impacted.length");
+    assert.strictEqual(filtered.engine, "core-graph");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
 test("impact --include-closed routes to the shaped-graph fallback and rejects non-downstream", { skip: !pmAvailable }, async () => {
   const ws = mkdtempSync(path.join(tmpdir(), "pmg-impact-incl-"));
   try {

@@ -2634,12 +2634,26 @@ export function activate(api) {
                 const result = await runPmGraph("impact", resolvedId, pmGraphFlags, context);
                 // The canonical engine traverses the FULL workspace graph and never
                 // sees pm-graph's presentation flags. Post-filter the returned rows to
-                // the same shaped item-id universe that `--filter`/`--include-closed`
-                // (and the default active-item shaping) produced for id resolution and
-                // the fallback path, so those flags behave identically on both engines.
+                // the same shaped item-id universe that `--filter` (and the default
+                // active-item shaping) produced for id resolution and the fallback path,
+                // so those flags behave identically on both engines.
+                //
+                // A row is kept only when its own id AND every node on its explaining
+                // path survive the filter. The fallback shapes the graph by removing
+                // filtered-out nodes *and their incident edges* before traversing, so a
+                // node reachable only THROUGH a filtered-out intermediary is not
+                // impacted there — an id-only post-filter would wrongly retain it (and
+                // leave the diagram's paths referencing absent nodes). Validating the
+                // full path against the shaped set reproduces the edge-removal
+                // semantics exactly.
                 const shapedItemIds = new Set(itemIds);
                 const rawAffected = Array.isArray(result.affected) ? result.affected : [];
-                const affected = rawAffected.filter((row) => shapedItemIds.has(row.id));
+                const affected = rawAffected.filter((row) => {
+                    if (!shapedItemIds.has(row.id))
+                        return false;
+                    const rowPath = Array.isArray(row.path) ? row.path : [];
+                    return rowPath.every((node) => shapedItemIds.has(node));
+                });
                 const impacted = affected.map((a) => a.id).sort();
                 const base = {
                     ok: true,
