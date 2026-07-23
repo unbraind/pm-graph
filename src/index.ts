@@ -3140,8 +3140,8 @@ export function activate(api: ExtensionApi): void {
               "Logical impact direction. downstream (default) = dependents that break if <id> changes; upstream = prerequisites/blockers of <id>; both = union. NOTE: upstream/both require the canonical pm graph engine (pm-cli >= 2026.7.18); on the fallback path they raise a clear error.",
             "--depth <n>": "Maximum traversal depth (non-negative integer; forwarded as --max-depth to the canonical engine)",
             "--limit <n>": "Cap the number of returned impact rows (non-negative integer; forwarded as --limit to the canonical engine)",
-            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND)",
-            "--include-closed": "Include closed/canceled items",
+            "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND). Applied on both engines (post-filtered on the canonical path).",
+            "--include-closed": "Include closed/canceled items in the impact set. Runs on the structural fallback path (the canonical engine traverses active items only), so it is supported only with --direction downstream.",
             "--json": "Output as JSON",
             "--format <text|json|mermaid|graphml|dot>":
               "Render the impact subgraph (root + affected nodes + the edges along the returned paths) as a diagram. text/json (default) return the result object; mermaid/graphml/dot print the diagram on stdout.",
@@ -3178,8 +3178,12 @@ export function activate(api: ExtensionApi): void {
       const edges = structuralEdges(graph);
       const wantDiagram = flags.format !== "text";
 
-      // Try the canonical registry-aware `pm graph impact` engine first.
-      if (await pmGraphAvailable(context)) {
+      // Try the canonical registry-aware `pm graph impact` engine first. The
+      // canonical engine traverses only ACTIVE items and exposes no
+      // include-closed switch, so `--include-closed` (which must *expand* the
+      // set to terminal items) can only be honored by the shaped-graph fallback
+      // below; route those invocations there for behavior parity.
+      if (!flags.includeClosed && (await pmGraphAvailable(context))) {
         const pmGraphFlags: PmGraphFlags = { direction: canonicalDirection };
         if (flags.depth !== undefined) pmGraphFlags.maxDepth = flags.depth;
         if (flags.limit !== undefined) pmGraphFlags.limit = flags.limit;
@@ -3189,12 +3193,22 @@ export function activate(api: ExtensionApi): void {
           cost?: { visited_nodes?: number; inspected_edges?: number };
           affected?: Array<{ id: string; distance: number; path?: string[] }>;
         }>("impact", resolvedId, pmGraphFlags, context);
-        const affected = Array.isArray(result.affected) ? result.affected : [];
+        // The canonical engine traverses the FULL workspace graph and never
+        // sees pm-graph's presentation flags. Post-filter the returned rows to
+        // the same shaped item-id universe that `--filter`/`--include-closed`
+        // (and the default active-item shaping) produced for id resolution and
+        // the fallback path, so those flags behave identically on both engines.
+        const shapedItemIds = new Set(itemIds);
+        const rawAffected = Array.isArray(result.affected) ? result.affected : [];
+        const affected = rawAffected.filter((row) => shapedItemIds.has(row.id));
         const impacted = affected.map((a) => a.id).sort();
         const base = {
           ok: true,
           id: resolvedId,
-          count: result.count,
+          // Derive count from the (post-filtered) impacted set so the
+          // count === impacted.length back-compat invariant holds regardless of
+          // how the engine reports its own count.
+          count: impacted.length,
           impacted,
           direction: logicalDirection,
           affected,
@@ -3210,11 +3224,13 @@ export function activate(api: ExtensionApi): void {
       }
 
       // Fallback: legacy structural reverse-reachable path (downstream only).
+      // Reached when the canonical engine is unavailable OR when --include-closed
+      // forced this path. Only downstream is expressible here.
       if (logicalDirection !== "downstream") {
-        throw new CommandError(
-          `--direction ${rawDirection} requires the canonical pm graph engine (pm-cli >= 2026.7.18); the installed pm-cli does not expose \`pm graph impact\`. Use --direction downstream (the default) or upgrade pm-cli.`,
-          EXIT_CODE.USAGE,
-        );
+        const detail = flags.includeClosed
+          ? "--include-closed is only supported with --direction downstream (the canonical pm graph engine, which handles upstream/both, cannot include closed items in traversal)."
+          : `--direction ${rawDirection} requires the canonical pm graph engine (pm-cli >= 2026.7.18); the installed pm-cli does not expose \`pm graph impact\`. Use --direction downstream (the default) or upgrade pm-cli.`;
+        throw new CommandError(detail, EXIT_CODE.USAGE);
       }
       const impacted = reverseReachable(edges, resolvedId);
       const base = { ok: true, id: resolvedId, count: impacted.length, impacted, engine: "fallback" as const };

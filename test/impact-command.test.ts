@@ -78,7 +78,7 @@ if (pmAvailable) {
   }
 }
 
-test("impact returns downstream dependents with affected distance/path rows (canonical engine)", { skip: !pmAvailable }, async () => {
+test("impact returns downstream dependents with affected distance/path rows (canonical engine)", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
   const ws = mkdtempSync(path.join(tmpdir(), "pmg-impact-"));
   try {
     pm(ws, ["init"]);
@@ -141,7 +141,68 @@ test("impact back-compat shape is preserved for --format json --direction downst
   }
 });
 
-test("impact --format mermaid prints a diagram containing the root and affected node ids", { skip: !pmAvailable }, async () => {
+test("impact --filter restricts the canonical result set (post-filter engine parity)", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-impact-filter-"));
+  try {
+    pm(ws, ["init"]);
+    const a = createItem(ws, "Alpha");
+    const b = createItem(ws, "BetaTask", a); // Task dependent of A
+    // Gamma is an Issue directly blocked-by A, so both B and C are direct
+    // dependents of A but of different types.
+    const gout = pm(ws, ["create", "Issue", "GammaIssue", "--blocked-by", a, "--json"]);
+    const parsed = JSON.parse(gout) as { id?: string; item?: { id: string } };
+    const c = (parsed.item?.id ?? parsed.id) as string;
+
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph impact")!;
+
+    // Unfiltered: both direct dependents are impacted, via the canonical engine.
+    const all = (await run!({ cwd: ws, args: [a, "--format", "json"] })) as any;
+    assert.ok(all.impacted.includes(b) && all.impacted.includes(c), "both dependents present unfiltered");
+    assert.strictEqual(all.engine, "core-graph");
+
+    // --filter type=task post-filters the canonical affected set to Tasks only,
+    // proving the presentation flags now apply on the canonical path (previously
+    // they were silently ignored there).
+    const filtered = (await run!({ cwd: ws, args: [a, "--filter", "type=task", "--format", "json"] })) as any;
+    assert.ok(filtered.impacted.includes(b), "Task dependent kept under --filter type=task");
+    assert.ok(!filtered.impacted.includes(c), "Issue dependent removed under --filter type=task");
+    assert.strictEqual(filtered.count, filtered.impacted.length, "count === impacted.length under filter");
+    assert.strictEqual(filtered.engine, "core-graph", "canonical engine used; filter applied via post-filter");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("impact --include-closed routes to the shaped-graph fallback and rejects non-downstream", { skip: !pmAvailable }, async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-impact-incl-"));
+  try {
+    pm(ws, ["init"]);
+    const a = createItem(ws, "Alpha");
+    createItem(ws, "Beta", a);
+
+    const handlers = collectHandlers();
+    const run = handlers.get("pm-graph impact")!;
+
+    // --include-closed cannot be honored by the canonical engine (active-only,
+    // no closed switch), so it is routed to the shaped-graph fallback.
+    const inc = (await run!({ cwd: ws, args: [a, "--include-closed", "--format", "json"] })) as any;
+    assert.strictEqual(inc.engine, "fallback", "--include-closed routes to the shaped-graph fallback");
+    assert.strictEqual(inc.count, inc.impacted.length, "count === impacted.length (--include-closed fallback)");
+
+    // The fallback expresses only downstream; upstream/both must fail loudly
+    // with an accurate reason (not the older-pm-cli message).
+    await assert.rejects(
+      () => run!({ cwd: ws, args: [a, "--include-closed", "--direction", "upstream"] }) as Promise<unknown>,
+      /include-closed[\s\S]*downstream/i,
+      "--include-closed + upstream rejected with a clear message",
+    );
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("impact --format mermaid prints a diagram containing the root and affected node ids", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
   const ws = mkdtempSync(path.join(tmpdir(), "pmg-impact-mermaid-"));
   try {
     pm(ws, ["init"]);
