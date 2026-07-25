@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Enable governance duplicate-detection advisory mode and adopt pm-cli 2026.7.25 ([pm-graph-asgr](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-asgr.toon))
+
 ## 2026.7.24 - 2026-07-24
 
 ### Added
