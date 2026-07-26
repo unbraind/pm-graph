@@ -1,12 +1,12 @@
 id: pm-graph-ow1z
 title: Adopt sdk/graph engine and drop the pm graph shell-out
-description: "Replace all spawnSync/execFile shell-outs to pm graph/list-all with in-process sdk/graph and sdk/runtime calls. Delete userland re-implementations (cycle detection, path search, topo sort, articulation points, etc.) replaced by SDK functions. Add durable graph cache. Add pm-graph next-work command using computeActionabilityReport + analyzeRelationshipSchedule."
+description: "Replace the pm graph <subcommand> shell-out with an in-process call to the canonical registry-aware engine via sdk/graph runGraph, and delete the pm graph --help availability probe and its degraded fallback (availability is now a compile-time guarantee from the declared peer dependency). Scope is the graph-engine migration only. The three remaining item-fetch shell-outs to pm list-all are deliberately NOT in scope and are tracked separately by pm-graph-v7k3, because converting them requires a sync-to-async change across fetchItemsViaPath, loadGraphFromPath and loadGraphForContext with its own regression surface."
 type: Feature
 status: closed
 priority: 2
 tags: []
 created_at: "2026-07-26T12:02:48.414Z"
-updated_at: "2026-07-26T20:46:55.715Z"
+updated_at: "2026-07-26T21:14:02.575Z"
 closed_at: "2026-07-26T19:18:21.697Z"
 author: pi-agent
 resolution: Canonical graph engine adopted in-process via sdk/graph runGraph; shell-out and availability probe removed. Remaining item-fetch shell-outs split into a dedicated follow-up.

@@ -1,4 +1,4 @@
-import type { Exporter } from "@unbrained/pm-cli/sdk";
+import { type Exporter } from "@unbrained/pm-cli/sdk";
 type CommandContext = {
     command?: string;
     args?: string[];
