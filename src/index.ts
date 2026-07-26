@@ -401,12 +401,18 @@ async function runPmJson<T>(context: CommandContext, args: string[]): Promise<T>
 }
 
 /**
- * Canonical `pm graph <subcommand>` flag bundle. `direction`/`maxDepth`/`limit`
- * mirror the host CLI's options and are forwarded to the in-process engine as
- * {@link GraphCommandOptions}.
+ * Canonical `pm graph <subcommand>` flag bundle forwarded to the in-process
+ * engine as {@link GraphCommandOptions}.
+ *
+ * The key set is derived from `GraphCommandOptions` so that renaming or
+ * removing one of these options upstream fails this package's build instead of
+ * silently dropping the flag at runtime. The intersected members then *narrow*
+ * the numeric options: the SDK accepts `string | number` because it also parses
+ * raw CLI argv, whereas this package's flag parser has already produced real
+ * numbers, and re-widening them here would let an unparsed string reach the
+ * engine unchecked.
  */
-type PmGraphFlags = {
-  direction?: string;
+type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" | "limit">> & {
   maxDepth?: number;
   limit?: number;
 };
@@ -445,12 +451,12 @@ async function runPmGraph<T extends GraphResult>(
   // one, otherwise the tracker owned by this command's workspace. Omitting it
   // would silently resolve against the parent process's cwd and report items as
   // not found.
-  const global: GlobalOptions = {
+  const globalOptions: GlobalOptions = {
     json: true,
     path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
   };
   try {
-    return (await runGraph(subcommand, id ?? undefined, undefined, options, global)) as T;
+    return (await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions)) as T;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CommandError(`Failed to run pm graph ${subcommand}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);

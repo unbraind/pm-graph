@@ -268,12 +268,12 @@ async function runPmGraph(subcommand, id, flags, context) {
     // one, otherwise the tracker owned by this command's workspace. Omitting it
     // would silently resolve against the parent process's cwd and report items as
     // not found.
-    const global = {
+    const globalOptions = {
         json: true,
         path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
     };
     try {
-        return (await runGraph(subcommand, id ?? undefined, undefined, options, global));
+        return (await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions));
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
