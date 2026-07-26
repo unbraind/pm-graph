@@ -1,0 +1,17 @@
+id: pm-graph-ow1z
+title: Adopt sdk/graph engine and drop the pm graph shell-out
+description: "Replace all spawnSync/execFile shell-outs to pm graph/list-all with in-process sdk/graph and sdk/runtime calls. Delete userland re-implementations (cycle detection, path search, topo sort, articulation points, etc.) replaced by SDK functions. Add durable graph cache. Add pm-graph next-work command using computeActionabilityReport + analyzeRelationshipSchedule."
+type: Feature
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-26T12:02:48.414Z"
+updated_at: "2026-07-26T19:18:21.698Z"
+closed_at: "2026-07-26T19:18:21.697Z"
+author: pi-agent
+resolution: Canonical graph engine adopted in-process via sdk/graph runGraph; shell-out and availability probe removed. Remaining item-fetch shell-outs split into a dedicated follow-up.
+actual_result: "95/95 tests green. Verified end-to-end in a live workspace on a 3-item transitive chain: impact returned both downstream items with correct distances and explaining paths on the core-graph engine; --depth 1 correctly bounded to 1; --include-closed still routes to the fallback engine; and an explicit --path invocation from an unrelated cwd resolved correctly, which is precisely the case naive in-process resolution breaks."
+notes[1]{created_at,author,text}:
+  "2026-07-26T19:18:20.978Z",claude-orchestrator,"Landed: the canonical impact engine now runs in-process via sdk/graph runGraph, replacing the 'pm graph <sub> --json' shell-out and the 'pm graph --help' availability probe. Availability is now a compile-time guarantee from the declared peer dependency, so the probe and its degraded fallback are gone; the --include-closed fallback is deliberately retained because the canonical engine traverses only ACTIVE items and exposes no include-closed switch. KEY GOTCHA: runGraph resolves its tracker as resolvePmRoot(process.cwd(), global.path), so an in-process call cannot inherit a workspace the way the shell-out did by passing cwd to the child. global.path must always be supplied explicitly, falling back to resolveImplicitPmRoot(workspace); omitting it resolves against the parent process cwd and reports every item as not found."
+close_reason: completed
+body: ""

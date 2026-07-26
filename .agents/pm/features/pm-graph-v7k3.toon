@@ -1,0 +1,14 @@
+id: pm-graph-v7k3
+title: Replace the list-all shell-outs with the in-process SDK item reader
+description: "Three item-fetch paths still spawn pm list-all --json --include-body with a 20 MB maxBuffer, which is the documented ENOBUFS ceiling and also requires a pm binary on PATH. Discovery from the graph-engine migration: pm-graph never reads item bodies, so --include-body fetches an unused payload and the publicly exported async listAllItemMetadata is a complete replacement. The work is the sync-to-async conversion of fetchItemsViaPath, loadGraphFromPath and loadGraphForContext across its 7 call sites."
+type: Feature
+status: open
+priority: 2
+tags: []
+created_at: "2026-07-26T19:18:22.014Z"
+updated_at: "2026-07-26T19:18:22.393Z"
+author: claude-orchestrator
+acceptance_criteria: No spawnSync or execFile call remains for reading pm items; item reads go through the SDK reader; no maxBuffer ceiling on any item read; pm binary no longer required on PATH for item loading; full suite green; exporter verified functionally.
+dependencies[1]{id,kind,created_at,author,source_kind}:
+  pm-graph-ow1z,related,"2026-07-26T19:18:22.372Z",null,null
+body: ""

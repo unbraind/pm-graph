@@ -3,8 +3,10 @@ import { promisify } from "node:util";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runGraph } from "@unbrained/pm-cli/sdk/graph";
+import { resolveImplicitPmRoot } from "@unbrained/pm-cli/sdk";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "2026.7.25";
+const EXTENSION_VERSION = "2026.7.26";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -235,62 +237,43 @@ async function runPmJson(context, args) {
     }
 }
 /**
- * Process-lifetime cache for the `pm graph` availability probe. Probed once
- * per process so the `impact` command can gracefully degrade on older pm-cli
- * builds that predate the registry-aware `pm graph` group (2026.7.18+).
- */
-let pmGraphAvailableCache = null;
-/**
- * Detect whether the host pm-cli exposes the canonical `pm graph` command
- * group with an `impact` subcommand. Runs `pm [--path <pm_root>] graph --help`
- * once and caches the result; a non-zero exit or a missing `impact` listing is
- * treated as "unavailable" so the `impact` command falls back to the legacy
- * structural reverse-reachable path.
- */
-async function pmGraphAvailable(context) {
-    if (pmGraphAvailableCache !== null)
-        return pmGraphAvailableCache;
-    const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
-    const commandArgs = [...pathArgs, "graph", "--help"];
-    try {
-        const { stdout } = await execFileAsync("pm", commandArgs, {
-            cwd: getWorkspace(context),
-            timeout: 15_000,
-            maxBuffer: 2 * 1024 * 1024,
-        });
-        // `pm graph --help` enumerates the registered subcommands; `impact` is
-        // present once the registry-aware engine is available.
-        pmGraphAvailableCache = /\bimpact\b/.test(stdout);
-    }
-    catch {
-        pmGraphAvailableCache = false;
-    }
-    return pmGraphAvailableCache;
-}
-/**
- * Shell out to the canonical registry-aware `pm graph <subcommand> [id] --json`
- * engine, mirroring `runPmJson` (honours `--path <pm_root>` and the in-process
- * `node` entry point). Parses JSON and throws a typed `CommandError` with a
- * clear message on any failure so callers can surface it cleanly.
+ * Invoke the canonical registry-aware graph engine in-process via the SDK's
+ * {@link runGraph}, honouring `--path <pm_root>` through `global.path`.
+ *
+ * This is the same engine that backs `pm graph <subcommand>`; calling it
+ * directly rather than spawning `pm` removes the subprocess, the JSON
+ * re-parse, and the output-size ceiling that a piped `--json` read imposes —
+ * a large workspace could previously exceed the shell-out's buffer and fail
+ * the query rather than answer it. It also drops the requirement that a `pm`
+ * binary be resolvable on `PATH`, which is not guaranteed for a
+ * package-backed extension.
+ *
+ * Availability is a compile-time guarantee: the engine is imported statically
+ * from the declared `@unbrained/pm-cli` peer dependency, so the former
+ * `pm graph --help` probe (and its degraded fallback) is no longer meaningful
+ * and has been removed.
  */
 async function runPmGraph(subcommand, id, flags, context) {
-    const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
-    const idArgs = id ? [id] : [];
-    const flagArgs = [];
+    const options = {};
     if (flags.direction)
-        flagArgs.push("--direction", flags.direction);
+        options.direction = flags.direction;
     if (flags.maxDepth !== undefined)
-        flagArgs.push("--max-depth", String(flags.maxDepth));
+        options.maxDepth = flags.maxDepth;
     if (flags.limit !== undefined)
-        flagArgs.push("--limit", String(flags.limit));
-    const commandArgs = [...pathArgs, "graph", subcommand, ...idArgs, "--json", ...flagArgs];
+        options.limit = flags.limit;
+    // The engine resolves its tracker as `resolvePmRoot(process.cwd(), global.path)`.
+    // An in-process call therefore cannot inherit a workspace the way the previous
+    // shell-out did by passing `cwd` to the child, so the tracker root is always
+    // supplied explicitly: the invocation's own `pm_root` when the host provided
+    // one, otherwise the tracker owned by this command's workspace. Omitting it
+    // would silently resolve against the parent process's cwd and report items as
+    // not found.
+    const global = {
+        json: true,
+        path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
+    };
     try {
-        const { stdout } = await execFileAsync("pm", commandArgs, {
-            cwd: getWorkspace(context),
-            timeout: 30_000,
-            maxBuffer: 20 * 1024 * 1024,
-        });
-        return JSON.parse(stdout);
+        return (await runGraph(subcommand, id ?? undefined, undefined, options, global));
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -2189,7 +2172,7 @@ export function activate(api) {
                         nodeCount: "Number of PmGraphNode entries in Neo4j (if connected)",
                         relationshipCount: "Number of relationships between PmGraphNode entries (if connected)",
                         lastSyncedAt: "Timestamp of the most recent sync (or null)",
-                        version: "2026.7.25",
+                        version: "2026.7.26",
                     },
                 };
             }
@@ -2625,7 +2608,7 @@ export function activate(api) {
             // include-closed switch, so `--include-closed` (which must *expand* the
             // set to terminal items) can only be honored by the shaped-graph fallback
             // below; route those invocations there for behavior parity.
-            if (!flags.includeClosed && (await pmGraphAvailable(context))) {
+            if (!flags.includeClosed) {
                 const pmGraphFlags = { direction: canonicalDirection };
                 if (flags.depth !== undefined)
                     pmGraphFlags.maxDepth = flags.depth;
