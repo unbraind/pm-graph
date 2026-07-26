@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Adopt sdk/graph engine and drop the pm graph shell-out ([pm-graph-ow1z](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-ow1z.toon))
+
 ## 2026.7.26 - 2026-07-26
 
 ### Other

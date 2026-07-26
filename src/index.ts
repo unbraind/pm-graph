@@ -3,10 +3,18 @@ import { promisify } from "node:util";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type {
-  ImportExportContext,
-  Exporter,
+import {
+  resolveImplicitPmRoot,
+  type Exporter,
+  type GlobalOptions,
+  type ImportExportContext,
 } from "@unbrained/pm-cli/sdk";
+import {
+  runGraph,
+  type GraphCommandOptions,
+  type GraphImpactResult,
+  type GraphResult,
+} from "@unbrained/pm-cli/sdk/graph";
 
 const execFileAsync = promisify(execFile);
 
@@ -393,75 +401,67 @@ async function runPmJson<T>(context: CommandContext, args: string[]): Promise<T>
 }
 
 /**
- * Process-lifetime cache for the `pm graph` availability probe. Probed once
- * per process so the `impact` command can gracefully degrade on older pm-cli
- * builds that predate the registry-aware `pm graph` group (2026.7.18+).
+ * Canonical `pm graph <subcommand>` flag bundle forwarded to the in-process
+ * engine as {@link GraphCommandOptions}.
+ *
+ * The key set is derived from `GraphCommandOptions` so that renaming or
+ * removing one of these options upstream fails this package's build instead of
+ * silently dropping the flag at runtime. The intersected members then *narrow*
+ * the numeric options: the SDK accepts `string | number` because it also parses
+ * raw CLI argv, whereas this package's flag parser has already produced real
+ * numbers, and re-widening them here would let an unparsed string reach the
+ * engine unchecked.
  */
-let pmGraphAvailableCache: boolean | null = null;
-
-/**
- * Detect whether the host pm-cli exposes the canonical `pm graph` command
- * group with an `impact` subcommand. Runs `pm [--path <pm_root>] graph --help`
- * once and caches the result; a non-zero exit or a missing `impact` listing is
- * treated as "unavailable" so the `impact` command falls back to the legacy
- * structural reverse-reachable path.
- */
-async function pmGraphAvailable(context: CommandContext): Promise<boolean> {
-  if (pmGraphAvailableCache !== null) return pmGraphAvailableCache;
-  const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
-  const commandArgs = [...pathArgs, "graph", "--help"];
-  try {
-    const { stdout } = await execFileAsync("pm", commandArgs, {
-      cwd: getWorkspace(context),
-      timeout: 15_000,
-      maxBuffer: 2 * 1024 * 1024,
-    });
-    // `pm graph --help` enumerates the registered subcommands; `impact` is
-    // present once the registry-aware engine is available.
-    pmGraphAvailableCache = /\bimpact\b/.test(stdout);
-  } catch {
-    pmGraphAvailableCache = false;
-  }
-  return pmGraphAvailableCache;
-}
-
-/**
- * Canonical `pm graph <subcommand>` flag bundle. `direction`/`maxDepth`/`limit`
- * mirror the host CLI's options and are translated into `--direction`,
- * `--max-depth`, and `--limit` on the shell-out command line.
- */
-type PmGraphFlags = {
-  direction?: string;
+type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" | "limit">> & {
   maxDepth?: number;
   limit?: number;
 };
 
 /**
- * Shell out to the canonical registry-aware `pm graph <subcommand> [id] --json`
- * engine, mirroring `runPmJson` (honours `--path <pm_root>` and the in-process
- * `node` entry point). Parses JSON and throws a typed `CommandError` with a
- * clear message on any failure so callers can surface it cleanly.
+ * Invoke the canonical registry-aware graph engine in-process via the SDK's
+ * {@link runGraph}, honouring `--path <pm_root>` through `global.path`.
+ *
+ * This is the same engine that backs `pm graph <subcommand>`; calling it
+ * directly rather than spawning `pm` removes the subprocess, the JSON
+ * re-parse, and the output-size ceiling that a piped `--json` read imposes —
+ * a large workspace could previously exceed the shell-out's buffer and fail
+ * the query rather than answer it. It also drops the requirement that a `pm`
+ * binary be resolvable on `PATH`, which is not guaranteed for a
+ * package-backed extension.
+ *
+ * Availability is a compile-time guarantee: the engine is imported statically
+ * from the declared `@unbrained/pm-cli` peer dependency, so the former
+ * `pm graph --help` probe (and its degraded fallback) is no longer meaningful
+ * and has been removed.
  */
-async function runPmGraph<T = unknown>(
+async function runPmGraph<T extends GraphResult>(
   subcommand: string,
   id: string | null,
   flags: PmGraphFlags,
   context: CommandContext,
 ): Promise<T> {
-  const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
-  const idArgs = id ? [id] : [];
-  const flagArgs: string[] = [];
-  if (flags.direction) flagArgs.push("--direction", flags.direction);
-  if (flags.maxDepth !== undefined) flagArgs.push("--max-depth", String(flags.maxDepth));
-  if (flags.limit !== undefined) flagArgs.push("--limit", String(flags.limit));
-  const commandArgs = [...pathArgs, "graph", subcommand, ...idArgs, "--json", ...flagArgs];
+  const options: GraphCommandOptions = {};
+  if (flags.direction) options.direction = flags.direction;
+  if (flags.maxDepth !== undefined) options.maxDepth = flags.maxDepth;
+  if (flags.limit !== undefined) options.limit = flags.limit;
   try {
-    const { stdout } = await execFileAsync("pm", commandArgs, {
-      cwd: getWorkspace(context),
-      timeout: 30_000,
-      maxBuffer: 20 * 1024 * 1024,
-    });
-    return JSON.parse(stdout) as T;
+    // The engine resolves its tracker as `resolvePmRoot(process.cwd(), global.path)`.
+    // An in-process call therefore cannot inherit a workspace the way the previous
+    // shell-out did by passing `cwd` to the child, so the tracker root is always
+    // supplied explicitly: the invocation's own `pm_root` when the host provided
+    // one, otherwise the tracker owned by this command's workspace. Omitting it
+    // would silently resolve against the parent process's cwd and report items as
+    // not found.
+    //
+    // Resolution happens inside the try because `resolveImplicitPmRoot` can throw
+    // for a workspace with no discoverable tracker; outside it, that throw would
+    // escape as a raw Error and bypass the CommandError exit-code contract every
+    // other failure path here maintains.
+    const globalOptions: GlobalOptions = {
+      json: true,
+      path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
+    };
+    return (await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions)) as T;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CommandError(`Failed to run pm graph ${subcommand}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
@@ -3127,17 +3127,17 @@ export function activate(api: ExtensionApi): void {
   api.registerCommand({
     name: "pm-graph impact",
     description:
-      "List all items transitively impacted by an item id (downstream dependents by default), with a count. Uses the canonical registry-aware pm graph engine when available, falling back to the legacy structural reverse-reachable set on older pm-cli.",
+      "List all items transitively impacted by an item id (downstream dependents by default), with a count. Runs the canonical registry-aware pm graph engine in-process; --include-closed uses the structural reverse-reachable set instead, because the canonical engine traverses active items only.",
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
           usage:
             "pm pm-graph impact <id> [--direction <downstream|upstream|both>] [--depth <n>] [--limit <n>] [--filter type=...|status=...] [--include-closed] [--json] [--format <text|json|mermaid|graphml|dot>]",
           description:
-            "Compute the impact set of an item over STRUCTURAL edges. By default lists every item that transitively depends on it (downstream dependents — the items that would break if <id> changes; equals the legacy reverse-reachable set). When the canonical `pm graph impact` engine is available (pm-cli >= 2026.7.18), delegates to it so custom relationship kinds and ordering classification are honoured, and returns rich per-row distance/path data plus traversal cost. On older pm-cli, falls back to the legacy reverse-reachable path (downstream only). Item ids resolve by exact match, case-insensitive match, then unique prefix.",
+            "Compute the impact set of an item over STRUCTURAL edges. By default lists every item that transitively depends on it (downstream dependents — the items that would break if <id> changes). Delegates in-process to the canonical `pm graph impact` engine, so custom relationship kinds and ordering classification are honoured, and returns rich per-row distance/path data plus traversal cost. `--include-closed` instead uses the structural reverse-reachable path (downstream only), since the canonical engine traverses active items only. Item ids resolve by exact match, case-insensitive match, then unique prefix.",
           flags: {
             "--direction <downstream|upstream|both>":
-              "Logical impact direction. downstream (default) = dependents that break if <id> changes; upstream = prerequisites/blockers of <id>; both = union. NOTE: upstream/both require the canonical pm graph engine (pm-cli >= 2026.7.18); on the fallback path they raise a clear error.",
+              "Logical impact direction. downstream (default) = dependents that break if <id> changes; upstream = prerequisites/blockers of <id>; both = union. NOTE: upstream/both are served only by the canonical engine, so they cannot be combined with --include-closed (which forces the structural path) and raise a clear error if you try.",
             "--depth <n>": "Maximum traversal depth (non-negative integer; forwarded as --max-depth to the canonical engine)",
             "--limit <n>": "Cap the number of returned impact rows (non-negative integer; forwarded as --limit to the canonical engine)",
             "--filter type=...|status=...": "Keep only PmItem nodes matching the given type/status (comma-list or repeat of same key = OR; different keys = AND). Applied on both engines (post-filtered on the canonical path).",
@@ -3183,16 +3183,16 @@ export function activate(api: ExtensionApi): void {
       // include-closed switch, so `--include-closed` (which must *expand* the
       // set to terminal items) can only be honored by the shaped-graph fallback
       // below; route those invocations there for behavior parity.
-      if (!flags.includeClosed && (await pmGraphAvailable(context))) {
+      if (!flags.includeClosed) {
         const pmGraphFlags: PmGraphFlags = { direction: canonicalDirection };
         if (flags.depth !== undefined) pmGraphFlags.maxDepth = flags.depth;
         if (flags.limit !== undefined) pmGraphFlags.limit = flags.limit;
-        const result = await runPmGraph<{
-          count: number;
-          truncated: boolean;
-          cost?: { visited_nodes?: number; inspected_edges?: number };
-          affected?: Array<{ id: string; distance: number; path?: string[] }>;
-        }>("impact", resolvedId, pmGraphFlags, context);
+        const result = await runPmGraph<GraphImpactResult>(
+          "impact",
+          resolvedId,
+          pmGraphFlags,
+          context,
+        );
         // The canonical engine traverses the FULL workspace graph and never
         // sees pm-graph's presentation flags. Post-filter the returned rows to
         // the same shaped item-id universe that `--filter` (and the default
@@ -3237,13 +3237,14 @@ export function activate(api: ExtensionApi): void {
       }
 
       // Fallback: legacy structural reverse-reachable path (downstream only).
-      // Reached when the canonical engine is unavailable OR when --include-closed
-      // forced this path. Only downstream is expressible here.
+      // Now reached ONLY when --include-closed forced this path — the canonical
+      // engine is a static import, so it can no longer be unavailable. Only
+      // downstream is expressible here.
       if (logicalDirection !== "downstream") {
-        const detail = flags.includeClosed
-          ? "--include-closed is only supported with --direction downstream (the canonical pm graph engine, which handles upstream/both, cannot include closed items in traversal)."
-          : `--direction ${rawDirection} requires the canonical pm graph engine (pm-cli >= 2026.7.18); the installed pm-cli does not expose \`pm graph impact\`. Use --direction downstream (the default) or upgrade pm-cli.`;
-        throw new CommandError(detail, EXIT_CODE.USAGE);
+        throw new CommandError(
+          "--include-closed is only supported with --direction downstream (the canonical pm graph engine, which handles upstream/both, cannot include closed items in traversal).",
+          EXIT_CODE.USAGE,
+        );
       }
       const impacted = reverseReachable(edges, resolvedId);
       const base = { ok: true, id: resolvedId, count: impacted.length, impacted, engine: "fallback" as const };
