@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt pm-cli 2026.7.27 dependency ranges ([pm-graph-gzw9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-gzw9.toon))
+
 ## 2026.7.27 - 2026-07-27
 
 ### Added

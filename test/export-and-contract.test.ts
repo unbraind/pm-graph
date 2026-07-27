@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
+
 import extension from "../dist/index.js";
 
 // Resolve this file's directory without relying on the CommonJS `__dirname`,
@@ -352,4 +354,57 @@ test("analytics honour a custom tracker path via pm_root (--pm-path fix)", { ski
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Regression: the `output_format` override must DECLINE payloads it does not
+// own, via the `{ handled: false }` decision.
+//
+// Registration alone is not enough to assert here. Before pm-cli 2026.7.27 an
+// override could decline by returning the inbound `ctx.payload`, and this
+// extension did exactly that. In 2026.7.27 an override's bare return value IS
+// what the host renders, so echoing the payload made EVERY command in a
+// workspace with this extension installed print the whole command context
+// (`global`, `format`, `options`, ...) instead of its own result. Filed upstream
+// as unbraind/pm-cli#776.
+//
+// The sibling test above uses a hand-rolled api double, which can only observe
+// that `registerService` was called — it never evaluates the override's return
+// value. These cases drive pm's real service runner instead.
+// ---------------------------------------------------------------------------
+
+test("output_format override declines payloads without the pm-graph raw marker", async () => {
+  const harness = await createExtensionTestHarness(extension, {
+    name: "pm-graph",
+    capabilities: ["commands", "importers", "services"],
+  });
+  assert.deepEqual(harness.activation.failed, [], "activation must not fail");
+  harness.assertServiceOverride({ name: "output_format" });
+
+  const payload = { command: "list", format: "toon", result: { items: [{ id: "probe-1" }], count: 1 } };
+  const outcome = await runRegisteredServiceOverrideForTest(harness.activation.services, {
+    service: "output_format",
+    command: "list",
+    payload,
+  } as Parameters<typeof runRegisteredServiceOverrideForTest>[1]);
+
+  assert.equal(outcome.handled, false, "an unrelated command's payload must be declined");
+  assert.deepEqual(outcome.result, payload, "a declined payload must reach the host untouched");
+  assert.deepEqual(outcome.warnings, [], "declining must not emit service-override warnings");
+});
+
+test("output_format override claims a pm-graph raw-output payload verbatim", async () => {
+  const harness = await createExtensionTestHarness(extension, {
+    name: "pm-graph",
+    capabilities: ["commands", "importers", "services"],
+  });
+  const raw = '{"nodes":[],"edges":[]}';
+  const outcome = await runRegisteredServiceOverrideForTest(harness.activation.services, {
+    service: "output_format",
+    command: "pm-graph export",
+    payload: { command: "pm-graph export", result: { __pmGraphRawOutput: raw } },
+  } as Parameters<typeof runRegisteredServiceOverrideForTest>[1]);
+
+  assert.equal(outcome.handled, true, "pm-graph export must claim its own raw payload");
+  assert.equal(outcome.result, raw, "the raw export string must reach the host verbatim");
 });

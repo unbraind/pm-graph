@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph, } from "@unbrained/pm-cli/sdk/graph";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "2026.7.26";
+const EXTENSION_VERSION = "2026.7.27";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -1899,7 +1899,12 @@ export function activate(api) {
     // register an `output_format` service override that unwraps the marker and
     // hands the raw string straight to stdout. `output_format` is a chained
     // service (multiple overrides coexist by design), and this override is a
-    // strict no-op for every other command/result.
+    // strict no-op for every other command/result. As of @unbrained/pm-cli
+    // 2026.7.27 an `output_format` override's bare return value IS what the
+    // host renders (it no longer falls through to default rendering when the
+    // override returns the inbound payload), so the no-op path must explicitly
+    // defer with the `{ handled: false }` decision instead of echoing
+    // `ctx.payload` (which would now render the whole command context).
     api.registerService("output_format", (ctx) => {
         const result = ctx.payload?.result;
         if (ctx.command === "pm-graph export" &&
@@ -1910,7 +1915,7 @@ export function activate(api) {
             if (typeof raw === "string")
                 return raw;
         }
-        return ctx.payload;
+        return { handled: false };
     });
     // --- pm-graph ping -------------------------------------------------------
     api.registerCommand({
@@ -2177,7 +2182,7 @@ export function activate(api) {
                         nodeCount: "Number of PmGraphNode entries in Neo4j (if connected)",
                         relationshipCount: "Number of relationships between PmGraphNode entries (if connected)",
                         lastSyncedAt: "Timestamp of the most recent sync (or null)",
-                        version: "2026.7.26",
+                        version: "2026.7.27",
                     },
                 };
             }
