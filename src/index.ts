@@ -2365,7 +2365,12 @@ export function activate(api: ExtensionApi): void {
   // register an `output_format` service override that unwraps the marker and
   // hands the raw string straight to stdout. `output_format` is a chained
   // service (multiple overrides coexist by design), and this override is a
-  // strict no-op for every other command/result.
+  // strict no-op for every other command/result. As of @unbrained/pm-cli
+  // 2026.7.27 an `output_format` override's bare return value IS what the
+  // host renders (it no longer falls through to default rendering when the
+  // override returns the inbound payload), so the no-op path must explicitly
+  // defer with the `{ handled: false }` decision instead of echoing
+  // `ctx.payload` (which would now render the whole command context).
   api.registerService("output_format", (ctx) => {
     const result = (ctx.payload as { result?: unknown } | undefined)?.result;
     if (
@@ -2377,7 +2382,7 @@ export function activate(api: ExtensionApi): void {
       const raw = (result as { __pmGraphRawOutput?: unknown }).__pmGraphRawOutput;
       if (typeof raw === "string") return raw;
     }
-    return ctx.payload;
+    return { handled: false };
   });
 
   // --- pm-graph ping -------------------------------------------------------

@@ -1,0 +1,11 @@
+id: pm-graph-vgj0
+title: Cover the output_format decline contract with real SDK harness tests instead of a registration-only assertion
+description: "The existing export-and-contract test asserted only that registerService was called for output_format, using a hand-rolled api double with an as any cast. That can never observe the override's RETURN value, which is exactly what regressed under pm-cli 2026.7.27: an override's bare return IS what the host renders, so the previous decline path returning ctx.payload made every command print the whole command context. Added two cases through createExtensionTestHarness plus runRegisteredServiceOverrideForTest: an unrelated command payload must be declined with handled false, the payload returned untouched and no service-override warnings, and a pm-graph export raw-output payload must still be claimed verbatim. Suite is 97 pass 0 fail. Filed upstream as unbraind/pm-cli#776."
+type: Task
+status: open
+priority: 2
+tags: []
+created_at: "2026-07-27T15:23:59.903Z"
+updated_at: "2026-07-27T15:23:59.903Z"
+author: claude-code
+body: ""
