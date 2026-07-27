@@ -1,0 +1,23 @@
+id: pm-graph-gzw9
+title: Adopt pm-cli 2026.7.27 dependency ranges
+description: Bump @unbrained/pm-cli peer and dev dependency ranges from 2026.7.26 to 2026.7.27 and adapt the output_format service override to the 2026.7.27 contract.
+type: Chore
+status: closed
+priority: 2
+tags[3]: 2026.7.27,bump,pm-cli
+created_at: "2026-07-27T14:51:15.824Z"
+updated_at: "2026-07-27T14:53:09.939Z"
+closed_at: "2026-07-27T14:53:09.938Z"
+claim_principal: pi-agent
+author: pi-agent
+estimated_minutes: 30
+acceptance_criteria: All gates pass; extension activates on 2026.7.27 CLI; no host-owned flag collisions
+resolution: "Bumped @unbrained/pm-cli peer and dev ranges to 2026.7.27. Adapted the output_format service override no-op to { handled: false } for the 2026.7.27 render contract. All gates pass; activation proof confirms pm-graph active on 2026.7.27 CLI with no host-owned flag collisions."
+expected_result: All gates pass; extension activates on 2026.7.27 CLI; no host-owned flag collisions.
+actual_result: "All gates pass: build, typecheck, check, 95/95 tests, changelog:full (no diff), changelog:check (up to date). pm-graph output_format override adapted to the 2026.7.27 service-override render contract. Activation proof: pm pm-graph ping --help exit 0 (not unknown_command); pm extension --explore --json shows pm-graph active/runtime_active true, activation_status ok, all 15 commands registered; pm-graph status, ping, analyze --json all exit 0. Flag audit clean."
+notes[3]{created_at,author,text}:
+  "2026-07-27T14:52:57.632Z",pi-agent,Bumped peerDependencies @unbrained/pm-cli from >=2026.7.26 to >=2026.7.27 and devDependencies from ^2026.7.26 to ^2026.7.27. Package version was already 2026.7.27. Ran npm install; confirmed installed CLI version is 2026.7.27 via node -e require check.
+  "2026-07-27T14:52:57.944Z",pi-agent,"Flag-collision audit grep across index.ts and src/*.ts for host-owned globals (json, quiet, path, lean, id-only, author, no-changed-fields, full-changed-fields, pm-path). All json hits are help-payload flag descriptions, manual arg re-parsing helpers, or json tokens passed to programmatic pm list-all shell-outs; no registerCommand declares a top-level flags array (the two commands with positionals declare arguments only). No host-owned global flag is declared in any flags array, so registration does not abort."
+  "2026-07-27T14:52:58.285Z",pi-agent,"Contract adaptation required by 2026.7.27: the output_format service override's bare return value is now rendered, so the previous no-op return of ctx.payload rendered the whole command context (regression confirmed versus 2026.7.26: 2026.7.26 printed ok: true / graph, 2026.7.27 printed the full command/global/options/result dump). Changed the no-op passthrough to return { handled: false } (the canonical ServiceOverrideDecision passthrough); the __pmGraphRawOutput marker path is unchanged so --format exports still emit raw output. Gates: build OK, typecheck OK, check OK, npm test 95/95 pass, changelog:full produced no CHANGELOG diff, changelog:check OK (up to date). Activation proof in throwaway workspace: pm pm-graph ping --help exits 0 with real usage (not unknown_command); pm extension --explore --json shows pm-graph active true, runtime_active true, activation_status ok, version 2026.7.27, all 15 commands registered. Exercised pm-graph status, pm-graph ping, and pm-graph analyze --json (all exit 0)."
+close_reason: Adoption verified and complete
+body: ""
