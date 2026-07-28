@@ -1,12 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Other
-
-- Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-graph-cvd3](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-cvd3.toon))
-- Ecosystem release readiness pass 2026-07-06 ([pm-graph-qqsg](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-qqsg.toon))
-
 ## 2026.7.28 - 2026-07-28
 
 ### Other
@@ -25,6 +18,12 @@
 ### Other
 
 - Enable governance duplicate-detection advisory mode and adopt pm-cli 2026.7.25 ([pm-graph-asgr](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-asgr.toon))
+
+## 2026.7.25 - 2026-07-25
+
+### Other
+
+- Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-graph-cvd3](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-cvd3.toon))
 
 ## 2026.7.24 - 2026-07-24
 
@@ -82,6 +81,12 @@
 - Production-readiness audit 2026-05-29 ([pm-graph-fq9w](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-fq9w.toon))
 - Full-cycle hardening wave: pm-graph ([pm-graph-4yd1](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-4yd1.toon))
 - Harden release bun-verify so registry-mirror lag cannot block the GitHub release ([pm-graph-avy6](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-avy6.toon))
+
+## 2026.7.10 - 2026-07-10
+
+### Other
+
+- Ecosystem release readiness pass 2026-07-06 ([pm-graph-qqsg](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-qqsg.toon))
 
 ## 2026.7.6 - 2026-07-06
 
