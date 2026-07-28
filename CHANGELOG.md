@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2026.7.28 - 2026-07-28
 
 ### Other
 
+- Adopt pm-cli 2026.7.28 ([pm-graph-gh22](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-gh22.toon))
 - Adopt pm-cli 2026.7.27 dependency ranges ([pm-graph-gzw9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-gzw9.toon))
 
 ## 2026.7.27 - 2026-07-27
