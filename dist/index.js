@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph, } from "@unbrained/pm-cli/sdk/graph";
 const execFileAsync = promisify(execFile);
-const EXTENSION_VERSION = "2026.7.27";
+const EXTENSION_VERSION = "2026.7.28";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
@@ -2182,7 +2182,7 @@ export function activate(api) {
                         nodeCount: "Number of PmGraphNode entries in Neo4j (if connected)",
                         relationshipCount: "Number of relationships between PmGraphNode entries (if connected)",
                         lastSyncedAt: "Timestamp of the most recent sync (or null)",
-                        version: "2026.7.27",
+                        version: "2026.7.28",
                     },
                 };
             }
