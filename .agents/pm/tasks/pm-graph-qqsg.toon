@@ -2,12 +2,12 @@ id: pm-graph-qqsg
 title: Ecosystem release readiness pass 2026-07-06
 description: "July 6, 2026 fleet readiness pass for the pm package ecosystem."
 type: Task
-status: in_progress
+status: closed
 priority: 1
 tags[4]: agent-audit,context-management,ecosystem,release-readiness
 created_at: "2026-07-06T15:33:33.157Z"
-updated_at: "2026-07-10T19:00:18.007Z"
-assignee: codex-reporting
+updated_at: "2026-07-28T11:14:14.186Z"
+closed_at: "2026-07-28T11:14:14.185Z"
 author: codex
 acceptance_criteria: Inventory GitHub reports and existing PR; validate all commands and documented output modes with real PM data; build/typecheck/test/pack/install/activate; inspect tarball; audit tracked files and full history; verify daily change-gated npm+Bun+GitHub release using pm-changelog; run Greptile; close all bot feedback and checks; merge and return main.
 outcome: "Current SDK/changelog dependencies, production-grade command UX, exhaustive real-workspace evidence, privacy-safe package/history, and a fully reviewed green merged PR."
@@ -28,4 +28,5 @@ files[3]{path,scope,note}:
   src/index.ts,project,EXTENSION_VERSION 0.2.0->2026.7.6 fix
 tests[1]{command,path,scope,timeout_seconds}:
   "npm run release:check",package.json,project,120
+close_reason: "Superseded and closed 2026-07-28: this audit/hardening wave completed and the package has shipped multiple releases since, now at 2026.7.28 on pm-cli 2026.7.28. Closing so the tracker stops advertising completed work as in flight."
 body: "Track the July 6, 2026 fleet pass: align package metadata with latest pm CLI/SDK and pm-changelog, verify daily release automation, run build/test/audit/package checks with real workspace data where practical, inspect GitHub state, and record privacy/history findings without changing pm-cli itself."

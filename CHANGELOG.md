@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt --respect-item-release in changelog scripts and bump pm-changelog to 2026.7.24 ([pm-graph-cvd3](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-cvd3.toon))
+- Ecosystem release readiness pass 2026-07-06 ([pm-graph-qqsg](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-qqsg.toon))
+
 ## 2026.7.28 - 2026-07-28
 
 ### Other
