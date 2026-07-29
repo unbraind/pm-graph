@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -877,6 +877,47 @@ test("graph-export exporter applies a valid --root and --depth neighborhood", { 
     const itemIds = parsed.graph.nodes.filter((n) => n.id.startsWith("pm-")).map((n) => n.id);
     assert.ok(itemIds.includes(a), "root retained");
     assert.ok(!itemIds.includes("Solo"), "disconnected node excluded by neighborhood depth");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("an invalid explicit tracker root fails with a USAGE exit rather than an empty graph", { skip: !pmAvailable }, async () => {
+  // The SDK reader resolves with an empty array for an absent path, for a path
+  // that is a regular file (swallowing ENOTDIR), and for a directory that is not
+  // a tracker. Without assertPmTracker a mistyped --path would make analyze
+  // report a confident empty graph and exit 0, where the removed `pm list-all`
+  // shell-out exited non-zero. An empty answer for a bad input is worse than a
+  // failure, because nothing downstream can detect it.
+  const ws = freshWorkspace();
+  try {
+    const harness = await makeHarness(ws);
+    const notATracker = path.join(ws, "tracker-is-a-file");
+    writeFileSync(notATracker, "not a tracker\n");
+
+    for (const [label, badRoot] of [
+      ["absent path", path.join(ws, "does-not-exist", ".agents", "pm")],
+      ["path is a file", notATracker],
+      ["directory without settings.json or schema/", ws],
+    ] as const) {
+      await assert.rejects(
+        () => harness.runCommand({ command: "pm-graph analyze", pmRoot: badRoot }),
+        (err: CommandError) => {
+          assert.strictEqual(
+            err.name,
+            "CommandError",
+            `${label}: must be a CommandError so the exit code survives to the host`,
+          );
+          assert.strictEqual(
+            err.exitCode,
+            2,
+            `${label}: an unusable tracker root is a USAGE error (exit 2)`,
+          );
+          return true;
+        },
+        `${label}: must fail rather than report an empty graph`,
+      );
+    }
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }

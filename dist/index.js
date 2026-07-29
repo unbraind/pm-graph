@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
@@ -256,6 +256,42 @@ function toNumber(value) {
 // PM CLI interaction
 // ---------------------------------------------------------------------------
 /**
+ * Verify that a path is a usable pm tracker root, throwing a `USAGE`
+ * {@link CommandError} when it is not.
+ *
+ * This exists because the SDK reader is tolerant where the shell-out it replaced
+ * was strict. `listAllItemMetadata` resolves with an empty array for a path that
+ * does not exist, for a path that is a regular file (swallowing `ENOTDIR`), and
+ * for a directory that is not a tracker — all indistinguishable from a tracker
+ * that legitimately has no items. Without this check a mistyped `--path` /
+ * `--pm-path` would make `analyze`, `cycles`, `critical-path`, `cypher` and the
+ * exporters report a confident empty graph and exit 0, where the previous
+ * `pm list-all` invocation exited non-zero. Reporting an empty answer for a bad
+ * input is worse than failing, because nothing downstream can detect it.
+ *
+ * A tracker is identified by the artefacts `pm init` always writes: `settings.json`
+ * and the `schema/` directory. Requiring either (rather than both) keeps older
+ * trackers readable while still rejecting an arbitrary directory.
+ *
+ * Filed upstream as unbraind/pm-cli#814; this guard restores the previous failure
+ * semantics locally and independently of that fix.
+ *
+ * @param pmRoot Candidate tracker root.
+ * @returns The same path, once validated, so callers can wrap in place.
+ */
+function assertPmTracker(pmRoot) {
+    if (!existsSync(pmRoot)) {
+        throw new CommandError(`No pm tracker at ${pmRoot}`, EXIT_CODE.USAGE);
+    }
+    if (!statSync(pmRoot).isDirectory()) {
+        throw new CommandError(`pm tracker path is not a directory: ${pmRoot}`, EXIT_CODE.USAGE);
+    }
+    if (!existsSync(path.join(pmRoot, "settings.json")) && !existsSync(path.join(pmRoot, "schema"))) {
+        throw new CommandError(`${pmRoot} is not a pm tracker (no settings.json or schema/ present)`, EXIT_CODE.USAGE);
+    }
+    return pmRoot;
+}
+/**
  * Resolve the tracker root for a command context, honouring an explicit
  * `pm_root` and falling back to {@link resolveImplicitPmRoot} over the
  * workspace directory.
@@ -271,9 +307,9 @@ function toNumber(value) {
  */
 function resolvePmRootForContext(context) {
     if (context.pm_root)
-        return context.pm_root;
+        return assertPmTracker(context.pm_root);
     try {
-        return resolveImplicitPmRoot(getWorkspace(context));
+        return assertPmTracker(resolveImplicitPmRoot(getWorkspace(context)));
     }
     catch (err) {
         if (err instanceof CommandError)
@@ -468,6 +504,9 @@ function graphFromItems(items, workspace, depsByItem) {
  * body payload are needed.
  */
 async function fetchItemsViaSdk(pmRoot) {
+    // Validate here as well as in resolvePmRootForContext: the exporter pipeline
+    // reaches loadGraphFromPath(pmRoot) directly, with no CommandContext involved.
+    assertPmTracker(pmRoot);
     try {
         return await listAllItemMetadata(pmRoot);
     }
