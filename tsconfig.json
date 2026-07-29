@@ -7,6 +7,8 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "rewriteRelativeImportExtensions": true,
+    "allowImportingTsExtensions": true,
     "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,

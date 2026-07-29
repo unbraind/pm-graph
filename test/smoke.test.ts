@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import extension from "../dist/index.js";
+import extension from "../src/index.ts";
 
 test("extension has required shape", () => {
   assert.ok(extension, "module should export a default value");

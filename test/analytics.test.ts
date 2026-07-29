@@ -23,7 +23,7 @@ import {
   mapImpactDirection,
   impactSubgraph,
   impactSubgraphFromNodeSet,
-} from "../dist/index.js";
+} from "../src/index.ts";
 
 // The renderers and analytics helpers are exported from the compiled module.
 // We import the renderExport-backed formats indirectly by exercising the
