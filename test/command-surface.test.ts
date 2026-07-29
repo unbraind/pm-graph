@@ -125,6 +125,81 @@ test("ping --help returns usage text", { skip: !pmAvailable }, async () => {
   }
 });
 
+// The status help `output` map documents what each response field means, so every
+// entry must read as a description. `version` previously held the literal
+// "2026.7.28", which is a value rather than a description, and the release
+// workflow's unanchored `version:` rewrite treated that nested string as its
+// target — so each release silently restamped a help string with a version
+// number and the documentation was never actually wrong-looking enough to notice.
+//
+// Asserting "no entry looks like a version" rather than pinning the exact wording
+// is deliberate: pinning the string would fail on any harmless copy edit, while
+// this catches precisely the regression that automation can reintroduce.
+test("status --help documents its output fields as descriptions, not values", { skip: !pmAvailable }, async () => {
+  const ws = freshWorkspace();
+  try {
+    pm(ws, ["init"]);
+    const harness = await makeHarness(ws);
+    const res = await harness.runCommand({ command: "pm-graph status", args: ["--help"], pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+    assert.equal(res.handled, true);
+    const result = res.result as { output: Record<string, string> };
+    assert.ok(result.output, "status help exposes an output map");
+
+    const versionLike = /^\d{4}\.\d{1,2}\.\d{1,2}(-\d+)?$/;
+    for (const [field, text] of Object.entries(result.output)) {
+      assert.equal(typeof text, "string", `${field} is documented with a string`);
+      assert.ok(text.length > 0, `${field} is documented`);
+      assert.ok(
+        !versionLike.test(text.trim()),
+        `${field} is documented with a description, not the literal value "${text}"`,
+      );
+    }
+    assert.match(result.output.version, /version/i, "the version field describes itself");
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+// Guards the other half of the same defect. The help text above is only stable if
+// the release workflow cannot rewrite it, and those two files are edited
+// independently — so a future contributor could un-anchor the pattern and the
+// help-text test would keep passing until the next release restamped it.
+//
+// This reconstructs the actual regex the release job runs and asserts it does not
+// match this package's source. Testing the real pattern rather than asserting on
+// the YAML text means the guard cannot be satisfied by a cosmetic edit that
+// leaves the behaviour broken.
+test("the release version rewrite cannot match anything in this package's source", () => {
+  const repoRoot = path.resolve(import.meta.dirname, "..");
+  const workflow = readFileSync(path.join(repoRoot, ".github", "workflows", "release.yml"), "utf-8");
+
+  const marker = "source.replace(/";
+  const start = workflow.indexOf(marker);
+  assert.ok(start >= 0, "release.yml still performs a source-level version rewrite");
+  const patternStart = start + marker.length;
+  const patternEnd = workflow.indexOf("/m,", patternStart);
+  assert.ok(
+    patternEnd > patternStart,
+    "the version rewrite is anchored with the multiline flag; an unanchored pattern matches nested strings",
+  );
+
+  // The workflow embeds this script in a double-quoted shell argument, so the
+  // file stores `\"` where the running regex sees `"`.
+  const pattern = workflow.slice(patternStart, patternEnd).replaceAll('\\"', '"');
+  const rewrite = new RegExp(pattern, "m");
+
+  const source = readFileSync(path.join(repoRoot, "src", "index.ts"), "utf-8");
+  const hit = rewrite.exec(source);
+  assert.equal(
+    hit,
+    null,
+    `the release rewrite would edit ${JSON.stringify(hit?.[0] ?? "")}; this package declares its version via EXTENSION_VERSION and manifest.json only`,
+  );
+
+  // And the constant it does target is present, so the rewrite is not a silent no-op.
+  assert.match(source, /const EXTENSION_VERSION = "\d{4}\.\d{1,2}\.\d{1,2}(-\d+)?";/);
+});
+
 // ---------------------------------------------------------------------------
 // export --format coverage and --output file writing
 // ---------------------------------------------------------------------------

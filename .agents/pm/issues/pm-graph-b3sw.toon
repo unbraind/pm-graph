@@ -1,0 +1,20 @@
+id: pm-graph-b3sw
+title: "pm-graph status help documents the version field with a stale literal, and the release version-bump regex targets that string instead of the real declaration"
+description: "The status command's help output map describes every field except version, which carries the literal 2026.7.28 rather than a description. The release workflow's first version regex is unanchored and non-global, so in this package its only match is that nested help string; the authoritative declarations are manifest.json and the EXTENSION_VERSION constant. Fixing the help text alone would be silently undone on the next release, so the regex must be anchored to the manifest property level in the same change."
+type: Issue
+status: closed
+priority: 2
+tags[3]: agent-ux,"area:help-output","area:release-automation"
+created_at: "2026-07-29T22:24:17.487Z"
+updated_at: "2026-07-29T22:32:37.806Z"
+closed_at: "2026-07-29T22:32:37.796Z"
+completed_at: "2026-07-29T22:32:37.796Z"
+claim_principal: codex
+author: codex
+acceptance_criteria: "The status help output documents version as a field description, not as a version literal; The release version-bump regex cannot match a nested string, so the help text survives a release; A test fails if the status help version entry ever becomes version-like again"
+risk: low
+confidence: high
+notes[1]{created_at,author,text}:
+  "2026-07-29T22:32:37.440Z",codex,"Both guard tests were verified by reintroducing each bug and confirming failure, then restoring: the help-text assertion fails when version carries a literal, and the release-regex assertion fails when the pattern is un-anchored. release:check green with 195 tests and coverage 83.20/78.47/89.66 against thresholds 81/77/88."
+close_reason: "Help output now documents the version field as a description, and the release rewrite is anchored to the manifest property level so it cannot restamp a nested string. Both halves are guarded by tests proven to fail on the reintroduced bug."
+body: ""

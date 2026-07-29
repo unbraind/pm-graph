@@ -7,6 +7,10 @@
 - Replace the list-all shell-outs with the in-process SDK item reader ([pm-graph-v7k3](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-v7k3.toon))
 - Run the test suite against TypeScript sources behind an uncheatable coverage gate ([pm-graph-5cu7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-5cu7.toon))
 
+### Fixed
+
+- pm-graph status help documents the version field with a stale literal, and the release version-bump regex targets that string instead of the real declaration ([pm-graph-b3sw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-b3sw.toon))
+
 ### Other
 
 - Raise the pm-graph engine from 63% line coverage toward the 100% mandate ([pm-graph-xnbt](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-xnbt.toon))
