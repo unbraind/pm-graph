@@ -6,6 +6,10 @@
 
 - Run the test suite against TypeScript sources behind an uncheatable coverage gate ([pm-graph-5cu7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-5cu7.toon))
 
+### Other
+
+- Adopt pm-cli 2026.7.29 ([pm-graph-jh4d](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-jh4d.toon))
+
 ## 2026.7.28 - 2026-07-28
 
 ### Other
