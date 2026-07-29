@@ -88,13 +88,21 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "npm_version=$npm_version" >> "$GITHUB_OUTPUT"
 
+      # The source rewrite targets two authoritative declarations and must not
+      # touch anything else. The `version:` pattern is anchored to a two-space
+      # indent so it can only match a manifest-object property; unanchored, its
+      # first match in this package was a nested help-output string 2700 lines
+      # in, which it then rewrote into a version number on every release. This
+      # package declares its version via EXTENSION_VERSION, so the anchored
+      # pattern correctly matches nothing here and the second rewrite does the
+      # work.
       - name: Update release version
         if: steps.decide.outputs.should_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
           npm version "${{ steps.decide.outputs.npm_version }}" --no-git-tag-version --allow-same-version
-          node -e "const fs=require('node:fs');const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;for(const file of ['manifest.json']){if(!fs.existsSync(file))continue;const json=JSON.parse(fs.readFileSync(file,'utf8'));json.version=version;fs.writeFileSync(file,JSON.stringify(json,null,2)+'\n');}for(const file of ['index.ts','src/index.ts']){if(!fs.existsSync(file))continue;const source=fs.readFileSync(file,'utf8');let next=source.replace(/version:\s*[\"'][^\"']+[\"']/,'version: \"'+version+'\"');next=next.replace(/(EXTENSION_VERSION\s*=\s*)[\"'][^\"']+[\"']/,(m,p1)=>p1+'\"'+version+'\"');if(next!==source)fs.writeFileSync(file,next);}"
+          node -e "const fs=require('node:fs');const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;for(const file of ['manifest.json']){if(!fs.existsSync(file))continue;const json=JSON.parse(fs.readFileSync(file,'utf8'));json.version=version;fs.writeFileSync(file,JSON.stringify(json,null,2)+'\n');}for(const file of ['index.ts','src/index.ts']){if(!fs.existsSync(file))continue;const source=fs.readFileSync(file,'utf8');let next=source.replace(/^  version:\s*[\"'][^\"']+[\"']/m,'  version: \"'+version+'\"');next=next.replace(/(EXTENSION_VERSION\s*=\s*)[\"'][^\"']+[\"']/,(m,p1)=>p1+'\"'+version+'\"');if(next!==source)fs.writeFileSync(file,next);}"
           npm run build
 
       - name: Generate changelog and release notes
