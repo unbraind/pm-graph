@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -275,7 +275,7 @@ test("export --root restricts to the neighborhood of a node", { skip: !pmAvailab
     pm(ws, ["init"]);
     const a = createItem(ws, "Alpha");
     const b = createItem(ws, "Beta", a);
-    createItem(ws, "Gamma"); // disconnected from Alpha/Beta
+    const gamma = createItem(ws, "Gamma"); // disconnected from Alpha/Beta
     const harness = await makeHarness(ws);
     const res = await harness.runCommand({
       command: "pm-graph export",
@@ -285,8 +285,30 @@ test("export --root restricts to the neighborhood of a node", { skip: !pmAvailab
     const result = res.result as { ok: boolean; graph: { nodes: Array<{ id: string }> } };
     const ids = result.graph.nodes.filter((n) => n.id.startsWith("pm-")).map((n) => n.id);
     assert.ok(ids.includes(a), "root included");
-    assert.ok(ids.includes(b), "neighbor included");
-    assert.ok(!ids.includes("Gamma") || !ids.some((id) => id !== a && id !== b && !id.startsWith("tag:") && !id.startsWith("type:") && !id.startsWith("status:")), "disconnected node excluded");
+    assert.ok(ids.includes(b), "dependency neighbor included");
+
+    // `export` defaults to --edges all, and shapeGraph walks relationships as
+    // UNDIRECTED for reachability, so Gamma is legitimately inside the
+    // neighborhood: it shares the `type:Task` and `status:open` facet nodes with
+    // Alpha, which form a real path. Asserting its absence here would be
+    // asserting against the documented semantics.
+    assert.ok(ids.includes(gamma), "with --edges all, facet links make every task reachable");
+
+    // --edges deps is what actually isolates a dependency neighborhood (and is
+    // what shapedAnalyticsGraph pins for exactly this reason). THIS is where a
+    // broken root filter shows up, so assert the exact node set.
+    const depsOnly = await harness.runCommand({
+      command: "pm-graph export",
+      args: ["--json", "--root", a, "--edges", "deps"],
+      pmRoot: path.join(ws, ".agents", "pm"),
+    }) as CmdResult;
+    const depsIds = (depsOnly.result as { graph: { nodes: Array<{ id: string }> } })
+      .graph.nodes.filter((n) => n.id.startsWith("pm-")).map((n) => n.id);
+    assert.deepStrictEqual(
+      [...depsIds].sort(),
+      [a, b].sort(),
+      "with --edges deps the neighborhood is exactly the root and its dependency neighbor",
+    );
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -895,10 +917,23 @@ test("an invalid explicit tracker root fails with a USAGE exit rather than an em
     const notATracker = path.join(ws, "tracker-is-a-file");
     writeFileSync(notATracker, "not a tracker\n");
 
+    const schemaIsFileRoot = path.join(ws, "schema-is-a-file");
+    mkdirSync(schemaIsFileRoot, { recursive: true });
+    writeFileSync(path.join(schemaIsFileRoot, "schema"), "decoy\n");
+
+    const settingsIsDirRoot = path.join(ws, "settings-is-a-dir");
+    mkdirSync(path.join(settingsIsDirRoot, "settings.json"), { recursive: true });
+
     for (const [label, badRoot] of [
       ["absent path", path.join(ws, "does-not-exist", ".agents", "pm")],
       ["path is a file", notATracker],
       ["directory without settings.json or schema/", ws],
+      // Marker TYPE matters, not just presence: a directory holding a FILE named
+      // `schema`, or a DIRECTORY named `settings.json`, is not a tracker. Letting
+      // either through would hand the path to a reader that answers with an empty
+      // list, restoring the very regression this guard prevents.
+      ["schema is a file, not a directory", schemaIsFileRoot],
+      ["settings.json is a directory, not a file", settingsIsDirRoot],
     ] as const) {
       await assert.rejects(
         () => harness.runCommand({ command: "pm-graph analyze", pmRoot: badRoot }),

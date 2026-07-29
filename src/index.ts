@@ -425,13 +425,38 @@ function assertPmTracker(pmRoot: string): string {
   if (!statSync(pmRoot).isDirectory()) {
     throw new CommandError(`pm tracker path is not a directory: ${pmRoot}`, EXIT_CODE.USAGE);
   }
-  if (!existsSync(path.join(pmRoot, "settings.json")) && !existsSync(path.join(pmRoot, "schema"))) {
+  // Check the marker TYPES, not merely their existence. A directory that happens
+  // to contain a file named `schema` or a directory named `settings.json` is not
+  // a tracker, and letting it through would hand the path to a reader that
+  // answers with an empty list — restoring exactly the invalid-root-succeeds
+  // regression this guard exists to prevent.
+  const hasSettingsFile = isEntry(path.join(pmRoot, "settings.json"), "file");
+  const hasSchemaDir = isEntry(path.join(pmRoot, "schema"), "directory");
+  if (!hasSettingsFile && !hasSchemaDir) {
     throw new CommandError(
-      `${pmRoot} is not a pm tracker (no settings.json or schema/ present)`,
+      `${pmRoot} is not a pm tracker (no settings.json file or schema/ directory present)`,
       EXIT_CODE.USAGE,
     );
   }
   return pmRoot;
+}
+
+/**
+ * Report whether a path exists as the given entry kind.
+ *
+ * `existsSync` alone cannot distinguish a file from a directory, which matters
+ * for tracker detection: the markers are specifically a `settings.json` *file*
+ * and a `schema` *directory*. A `statSync` on a missing path throws, so the
+ * existence check and the kind check are combined here.
+ *
+ * @param target Absolute path to inspect.
+ * @param kind Required entry kind.
+ * @returns True when `target` exists and is of `kind`.
+ */
+function isEntry(target: string, kind: "file" | "directory"): boolean {
+  if (!existsSync(target)) return false;
+  const stats = statSync(target);
+  return kind === "file" ? stats.isFile() : stats.isDirectory();
 }
 
 /**

@@ -334,8 +334,17 @@ test("parseAnalyticsFlags rejects an invalid --format value", () => {
   assert.throws(() => parseAnalyticsFlags(["--format=svg"]), /Invalid --format "svg"/);
 });
 
-test("mapImpactDirection rejects null/undefined input", () => {
-  assert.throws(() => mapImpactDirection(""), /Invalid --direction/);
+test("mapImpactDirection rejects empty, null and undefined input", () => {
+  // The implementation normalises via `logical ?? ""`, so null and undefined take
+  // a different path from "" and the earlier name promised coverage the body did
+  // not provide. Exercise all three.
+  for (const input of ["", null, undefined]) {
+    assert.throws(
+      () => mapImpactDirection(input as unknown as string),
+      /Invalid --direction/,
+      `input ${JSON.stringify(input)} must be rejected`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
