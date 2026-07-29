@@ -145,7 +145,12 @@ test("status --help documents its output fields as descriptions, not values", { 
     const result = res.result as { output: Record<string, string> };
     assert.ok(result.output, "status help exposes an output map");
 
-    const versionLike = /^\d{4}\.\d{1,2}\.\d{1,2}(-\d+)?$/;
+    // Deliberately broader than this package's CalVer scheme. The rewrite writes
+    // whatever `package.json` carries, so pinning the guard to `2026.7.28`-shaped
+    // strings would stop catching the regression the moment the versioning scheme
+    // changed — and a literal `1.2.3` is no more a field description than a
+    // literal `2026.7.28` is.
+    const versionLike = /^v?\d+(?:\.\d+){1,3}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
     for (const [field, text] of Object.entries(result.output)) {
       assert.equal(typeof text, "string", `${field} is documented with a string`);
       assert.ok(text.length > 0, `${field} is documented`);
@@ -188,16 +193,44 @@ test("the release version rewrite cannot match anything in this package's source
   const pattern = workflow.slice(patternStart, patternEnd).replaceAll('\\"', '"');
   const rewrite = new RegExp(pattern, "m");
 
-  const source = readFileSync(path.join(repoRoot, "src", "index.ts"), "utf-8");
-  const hit = rewrite.exec(source);
-  assert.equal(
-    hit,
-    null,
-    `the release rewrite would edit ${JSON.stringify(hit?.[0] ?? "")}; this package declares its version via EXTENSION_VERSION and manifest.json only`,
-  );
+  // Read the candidate list out of the workflow too, rather than hardcoding a
+  // parallel copy. The workflow rewrites every file in its own list, so a guard
+  // that checks a fixed subset stops covering the job the moment that list grows
+  // — adding a root `index.ts` would reintroduce an unintended rewrite target
+  // with the test still green.
+  // Searched backwards from the rewrite: the `source.replace` call sits *inside*
+  // the loop that declares the candidates, so scanning forward finds nothing.
+  const loopMarker = "for(const file of [";
+  const loopStart = workflow.lastIndexOf(loopMarker, start);
+  assert.ok(loopStart >= 0, "release.yml still iterates a source-file candidate list");
+  const loopEnd = workflow.indexOf("]", loopStart);
+  const candidates = workflow
+    .slice(loopStart + loopMarker.length, loopEnd)
+    .split(",")
+    .map((entry) => entry.trim().replace(/^'|'$/g, ""))
+    .filter((entry) => entry.endsWith(".ts"));
+  assert.ok(candidates.length > 0, "the candidate list was parsed, not silently emptied");
+
+  let checked = 0;
+  for (const candidate of candidates) {
+    const candidatePath = path.join(repoRoot, candidate);
+    if (!existsSync(candidatePath)) continue;
+    checked += 1;
+    const source = readFileSync(candidatePath, "utf-8");
+    const hit = rewrite.exec(source);
+    assert.equal(
+      hit,
+      null,
+      `the release rewrite would edit ${JSON.stringify(hit?.[0] ?? "")} in ${candidate}; this package declares its version via EXTENSION_VERSION and manifest.json only`,
+    );
+  }
+  assert.ok(checked > 0, "at least one candidate exists, so the assertions above ran");
 
   // And the constant it does target is present, so the rewrite is not a silent no-op.
-  assert.match(source, /const EXTENSION_VERSION = "\d{4}\.\d{1,2}\.\d{1,2}(-\d+)?";/);
+  assert.match(
+    readFileSync(path.join(repoRoot, "src", "index.ts"), "utf-8"),
+    /const EXTENSION_VERSION = "\d{4}\.\d{1,2}\.\d{1,2}(-\d+)?";/,
+  );
 });
 
 // ---------------------------------------------------------------------------
