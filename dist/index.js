@@ -1,11 +1,9 @@
-import { execFile, spawnSync } from "node:child_process";
-import { promisify } from "node:util";
-import { writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
+import { listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph, } from "@unbrained/pm-cli/sdk/graph";
-const execFileAsync = promisify(execFile);
 const EXTENSION_VERSION = "2026.7.28";
 // ---------------------------------------------------------------------------
 // Error contract
@@ -121,6 +119,33 @@ function neo4jFriendlyError(err) {
     }
     return err;
 }
+/**
+ * Parse an optional non-negative millisecond override from an environment
+ * variable, returning `undefined` when the variable is absent or malformed.
+ *
+ * Both knobs exposed by {@link createDriver} (the TCP connect cap and the
+ * transaction-retry budget) are optional, so a single guarded parser keeps the
+ * production default identical to the driver's own whenever an operator has not
+ * opted in. A malformed or negative value is ignored rather than thrown: a bad
+ * value here must never stop a workspace whose Neo4j is reachable from
+ * connecting, and the malformed input surfaces anyway as the driver's own
+ * connection error when the value genuinely matters.
+ *
+ * @param envVar - Name of the environment variable to read.
+ * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
+ */
+function parseNeo4jMs(envVar) {
+    const raw = process.env[envVar];
+    if (raw === undefined || raw.trim() === "")
+        return undefined;
+    const trimmed = raw.trim();
+    if (!/^\d+(\.\d+)?$/.test(trimmed))
+        return undefined;
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0)
+        return undefined;
+    return Math.round(n);
+}
 async function createDriver() {
     const uri = process.env.NEO4J_URI;
     const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME;
@@ -129,14 +154,28 @@ async function createDriver() {
         throw new CommandError(neo4jMissingMessage(), EXIT_CODE.USAGE);
     }
     const neo4j = await loadNeo4j();
-    return neo4j.driver(uri, neo4j.auth.basic(user, password), {
+    const config = {
         // Close idle connections after 5 minutes
         maxConnectionLifetime: 5 * 60 * 1000,
         // Give up acquiring a connection within 10 seconds
         connectionAcquisitionTimeout: 10_000,
         // Allow at most 10 concurrent connections per pool
         maxConnectionPoolSize: 10,
-    });
+    };
+    // Cap the TCP connect so a dead host fails in seconds rather than hanging on
+    // the OS default. Production leaves this unset (the driver's own default) so
+    // established behaviour is unchanged; operators on tight networks can shrink
+    // it via NEO4J_CONNECTION_TIMEOUT_MS.
+    const connectionTimeout = parseNeo4jMs("NEO4J_CONNECTION_TIMEOUT_MS");
+    if (connectionTimeout !== undefined)
+        config.connectionTimeout = connectionTimeout;
+    // Shrink the transaction-retry budget so a clearly-unreachable host gives up
+    // quickly instead of retrying for the driver's 30s default. Production leaves
+    // this unset; CI/test runs set NEO4J_MAX_RETRY_MS to fail fast.
+    const maxRetry = parseNeo4jMs("NEO4J_MAX_RETRY_MS");
+    if (maxRetry !== undefined)
+        config.maxTransactionRetryTime = maxRetry;
+    return neo4j.driver(uri, neo4j.auth.basic(user, password), config);
 }
 /**
  * Convert a Neo4j driver value (Integer, Node, Relationship, Path, …)
@@ -216,24 +255,92 @@ function toNumber(value) {
 // ---------------------------------------------------------------------------
 // PM CLI interaction
 // ---------------------------------------------------------------------------
-async function runPmJson(context, args) {
-    const cliEntry = process.argv[1];
-    const command = cliEntry ? process.execPath : "pm";
-    const pathArgs = context.pm_root ? ["--path", context.pm_root] : [];
-    const commandArgs = cliEntry
-        ? [cliEntry, ...pathArgs, ...args, "--json"]
-        : [...pathArgs, ...args, "--json"];
+/**
+ * Verify that a path is a usable pm tracker root, throwing a `USAGE`
+ * {@link CommandError} when it is not.
+ *
+ * This exists because the SDK reader is tolerant where the shell-out it replaced
+ * was strict. `listAllItemMetadata` resolves with an empty array for a path that
+ * does not exist, for a path that is a regular file (swallowing `ENOTDIR`), and
+ * for a directory that is not a tracker — all indistinguishable from a tracker
+ * that legitimately has no items. Without this check a mistyped `--path` /
+ * `--pm-path` would make `analyze`, `cycles`, `critical-path`, `cypher` and the
+ * exporters report a confident empty graph and exit 0, where the previous
+ * `pm list-all` invocation exited non-zero. Reporting an empty answer for a bad
+ * input is worse than failing, because nothing downstream can detect it.
+ *
+ * A tracker is identified by the artefacts `pm init` always writes: `settings.json`
+ * and the `schema/` directory. Requiring either (rather than both) keeps older
+ * trackers readable while still rejecting an arbitrary directory.
+ *
+ * Filed upstream as unbraind/pm-cli#814; this guard restores the previous failure
+ * semantics locally and independently of that fix.
+ *
+ * @param pmRoot Candidate tracker root.
+ * @returns The same path, once validated, so callers can wrap in place.
+ */
+function assertPmTracker(pmRoot) {
+    if (!existsSync(pmRoot)) {
+        throw new CommandError(`No pm tracker at ${pmRoot}`, EXIT_CODE.USAGE);
+    }
+    if (!statSync(pmRoot).isDirectory()) {
+        throw new CommandError(`pm tracker path is not a directory: ${pmRoot}`, EXIT_CODE.USAGE);
+    }
+    // Check the marker TYPES, not merely their existence. A directory that happens
+    // to contain a file named `schema` or a directory named `settings.json` is not
+    // a tracker, and letting it through would hand the path to a reader that
+    // answers with an empty list — restoring exactly the invalid-root-succeeds
+    // regression this guard exists to prevent.
+    const hasSettingsFile = isEntry(path.join(pmRoot, "settings.json"), "file");
+    const hasSchemaDir = isEntry(path.join(pmRoot, "schema"), "directory");
+    if (!hasSettingsFile && !hasSchemaDir) {
+        throw new CommandError(`${pmRoot} is not a pm tracker (no settings.json file or schema/ directory present)`, EXIT_CODE.USAGE);
+    }
+    return pmRoot;
+}
+/**
+ * Report whether a path exists as the given entry kind.
+ *
+ * `existsSync` alone cannot distinguish a file from a directory, which matters
+ * for tracker detection: the markers are specifically a `settings.json` *file*
+ * and a `schema` *directory*. A `statSync` on a missing path throws, so the
+ * existence check and the kind check are combined here.
+ *
+ * @param target Absolute path to inspect.
+ * @param kind Required entry kind.
+ * @returns True when `target` exists and is of `kind`.
+ */
+function isEntry(target, kind) {
+    if (!existsSync(target))
+        return false;
+    const stats = statSync(target);
+    return kind === "file" ? stats.isFile() : stats.isDirectory();
+}
+/**
+ * Resolve the tracker root for a command context, honouring an explicit
+ * `pm_root` and falling back to {@link resolveImplicitPmRoot} over the
+ * workspace directory.
+ *
+ * Throws a {@link CommandError} carrying `EXIT_CODE.USAGE` when no tracker is
+ * discoverable: running a graph command outside a pm workspace is a usage
+ * mistake, not an internal failure, and the typed error keeps the single-clean
+ * -exit contract that the replaced shell-out provided. A bare `Error` here would
+ * leave the host to re-invoke the handler and exit with a generic code.
+ *
+ * Callers that treat a missing tracker as non-fatal (the `status` command)
+ * catch it, which still works because `CommandError` extends `Error`.
+ */
+function resolvePmRootForContext(context) {
+    if (context.pm_root)
+        return assertPmTracker(context.pm_root);
     try {
-        const { stdout } = await execFileAsync(command, commandArgs, {
-            cwd: getWorkspace(context),
-            timeout: 30_000,
-            maxBuffer: 20 * 1024 * 1024,
-        });
-        return JSON.parse(stdout);
+        return assertPmTracker(resolveImplicitPmRoot(getWorkspace(context)));
     }
     catch (err) {
+        if (err instanceof CommandError)
+            throw err;
         const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Failed to run pm ${args.join(" ")}: ${msg}`);
+        throw new CommandError(`Could not locate a pm tracker: ${msg}`, EXIT_CODE.USAGE);
     }
 }
 /**
@@ -349,8 +456,12 @@ function graphFromItems(items, workspace, depsByItem) {
                 reason: item.blocked_reason ?? item.blockedReason ?? null,
             });
         }
+        // ItemMetadata carries dependencies[] as typed Dependency[] objects and
+        // may also carry a legacy deps[] field (via the index signature). Both are
+        // flattened into one list of record-shaped objects for relationshipTarget.
+        const rawDeps = item["deps"];
         const deps = [
-            ...(item.deps ?? []),
+            ...(Array.isArray(rawDeps) ? rawDeps : []),
             ...(item.dependencies ?? []),
             ...(depsByItem.get(item.id) ?? []),
         ];
@@ -407,26 +518,34 @@ function graphFromItems(items, workspace, depsByItem) {
     };
 }
 /**
- * Synchronously fetch all items for a given pm root using
- * `pm --path <pm_root> list-all --json --include-body`. The `--include-body`
- * payload already carries `dependencies[]`, `blocked_by`, `tags`, and facet
- * fields, so a single call is enough to build the full graph — no per-item
- * `pm deps` round-trips are needed. Used by the exporter pipeline, where the
- * SDK provides `pm_root` (not a CommandContext `cwd`).
+ * Fetch all item metadata for a given pm root in-process via the SDK's
+ * {@link listAllItemMetadata}. This replaces the previous `pm list-all
+ * --json --include-body` shell-out: the SDK reader reads the tracker files
+ * directly, removing the child-process boundary, the `maxBuffer` ceiling, and
+ * the requirement that a `pm` binary be resolvable on `PATH`. The
+ * `listAllItemMetadata` payload already carries `dependencies[]`,
+ * `blocked_by`, `tags`, and facet fields, so a single call is enough to build
+ * the full graph — no per-item `pm deps` round-trips and no unused `--include-body`
+ * body payload are needed.
  */
-function fetchItemsViaPath(pmRoot) {
-    const result = spawnSync("pm", ["--path", pmRoot, "list-all", "--json", "--include-body"], { encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
-    if (result.error || result.status !== 0) {
-        throw new CommandError(`Failed to fetch pm items (exit ${result.status ?? "unknown"}): ${result.stderr?.trim() || result.error?.message || "no output"}`);
-    }
-    let parsed;
+async function fetchItemsViaSdk(pmRoot) {
+    // Validate here as well as in resolvePmRootForContext: the exporter pipeline
+    // reaches loadGraphFromPath(pmRoot) directly, with no CommandContext involved.
+    assertPmTracker(pmRoot);
     try {
-        parsed = JSON.parse(result.stdout);
+        return await listAllItemMetadata(pmRoot);
     }
     catch (err) {
-        throw new CommandError(`Failed to parse pm list-all output as JSON: ${err instanceof Error ? err.message : String(err)}`);
+        // The shell-out this replaced threw CommandError, so its failures carried an
+        // exitCode. A plain Error escaping here would bypass that contract: the host
+        // re-invokes the handler and exits with a generic code instead of one clean
+        // non-zero exit. Preserve an already-typed CommandError (an unreadable item
+        // or a malformed tracker may raise one) and wrap anything else.
+        if (err instanceof CommandError)
+            throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new CommandError(`Failed to read pm items from ${pmRoot}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
     }
-    return parsed.items ?? [];
 }
 /**
  * Derive the logical workspace directory from a pm_root. pm roots are usually
@@ -447,38 +566,28 @@ function workspaceFromPmRoot(pmRoot) {
     }
     return normalized;
 }
-/** Build a Graph directly from items already loaded via list-all --include-body. */
-function loadGraphFromPath(pmRoot) {
-    const items = fetchItemsViaPath(pmRoot);
+/**
+ * Build a Graph directly from items loaded in-process via the SDK reader.
+ * The {@link ItemMetadata} payload carries `dependencies[]`, `blocked_by`,
+ * `parent`, `tags`, and facet fields, so a single read is enough to construct
+ * the full graph.
+ */
+async function loadGraphFromPath(pmRoot) {
+    const items = await fetchItemsViaSdk(pmRoot);
     return graphFromItems(items, workspaceFromPmRoot(pmRoot), new Map());
 }
 /**
- * Build a Graph for a CommandContext via a single
- * `pm list-all --json --include-body` call from the workspace cwd. The
- * `--include-body` payload already carries dependencies/blocked_by/parent/tags,
- * so no per-item `pm deps` round-trips are needed. Used by the offline
- * analytics commands (analyze/cycles/path/critical-path).
+ * Build a Graph for a CommandContext via a single in-process SDK item read.
+ * Prefers the resolved tracker path the CLI hands to extension commands
+ * (`context.pm_root`) so custom `--pm-path`/`--path` workspaces resolve
+ * correctly; falls back to {@link resolveImplicitPmRoot} over the workspace
+ * directory for older CLI versions that omit `pm_root`. Used by the offline
+ * analytics commands (analyze/cycles/path/critical-path) and the export
+ * pipeline.
  */
-function loadGraphForContext(context) {
-    // Prefer the resolved tracker path the CLI hands to extension commands so
-    // custom --pm-path/--path workspaces resolve correctly; fall back to a
-    // cwd-relative fetch for older CLI versions that omit pm_root.
-    if (context.pm_root) {
-        return loadGraphFromPath(context.pm_root);
-    }
-    const workspace = getWorkspace(context);
-    const result = spawnSync("pm", ["list-all", "--json", "--include-body"], { cwd: workspace, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
-    if (result.error || result.status !== 0) {
-        throw new CommandError(`Failed to fetch pm items (exit ${result.status ?? "unknown"}): ${result.stderr?.trim() || result.error?.message || "no output"}`);
-    }
-    let parsed;
-    try {
-        parsed = JSON.parse(result.stdout);
-    }
-    catch (err) {
-        throw new CommandError(`Failed to parse pm list-all output as JSON: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    return graphFromItems(parsed.items ?? [], workspace, new Map());
+async function loadGraphForContext(context) {
+    const pmRoot = resolvePmRootForContext(context);
+    return await loadGraphFromPath(pmRoot);
 }
 /** Validate and normalise a `--format` value for the analysis commands. */
 function parseAnalysisFormat(value) {
@@ -608,8 +717,8 @@ export function parseAnalyticsFlags(args) {
  * --include-closed and an optional --root/--depth neighborhood). Throws
  * NOT_FOUND when --root cannot be resolved to a unique workspace item id.
  */
-function shapedAnalyticsGraph(context, flags) {
-    const full = loadGraphForContext(context);
+async function shapedAnalyticsGraph(context, flags) {
+    const full = await loadGraphForContext(context);
     const resolvedRoot = flags.root
         ? resolveItemIdOrThrow([...itemNodeIds(full)].sort(), flags.root, "--root node").resolved
         : undefined;
@@ -2015,8 +2124,8 @@ export function activate(api) {
             if (outputPath && rawFormat === undefined) {
                 throw new CommandError("--output requires --format (the graph-object output is written by the host).", EXIT_CODE.USAGE);
             }
-            const buildGraph = () => {
-                const fullGraph = loadGraphForContext(context);
+            const buildGraph = async () => {
+                const fullGraph = await loadGraphForContext(context);
                 if (!shapingRequested)
                     return fullGraph;
                 if (root && !fullGraph.nodes.some((n) => n.id === root)) {
@@ -2030,7 +2139,7 @@ export function activate(api) {
                 try {
                     return {
                         ok: true,
-                        graph: buildGraph(),
+                        graph: await buildGraph(),
                     };
                 }
                 catch (err) {
@@ -2049,7 +2158,7 @@ export function activate(api) {
                 throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);
             }
             try {
-                const graph = buildGraph();
+                const graph = await buildGraph();
                 const output = renderExport(format, graph);
                 if (outputPath) {
                     const absolutePath = path.resolve(outputPath.trim());
@@ -2100,7 +2209,7 @@ export function activate(api) {
                 };
             }
             try {
-                const graph = loadGraphForContext(context);
+                const graph = await loadGraphForContext(context);
                 return {
                     ok: true,
                     graph: {
@@ -2141,7 +2250,7 @@ export function activate(api) {
             const fullSync = args.includes("--full");
             let graph;
             try {
-                graph = loadGraphForContext(context);
+                graph = await loadGraphForContext(context);
             }
             catch (err) {
                 // Preserve an already-typed CommandError (and its exitCode) rather than
@@ -2189,11 +2298,13 @@ export function activate(api) {
             const workspace = getWorkspace(context);
             const projectKey = projectKeyForWorkspace(workspace);
             const configured = neo4jConfigured();
-            // Always fetch local item count regardless of Neo4j availability
+            // Always fetch local item count regardless of Neo4j availability.
+            // Uses the in-process SDK reader (no `pm` binary on PATH required).
             let localItemCount = 0;
             try {
-                const result = await runPmJson(context, ["list-all"]);
-                localItemCount = result.items?.length ?? 0;
+                const pmRoot = resolvePmRootForContext(context);
+                const items = await listAllItemMetadata(pmRoot);
+                localItemCount = items.length;
             }
             catch {
                 // Non-fatal: workspace may not be initialised
@@ -2402,7 +2513,7 @@ export function activate(api) {
                 };
             }
             const flags = parseAnalyticsFlags(context.args ?? []);
-            const graph = shapedAnalyticsGraph(context, flags);
+            const graph = await shapedAnalyticsGraph(context, flags);
             const report = analyzeGraph(graph);
             return { ok: true, ...report };
         },
@@ -2431,7 +2542,7 @@ export function activate(api) {
                 };
             }
             const flags = parseAnalyticsFlags(context.args ?? []);
-            const graph = shapedAnalyticsGraph(context, flags);
+            const graph = await shapedAnalyticsGraph(context, flags);
             const edges = structuralEdges(graph);
             const items = [...itemNodeIds(graph)].sort();
             const cycles = findCycles(items, edges);
@@ -2478,7 +2589,7 @@ export function activate(api) {
             if (!from || !to) {
                 throw new CommandError("Usage: pm pm-graph path <from> <to>\nExample: pm pm-graph path pm-ep18 pm-hd71", EXIT_CODE.USAGE);
             }
-            const graph = shapedAnalyticsGraph(context, flags);
+            const graph = await shapedAnalyticsGraph(context, flags);
             const itemIds = [...itemNodeIds(graph)].sort();
             const resolvedFrom = resolveItemIdOrThrow(itemIds, from, "Source item").resolved;
             const resolvedTo = resolveItemIdOrThrow(itemIds, to, "Target item").resolved;
@@ -2518,7 +2629,7 @@ export function activate(api) {
                 };
             }
             const flags = parseAnalyticsFlags(context.args ?? []);
-            const graph = shapedAnalyticsGraph(context, flags);
+            const graph = await shapedAnalyticsGraph(context, flags);
             const edges = structuralEdges(graph);
             const items = [...itemNodeIds(graph)].sort();
             const chain = longestChain(items, edges);
@@ -2554,7 +2665,7 @@ export function activate(api) {
                 };
             }
             const flags = parseAnalyticsFlags(context.args ?? []);
-            const graph = shapedAnalyticsGraph(context, flags);
+            const graph = await shapedAnalyticsGraph(context, flags);
             const edges = structuralEdges(graph);
             const items = [...itemNodeIds(graph)].sort();
             const { order, cycleNodes } = topoSort(items, edges);
@@ -2608,7 +2719,7 @@ export function activate(api) {
             const rawDirection = flags.direction ?? "downstream";
             const canonicalDirection = mapImpactDirection(rawDirection);
             const logicalDirection = canonicalDirection === "both" ? "both" : canonicalDirection === "incoming" ? "downstream" : "upstream";
-            const graph = shapedAnalyticsGraph(context, flags);
+            const graph = await shapedAnalyticsGraph(context, flags);
             const itemIds = [...itemNodeIds(graph)].sort();
             const resolvedId = resolveItemIdOrThrow(itemIds, id, "Item").resolved;
             const edges = structuralEdges(graph);
@@ -2716,7 +2827,7 @@ export function activate(api) {
             if (!id) {
                 throw new CommandError("Usage: pm pm-graph explain <id>\nExample: pm pm-graph explain pm-ep18", EXIT_CODE.USAGE);
             }
-            const graph = shapeGraph(loadGraphForContext(context), {
+            const graph = shapeGraph(await loadGraphForContext(context), {
                 edges: "deps",
                 includeClosed: flags.includeClosed,
                 filter: flags.filter,
@@ -2739,7 +2850,7 @@ export function activate(api) {
     // `pm list-all --json --include-body` call and renders it to one of six
     // offline formats (cypher | mermaid | dot | json | graphml | plantuml).
     // No Neo4j required. Rich flags live on the canonical `pm pm-graph export`.
-    const exporter = (ctx) => {
+    const exporter = async (ctx) => {
         const options = ctx.options ?? {};
         const rawFormat = String(readExportOption(options, "format") ?? "json").toLowerCase();
         if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(rawFormat)) {
@@ -2765,9 +2876,9 @@ export function activate(api) {
                 throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
         }
-        // The export pipeline provides pm_root; fall back to the cwd-based fetch
-        // (same as the command path) if a host ever omits it.
-        const fullGraph = ctx.pm_root ? loadGraphFromPath(ctx.pm_root) : loadGraphForContext({});
+        // The export pipeline provides pm_root; fall back to the in-process SDK
+        // reader over the workspace cwd if a host ever omits it.
+        const fullGraph = await (ctx.pm_root ? loadGraphFromPath(ctx.pm_root) : loadGraphForContext({}));
         if (root && !fullGraph.nodes.some((n) => n.id === root)) {
             throw new CommandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
         }
