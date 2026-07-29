@@ -258,11 +258,29 @@ function toNumber(value) {
 /**
  * Resolve the tracker root for a command context, honouring an explicit
  * `pm_root` and falling back to {@link resolveImplicitPmRoot} over the
- * workspace directory. Throws when no tracker is discoverable — callers that
- * treat a missing tracker as non-fatal wrap this in a try/catch.
+ * workspace directory.
+ *
+ * Throws a {@link CommandError} carrying `EXIT_CODE.USAGE` when no tracker is
+ * discoverable: running a graph command outside a pm workspace is a usage
+ * mistake, not an internal failure, and the typed error keeps the single-clean
+ * -exit contract that the replaced shell-out provided. A bare `Error` here would
+ * leave the host to re-invoke the handler and exit with a generic code.
+ *
+ * Callers that treat a missing tracker as non-fatal (the `status` command)
+ * catch it, which still works because `CommandError` extends `Error`.
  */
 function resolvePmRootForContext(context) {
-    return context.pm_root || resolveImplicitPmRoot(getWorkspace(context));
+    if (context.pm_root)
+        return context.pm_root;
+    try {
+        return resolveImplicitPmRoot(getWorkspace(context));
+    }
+    catch (err) {
+        if (err instanceof CommandError)
+            throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new CommandError(`Could not locate a pm tracker: ${msg}`, EXIT_CODE.USAGE);
+    }
 }
 /**
  * Invoke the canonical registry-aware graph engine in-process via the SDK's
@@ -450,7 +468,20 @@ function graphFromItems(items, workspace, depsByItem) {
  * body payload are needed.
  */
 async function fetchItemsViaSdk(pmRoot) {
-    return listAllItemMetadata(pmRoot);
+    try {
+        return await listAllItemMetadata(pmRoot);
+    }
+    catch (err) {
+        // The shell-out this replaced threw CommandError, so its failures carried an
+        // exitCode. A plain Error escaping here would bypass that contract: the host
+        // re-invokes the handler and exits with a generic code instead of one clean
+        // non-zero exit. Preserve an already-typed CommandError (an unreadable item
+        // or a malformed tracker may raise one) and wrap anything else.
+        if (err instanceof CommandError)
+            throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new CommandError(`Failed to read pm items from ${pmRoot}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+    }
 }
 /**
  * Derive the logical workspace directory from a pm_root. pm roots are usually
