@@ -1,0 +1,17 @@
+id: pm-graph-5cu7
+title: Run the test suite against TypeScript sources behind an uncheatable coverage gate
+description: "Coverage was unmeasured in this package: the suite imported the compiled output from dist, so the only numbers obtainable pointed at generated JavaScript offsets rather than lines an author edits, and no threshold was wired into any gate. Tests now import the TypeScript source directly, which Node has executed without a flag since 22.18.0, the engines floor this package already declares. The gate is scripts/coverage-gate.ts. Beyond enforcing per-dimension thresholds it reconciles the reported file list against a walk of the source tree, because Node omits files that never load from its coverage report entirely rather than reporting them at zero, so a threshold flag alone is satisfiable by narrowing what the suite imports. The walk is dynamic rather than a frozen file list, so a module added later is required automatically. The gate also pins TZ to UTC so the measurement is identical on any machine, chains build:test so the test tree and the gate script stay typechecked now that release:check no longer runs npm test, deletes any previous lcov report so a run producing no report cannot pass on stale data, and validates that ignore entries are genuinely type-only by checking their compiled output. Measured baseline for this package is 63.21 line, 76.46 branch and 77.40 function coverage over the single source file, with thresholds pinned at that floor."
+type: Feature
+status: closed
+priority: 1
+tags[3]: code-quality,coverage,testing
+created_at: "2026-07-29T01:05:50.693Z"
+updated_at: "2026-07-29T01:06:11.847Z"
+closed_at: "2026-07-29T01:06:11.845Z"
+author: codex
+acceptance_criteria: "Tests import the TypeScript source rather than dist; the gate fails on threshold regression; the gate fails when a source file never loads, proven by a negative control; thresholds are recorded in package.json as a ratchet at the measured baseline; the gate runs in release:check and in CI on both supported Node lines."
+resolution: "Tests run against the TypeScript source and scripts/coverage-gate.ts is wired into release:check and CI on a Node 22 and 26 matrix."
+expected_result: "A coverage gate runs in the release check and in CI on Node 22 and 26, reports against the TypeScript source, and fails when a source file is untested or a threshold regresses."
+actual_result: "npm run release:check passes end to end. The gate reports one source file at 63.21 line, 76.46 branch and 77.40 function coverage, with thresholds pinned at 63/76/77. Negative control: a throwaway untested file under src makes the gate exit 1 and name it, and it exits 0 again once removed."
+close_reason: Coverage gate landed and locally verified; CI legs are unobserved until the pull request runs.
+body: ""
