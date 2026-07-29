@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Run the test suite against TypeScript sources behind an uncheatable coverage gate ([pm-graph-5cu7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-5cu7.toon))
+
 ## 2026.7.28 - 2026-07-28
 
 ### Other

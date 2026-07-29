@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
 
-import extension from "../dist/index.js";
+import extension from "../src/index.ts";
 
 // Resolve this file's directory without relying on the CommonJS `__dirname`,
 // which is undefined in ES modules (referencing it throws on Node versions

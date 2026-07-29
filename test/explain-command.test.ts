@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import extension from "../dist/index.js";
+import extension from "../src/index.ts";
 
 type Handler = (ctx: { cwd?: string; args?: string[] }) => Promise<unknown>;
 

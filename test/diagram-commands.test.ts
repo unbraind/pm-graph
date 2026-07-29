@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import extension from "../dist/index.js";
+import extension from "../src/index.ts";
 
 // Integration tests that drive the REAL registered command handlers
 // (critical-path / cycles) against a throwaway pm workspace, so we exercise the
