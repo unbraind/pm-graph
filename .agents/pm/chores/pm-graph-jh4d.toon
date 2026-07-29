@@ -1,0 +1,16 @@
+id: pm-graph-jh4d
+title: Adopt pm-cli 2026.7.29
+description: "Bump pm-cli dependency to 2026.7.29, update peerDependency, audit for removed --all flag, audit for fixed upstream workarounds (GH-651, GH-672, GH-676, GH-785/792, GH-794), pass all quality gates."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-07-29T04:32:00.666Z"
+updated_at: "2026-07-29T04:41:47.894Z"
+closed_at: "2026-07-29T04:41:47.841Z"
+completed_at: "2026-07-29T04:41:47.841Z"
+author: pi-agent
+comments[1]{created_at,author,text}:
+  "2026-07-29T04:33:17.465Z",pi-agent,"Bumped @unbrained/pm-cli devDependency to 2026.7.29, set peerDependency to >=2026.7.29. Audited for 'list --all' and 'list -a': no hits found. Upstream workaround audit: GH-651 (signed activity window) - no hits. GH-672 (context low_level blocked state) - 'blocked' references are this package's own graph dependency/blocker model, not pm context workarounds. GH-676 (list --tag CSV) - no pm list --tag calls. GH-785/792 (pm health runtime dirs) - no hits. GH-794 (output_format override) - the package uses { handled: false } to decline (changed from ctx.payload echo due to 2026.7.27 destructive behavior). In 2026.7.29 the identity echo is now inert (detected and skipped with deprecation warning), but { handled: false } is the cleaner modern pattern. Reverting to ctx.payload would produce deprecation warnings and break the test asserting no warnings. No workaround to remove — { handled: false } is the correct approach."
+close_reason: "Bumped @unbrained/pm-cli to 2026.7.29 (devDep + peerDep >=2026.7.29). No 'list --all' hits found. No upstream workarounds to remove (GH-794 output_format { handled: false } is the correct modern pattern, not a workaround). All quality gates pass: 97 tests, coverage lines 63.21% (threshold 63), branches 76.46% (threshold 76), functions 77.40% (threshold 77). Changelog check and audit:prod clean."
+body: ""
