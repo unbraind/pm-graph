@@ -104,9 +104,9 @@
       "test/*.test.ts"
     ],
     "thresholds": {
-      "lines": 63,
-      "branches": 76,
-      "functions": 77
+      "lines": 81,
+      "branches": 77,
+      "functions": 88
     },
     "ignore": []
   }
