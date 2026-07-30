@@ -129,6 +129,9 @@ jobs:
           [[ -f manifest.json ]] && paths+=(manifest.json)
           [[ -f index.ts ]] && paths+=(index.ts)
           [[ -d src ]] && paths+=(src)
+          # Trailing slash: a bare `dist` pathspec also matches dist-test/, which
+          # would stage test fixtures into the release commit. See the matching
+          # note in ci.yml.
           git ls-files --error-unmatch 'dist/' > /dev/null 2>&1 && paths+=(dist)
           git add "${paths[@]}"
           if git diff --cached --quiet; then
