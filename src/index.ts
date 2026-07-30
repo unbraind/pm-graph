@@ -17,7 +17,7 @@ import {
   type GraphResult,
 } from "@unbrained/pm-cli/sdk/graph";
 
-const EXTENSION_VERSION = "2026.7.28";
+const EXTENSION_VERSION = "2026.7.30";
 
 // ---------------------------------------------------------------------------
 // Error contract
