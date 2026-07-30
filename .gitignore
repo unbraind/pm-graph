@@ -1,5 +1,6 @@
 node_modules/
-dist/
+# dist/ is intentionally committed: a git-URL install copies the repo as-is
+# and never runs a build, so the entry file must be in git.
 dist-test/
 npm-debug.log*
 .DS_Store

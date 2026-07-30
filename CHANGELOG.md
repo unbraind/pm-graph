@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Release commits discard the rebuilt dist, so the git-install path serves the previous version ([pm-graph-v6yt](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-v6yt.toon))
+
 ## 2026.7.30 - 2026-07-30
 
 ### Added

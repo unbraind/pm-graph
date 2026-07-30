@@ -40,8 +40,46 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Build
-        run: npm run build
+      - name: Build and verify committed output is current
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Every flag below is load-bearing. Do not simplify any of them without
+          # reading why it is here; each one was a way this gate silently passed.
+          #
+          #   'dist/' with the trailing slash — cosmetic, not corrective. A bare
+          #     `dist` pathspec does NOT match dist-test/; git pathspecs match whole
+          #     path components, so `dist` matches the dist directory and nothing
+          #     else. An earlier revision of this comment claimed otherwise and was
+          #     wrong (caught in review on pm-web#76). The slash is kept only
+          #     because it states the intent at a glance.
+          #   --error-unmatch + exit 1 — an untracked dist/ used to skip the gate.
+          #     This package is installed by copying the repository, so untracked
+          #     build output is the defect, not an exemption from checking for it.
+          #   rm -rf dist — tsc never removes output for a deleted source, so an
+          #     orphaned artifact survived every rebuild and every comparison.
+          #   git status, not git diff — `git diff --quiet` cannot see a NEW file at
+          #     all, so a newly generated artifact was invisible to it.
+          #   --untracked-files=all — without it a new file inside a tracked
+          #     directory is reported as the directory, not the file.
+          #   --ignored=matching — some packages gitignore a dist/ whose contents
+          #     git tracks; there a new artifact is invisible to plain git status
+          #     too, so one .gitignore line would have disabled this gate forever.
+          #     'matching' rather than plain --ignored keeps the report scoped to the
+          #     pathspec instead of listing node_modules.
+          if ! git ls-files --error-unmatch 'dist/' > /dev/null 2>&1; then
+            echo "::error::dist/ is not tracked. This package is installed by copying the repository, so the build output has to be in git."
+            exit 1
+          fi
+          rm -rf dist
+          npm run build
+          drift=$(git status --porcelain=v1 --untracked-files=all --ignored=matching -- 'dist/')
+          if [ -n "$drift" ]; then
+            echo "::error::Committed dist/ does not match a fresh build. Run 'npm run build' and commit the result."
+            printf '%s\n' "$drift"
+            exit 1
+          fi
+          echo "Committed dist/ matches a fresh build."
 
       - name: Test with coverage gate
         run: npm run coverage
