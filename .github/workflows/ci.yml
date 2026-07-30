@@ -47,9 +47,12 @@ jobs:
           # Every flag below is load-bearing. Do not simplify any of them without
           # reading why it is here; each one was a way this gate silently passed.
           #
-          #   'dist/' with the trailing slash — a bare `dist` pathspec also matches
-          #     dist-test/, so drift in the test fixtures failed the build as if it
-          #     were stale output.
+          #   'dist/' with the trailing slash — cosmetic, not corrective. A bare
+          #     `dist` pathspec does NOT match dist-test/; git pathspecs match whole
+          #     path components, so `dist` matches the dist directory and nothing
+          #     else. An earlier revision of this comment claimed otherwise and was
+          #     wrong (caught in review on pm-web#76). The slash is kept only
+          #     because it states the intent at a glance.
           #   --error-unmatch + exit 1 — an untracked dist/ used to skip the gate.
           #     This package is installed by copying the repository, so untracked
           #     build output is the defect, not an exemption from checking for it.
