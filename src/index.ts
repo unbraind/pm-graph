@@ -10,12 +10,7 @@ import {
   type ImportExportContext,
   type ItemMetadata,
 } from "@unbrained/pm-cli/sdk";
-import {
-  runGraph,
-  type GraphCommandOptions,
-  type GraphImpactResult,
-  type GraphResult,
-} from "@unbrained/pm-cli/sdk/graph";
+import { runGraph, type GraphCommandOptions } from "@unbrained/pm-cli/sdk/graph";
 
 const EXTENSION_VERSION = "2026.7.31";
 
@@ -517,13 +512,21 @@ type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" |
  * from the declared `@unbrained/pm-cli` peer dependency, so the former
  * `pm graph --help` probe (and its degraded fallback) is no longer meaningful
  * and has been removed.
+ *
+ * Since pm-cli 2026.8.3 the engine returns `ProjectedGraphResult` — the union
+ * of every subcommand envelope intersected with the output-projection
+ * declaration. That type is not re-exported from the public `sdk/graph`
+ * surface, so the return type here is taken from {@link runGraph} itself via
+ * `ReturnType` instead of being re-declared locally, where a hand-maintained
+ * copy would drift. Callers narrow the union on the `subcommand` discriminant
+ * carried by every envelope, so no cast appears anywhere on this path.
  */
-async function runPmGraph<T extends GraphResult>(
+async function runPmGraph(
   subcommand: string,
   id: string | null,
   flags: PmGraphFlags,
   context: CommandContext,
-): Promise<T> {
+): Promise<Awaited<ReturnType<typeof runGraph>>> {
   const options: GraphCommandOptions = {};
   if (flags.direction) options.direction = flags.direction;
   if (flags.maxDepth !== undefined) options.maxDepth = flags.maxDepth;
@@ -545,7 +548,7 @@ async function runPmGraph<T extends GraphResult>(
       json: true,
       path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
     };
-    return (await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions)) as T;
+    return await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CommandError(`Failed to run pm graph ${subcommand}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
@@ -3256,12 +3259,18 @@ export function activate(api: ExtensionApi): void {
         const pmGraphFlags: PmGraphFlags = { direction: canonicalDirection };
         if (flags.depth !== undefined) pmGraphFlags.maxDepth = flags.depth;
         if (flags.limit !== undefined) pmGraphFlags.limit = flags.limit;
-        const result = await runPmGraph<GraphImpactResult>(
-          "impact",
-          resolvedId,
-          pmGraphFlags,
-          context,
-        );
+        const result = await runPmGraph("impact", resolvedId, pmGraphFlags, context);
+        // runGraph returns the projected union of every subcommand envelope.
+        // This call site only ever asks for "impact", so checking the
+        // subcommand discriminant narrows the union to the impact projection
+        // with no cast at all; any other envelope means the engine drifted
+        // from its contract, which is a generic failure here, not a usage one.
+        if (result.subcommand !== "impact") {
+          throw new CommandError(
+            `pm graph impact returned a "${result.subcommand}" result envelope`,
+            EXIT_CODE.GENERIC_FAILURE,
+          );
+        }
         // The canonical engine traverses the FULL workspace graph and never
         // sees pm-graph's presentation flags. Post-filter the returned rows to
         // the same shaped item-id universe that `--filter` (and the default
