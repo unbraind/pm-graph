@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Fix runGraph projected result narrowing and bump pm-cli to 2026.8.3 ([pm-graph-l9df](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-l9df.toon))
+
 ### Other
 
 - Resolve pm-changelog to the release that derives release dates in UTC ([pm-graph-9gtz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-9gtz.toon))
