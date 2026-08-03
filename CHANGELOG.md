@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Resolve pm-changelog to the release that derives release dates in UTC ([pm-graph-9gtz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-9gtz.toon))
+
 ## 2026.7.31 - 2026-07-31
 
 ### Fixed
