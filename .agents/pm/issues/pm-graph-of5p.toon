@@ -1,0 +1,12 @@
+id: pm-graph-of5p
+title: Make the id-resolution prefix test re-roll its setup instead of asserting on a random precondition
+description: "test/id-resolution.test.ts could fail in its own setup rather than in the code under test. It created three items, then asserted that uniqueNonExactPrefix(c, [a,b,c]) returned a prefix. Ids are pm- plus four random base36 characters, so the longest usable proper prefix carries only three of them, and whenever another id shares all three the helper correctly returns null and the assertion failed the build. Measured at roughly 6.4e-5 per run, confirmed by simulation at 16 failures in 400000 trials, and observed for real on CI run 30797275564 where test(26) failed while test(22) passed on the same commit whose only change was a lockfile refresh. A setup precondition that depends on chance must be re-rolled, not asserted. Replaced with a bounded retry that rebuilds the chain in a fresh workspace until the newest id has a unique proper prefix, discarding the losing workspace each time so the tracker does not accumulate ids and make a collision more likely."
+type: Issue
+status: open
+priority: 2
+tags[3]: ci,flaky,tests
+created_at: "2026-08-05T18:52:16.180Z"
+updated_at: "2026-08-05T18:52:16.180Z"
+author: "harness:claude-code"
+acceptance_criteria: The prefix precondition is obtained by bounded retry rather than assertion; each failed attempt discards its workspace so retries do not raise collision probability; the bound is documented with the resulting failure probability; the give-up path throws a diagnostic naming the ids; the full suite passes and typecheck is clean.
+body: ""

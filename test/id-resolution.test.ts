@@ -56,22 +56,68 @@ try {
   pmAvailable = false;
 }
 
-test("path resolves source/target by unique prefix and case-insensitive id", { skip: !pmAvailable }, async () => {
-  const ws = mkdtempSync(path.join(tmpdir(), "pmg-id-path-"));
-  try {
+/**
+ * Upper bound on setup attempts before the chain builder gives up.
+ *
+ * Each attempt fails independently with probability about 6.4e-5, so eight
+ * attempts put a spurious failure below 1e-33 — far past the point where any
+ * other source of flake dominates.
+ */
+const MAX_CHAIN_ATTEMPTS = 8;
+
+/**
+ * Builds a three-item blocked-by chain in a fresh workspace whose newest id is
+ * addressable by a proper prefix, retrying until it is.
+ *
+ * Ids are `pm-` plus four random base36 characters, so the longest usable
+ * proper prefix carries only three of them. Roughly once in 15,000 runs another
+ * id in the workspace shares all three and no proper prefix of the newest id is
+ * unique. That is a property of the randomly generated ids, **not** of the
+ * resolution code under test, so it is a precondition to re-roll rather than an
+ * assertion to fail on — asserting it turned a coin flip into a red build on
+ * unrelated pull requests.
+ *
+ * Discards the workspace after a losing roll so each attempt starts from an
+ * empty tracker; a retained one would add ids and make a collision more likely,
+ * not less.
+ *
+ * @returns The workspace path, the three created ids oldest-first, and a prefix
+ *   that resolves to `c` alone.
+ */
+function createChainWithUniquePrefix(): {
+  ws: string;
+  a: string;
+  b: string;
+  c: string;
+  prefix: string;
+} {
+  let lastAttemptIds: string[] = [];
+  for (let attempt = 0; attempt < MAX_CHAIN_ATTEMPTS; attempt++) {
+    const ws = mkdtempSync(path.join(tmpdir(), "pmg-id-path-"));
     pm(ws, ["init"]);
     const a = createItem(ws, "Alpha");
     const b = createItem(ws, "Beta", a);
     const c = createItem(ws, "Gamma", b);
 
-    const fromPrefix = uniqueNonExactPrefix(c, [a, b, c]);
-    assert.ok(fromPrefix, "test setup expected a unique non-exact prefix");
+    const prefix = uniqueNonExactPrefix(c, [a, b, c]);
+    if (prefix) return { ws, a, b, c, prefix };
 
+    rmSync(ws, { recursive: true, force: true });
+    lastAttemptIds = [a, b, c];
+  }
+  throw new Error(
+    `no unique non-exact prefix after ${MAX_CHAIN_ATTEMPTS} attempts; last ids: ${lastAttemptIds.join(", ")}`,
+  );
+}
+
+test("path resolves source/target by unique prefix and case-insensitive id", { skip: !pmAvailable }, async () => {
+  const { ws, a, b, c, prefix: fromPrefix } = createChainWithUniquePrefix();
+  try {
     const handlers = collectHandlers();
     const run = handlers.get("pm-graph path");
     assert.ok(run, "path command should be registered");
 
-    const result = await run!({ cwd: ws, args: [fromPrefix!, a.toUpperCase()] }) as {
+    const result = await run!({ cwd: ws, args: [fromPrefix, a.toUpperCase()] }) as {
       ok: boolean;
       from: string;
       to: string;
