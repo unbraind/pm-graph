@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Make the id-resolution prefix test re-roll its setup instead of asserting on a random precondition ([pm-graph-of5p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-of5p.toon))
+
 ## 2026.8.4 - 2026-08-04
 
 ### Fixed
