@@ -1,6 +1,6 @@
 {
   "name": "pm-graph",
-  "version": "2026.8.4",
+  "version": "2026.8.6",
   "description": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
   "entry": "./dist/index.js",
   "capabilities": [
