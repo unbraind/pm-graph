@@ -1,0 +1,25 @@
+id: pm-graph-y2ax
+title: Reconcile PR with same-day release before changelog CI
+description: "The exact pull_request merge combines this branch with main's newer 2026.8.6 release, so pm-changelog correctly projects new tracker work under Unreleased while the branch-local older-version projection is dated. Reconcile origin/main, regenerate the package-owned changelog, and verify both Node matrix jobs."
+type: Issue
+status: closed
+priority: 1
+tags: []
+created_at: "2026-08-06T23:41:58.472Z"
+updated_at: "2026-08-06T23:45:52.264Z"
+closed_at: "2026-08-06T23:45:51.831Z"
+completed_at: "2026-08-06T23:45:51.831Z"
+author: codex
+estimated_minutes: 60
+acceptance_criteria: "origin/main is merged without losing either PM history; changelog:check matches the pull-request merge topology; full release gate passes; exact-head Node 22 and 26 Actions jobs pass"
+resolution: Reconciled the feature branch with the same-day release and regenerated the deterministic merge-topology changelog.
+expected_result: The PR merge projection has a deterministic Unreleased changelog and both CI matrix jobs pass.
+actual_result: origin/main merged cleanly; 195 tests and the complete release gate pass at package version 2026.8.6; exact-head Actions rerun remains required.
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-graph-9qk5,related,"2026-08-06T23:41:58.472Z",codex,"cli:create:dep",detected
+notes[1]{created_at,author,text}:
+  "2026-08-06T23:45:50.891Z",codex,"Exact Actions logs showed both Node 22 and 26 passed through packaging and failed only because the synthetic PR merge combined the feature branch with main's 2026.8.6 release. Merged origin/main without conflicts, regenerated the package-owned full changelog under the real topology, and passed the full release gate: 195 tests, 83.13/78.44/89.66 coverage ratchet, zero production vulnerabilities, package dry-run, and changelog check."
+tests[1]{command,scope}:
+  "npm run release:check",project
+close_reason: "Merged the same-day release baseline, regenerated CHANGELOG.md, and passed the complete local release gate; awaiting exact-head Node 22/26 Actions confirmation."
+body: ""
