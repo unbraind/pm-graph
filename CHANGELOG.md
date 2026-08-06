@@ -2,13 +2,15 @@
 
 ## Unreleased
 
+### Other
+
+- Gate CI on strict tracked pm project health ([pm-graph-9qk5](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-9qk5.toon))
+
+## 2026.8.6 - 2026-08-06
+
 ### Fixed
 
 - Make the id-resolution prefix test re-roll its setup instead of asserting on a random precondition ([pm-graph-of5p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-of5p.toon))
-
-### Other
-
-- Gate CI on pm health so a silently discarded peer edit cannot merge ([pm-graph-9qk5](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-9qk5.toon))
 
 ## 2026.8.4 - 2026-08-04
 
