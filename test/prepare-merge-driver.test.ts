@@ -83,14 +83,53 @@ test("Windows resolver uses PATHEXT defaults and ignores empty PATH entries", ()
   ]);
 });
 
-test("Windows resolver verifies real and missing command shims", (t) => {
+test("POSIX resolver uses target-platform path operations", () => {
+  const inspected: string[] = [];
+  assert.strictEqual(resolvePmCommand(
+    "/first:/second",
+    "",
+    "linux",
+    (candidate) => {
+      inspected.push(candidate);
+      return false;
+    },
+  ), undefined);
+  assert.deepStrictEqual(inspected, ["/first/pm", "/second/pm"]);
+});
+
+test("Windows resolver verifies a real shim with its default filesystem boundary", (t) => {
   const directory = `pm-graph-windows-${process.pid}-${Date.now()}`;
   const candidate = win32.join(directory, "pm.CMD");
+  mkdirSync(directory);
   writeFileSync(candidate, "");
-  t.after(() => rmSync(candidate, { force: true }));
+  t.after(() => {
+    rmSync(candidate, { force: true });
+    rmSync(directory, { recursive: true, force: true });
+  });
 
   assert.strictEqual(resolvePmCommand(directory, ".CMD", "win32"), candidate);
-  assert.strictEqual(resolvePmCommand(`${directory}-missing`, ".CMD", "win32"), undefined);
+});
+
+test("resolver verifies real and missing commands with its default filesystem boundary", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "pm-graph-resolver-"));
+  const windows = process.platform === "win32";
+  const candidate = join(directory, windows ? "pm.CMD" : "pm");
+  writeFileSync(candidate, "");
+  if (!windows) {
+    chmodSync(candidate, 0o755);
+  }
+  t.after(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  assert.strictEqual(
+    resolvePmCommand(directory, windows ? ".CMD" : "", process.platform),
+    candidate,
+  );
+  assert.strictEqual(
+    resolvePmCommand(`${directory}-missing`, windows ? ".CMD" : "", process.platform),
+    undefined,
+  );
 });
 
 test("resolver reads process defaults and tolerates a missing PATH", (t) => {

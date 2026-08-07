@@ -9,7 +9,7 @@
 
 import { spawnSync } from "node:child_process";
 import { accessSync, constants, realpathSync, statSync } from "node:fs";
-import { delimiter, join, resolve, win32 } from "node:path";
+import { posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Process fields needed to distinguish success, absence, and failure. */
@@ -76,9 +76,9 @@ export function resolvePmCommand(
   verifyCandidate: CandidateVerifier = isExecutableFile,
 ): string | undefined {
   const windows = platform === "win32";
-  const pathDelimiter = windows ? ";" : delimiter;
+  const pathApi = windows ? win32 : posix;
   const directories = pathValue
-    .split(pathDelimiter)
+    .split(pathApi.delimiter)
     .map((directory) => windows
       && directory.length >= 2
       && directory.startsWith('"')
@@ -96,9 +96,7 @@ export function resolvePmCommand(
 
   for (const directory of directories) {
     for (const extension of extensions) {
-      const candidate = windows
-        ? win32.join(directory, `pm${extension}`)
-        : join(directory, "pm");
+      const candidate = pathApi.join(directory, `pm${extension}`);
       if (verifyCandidate(candidate, platform)) {
         return candidate;
       }
