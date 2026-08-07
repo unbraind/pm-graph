@@ -1,0 +1,23 @@
+id: pm-graph-xc7g
+title: Remove private identities and host-specific paths from reachable Git history
+description: "A full reachable-history audit is required before pm-graph may be considered safe for public publication. Any private identity, absolute host path, credential, or tenant data in reachable commits must be removed with an auditable history rewrite and fresh-clone verification."
+type: Issue
+status: open
+priority: 0
+tags[3]: history,privacy,release-blocker
+created_at: "2026-08-07T18:45:28.977Z"
+updated_at: "2026-08-07T19:02:07.979Z"
+author: codex
+estimated_minutes: 360
+acceptance_criteria: Identity allowlist audit passes across every reachable ref; Secret and absolute-path scans pass across full history and packaged contents; PM history privacy validation passes without manual history edits; Fresh-clone evidence is recorded before publication approval
+risk: critical
+confidence: high
+severity: critical
+repro_steps: "Audit every reachable commit and ref, PM history, tracked files, generated artifacts, and package tarball; verify from a fresh clone after any rewrite."
+expected_result: "All reachable refs and packaged artifacts contain only approved public identities and portable paths, with no secrets, private service data, or host-specific values."
+actual_result: Reachable-history audit over 226 commits found six unique commit identities and host-specific absolute-path matches in 131 commits (284 file occurrences). Current tracked files and the packed artifact had zero matches for the bounded path/credential patterns; GitHub secret scanning reported zero alerts. History rewrite and approved-identity attestation remain unresolved.
+component: release-privacy
+customer_impact: Publishing before attestation could expose personal or private infrastructure data permanently.
+notes[1]{created_at,author,text}:
+  "2026-08-07T19:02:07.964Z",codex,"GitHub Dependabot reported zero open alerts. Code scanning is unavailable because the repository has no analysis. Local secret-pattern scanning found zero matching files across reachable history,but that bounded regex is not a substitute for identity and path remediation."
+body: ""

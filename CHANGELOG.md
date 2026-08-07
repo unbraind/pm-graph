@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt pm CLI and SDK 2026.8.7 with a covered TypeScript merge-driver lifecycle ([pm-graph-jrc0](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-jrc0.toon))
+
 ## 2026.8.7 - 2026-08-07
 
 ### Fixed
