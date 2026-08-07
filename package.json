@@ -7,7 +7,7 @@
     "build": "tsc",
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc --noEmit",
-    "prepare": "node scripts/prepare-merge-driver.mjs",
+    "prepare": "node scripts/prepare-merge-driver.ts",
     "check": "npm run typecheck",
     "audit:prod": "node --input-type=module -e \"import { spawnSync } from 'node:child_process'; import { devNull } from 'node:os'; const env = { ...process.env, npm_config_userconfig: devNull, NPM_CONFIG_USERCONFIG: devNull }; for (const key of Object.keys(env)) if (key.toLowerCase() === 'npm_config_allow_scripts') delete env[key]; const win = process.platform === 'win32'; const r = spawnSync(win ? 'npm.cmd' : 'npm', ['audit', '--omit=dev', '--ignore-scripts'], { stdio: 'inherit', env, shell: win }); process.exit(r.status ?? 1);\"",
     "pack:dry-run": "npm pack --dry-run",
@@ -26,9 +26,9 @@
     "neo4j-driver": "^6.2.0"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
-    "@unbrained/pm-cli": "^2026.8.6",
-    "pm-changelog": "^2026.8.6",
+    "@types/node": "^26.2.0",
+    "@unbrained/pm-cli": "^2026.8.7",
+    "pm-changelog": "^2026.8.7",
     "typescript": "^7.0.2"
   },
   "files": [
@@ -48,7 +48,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.8.3"
+    "@unbrained/pm-cli": ">=2026.8.7"
   },
   "engines": {
     "node": ">=22.18.0"
@@ -98,7 +98,8 @@
   },
   "coverageGate": {
     "sources": [
-      "src"
+      "src",
+      "scripts/prepare-merge-driver.ts"
     ],
     "tests": [
       "test/*.test.ts"

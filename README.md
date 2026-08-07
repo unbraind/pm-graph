@@ -484,14 +484,14 @@ pm pm-graph ping
 
 ## Release Automation
 
-This package is release-ready for GitHub, npm, and Bun-compatible installs. CI runs type checking, build, production dependency audit, package packing, Bun install verification, and pm-changelog validation. The daily release workflow publishes only when commits exist after the latest release tag and uses pm-changelog to generate CHANGELOG.md and GitHub release notes.
+This package supports GitHub, npm, and Bun-compatible installs. Publication remains blocked until the independently tracked full-history privacy and repository-wide exact coverage/source-quality gates are resolved. CI runs type checking, build, production dependency audit, package packing, Bun install verification, and pm-changelog validation. The daily release workflow publishes only when commits exist after the latest release tag and uses pm-changelog to generate CHANGELOG.md and GitHub release notes.
 
 ## Multi-agent merge safety
 
 This repo tracks its project management in `.agents/pm/` and ships a committed `.gitattributes`
 that maps those tracker artifacts to pm-cli's field-aware Git merge drivers, so concurrent-branch
 tracker edits merge cleanly instead of hard-conflicting. The driver definitions live in per-clone
-Git config; `npm install` / `npm ci` wires them automatically via the `prepare` script (a portable Node guard, `scripts/prepare-merge-driver.mjs`: it runs
+Git config; `npm install` / `npm ci` wires them automatically via the `prepare` script (an erasable TypeScript Node guard, `scripts/prepare-merge-driver.ts`: it runs
 `pm merge install` only when the `pm` CLI is on `PATH`, and no-ops cleanly otherwise so
 production / `--omit=dev` installs are not broken; being Node-based it behaves identically
 on POSIX shells and Windows `cmd.exe`). To (re)run manually: `npm run merge:install`.
