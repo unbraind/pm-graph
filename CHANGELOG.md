@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Reconcile PR with same-day release before changelog CI ([pm-graph-y2ax](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-y2ax.toon))
+
+### Other
+
+- Gate CI on strict tracked pm project health ([pm-graph-9qk5](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-9qk5.toon))
+
 ## 2026.8.6 - 2026-08-06
 
 ### Fixed
