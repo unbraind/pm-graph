@@ -2049,7 +2049,11 @@ export function analyzeGraph(graph, topN = 10) {
  * A `fullSync` first wipes every `PmGraphNode` for the project key; otherwise
  * the run is incremental — nodes and relationships are upserted and then any
  * node whose id was absent from this graph is `DETACH DELETE`d, so deleted
- * items actually disappear from the store. A `PmGraphSync` marker records the
+ * items actually disappear from the store. That pruning is skipped entirely
+ * when the incoming graph has no nodes at all: an empty read is far more likely
+ * to be a failed or misconfigured scan than a project whose every item was
+ * deleted, so the stored nodes are left untouched rather than wiped. Use
+ * `fullSync` to empty a project deliberately. A `PmGraphSync` marker records the
  * last-sync timestamp and extension version. Every write error is funnelled
  * through {@link neo4jFriendlyError}, and the session and driver are closed in
  * a `finally` so a thrown error never leaks a connection.
