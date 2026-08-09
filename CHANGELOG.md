@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Adopt the mandatory docstring gate ([pm-graph-k5ao](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-k5ao.toon))
+
 ## 2026.8.8 - 2026-08-08
 
 ### Other
