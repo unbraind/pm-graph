@@ -154,6 +154,14 @@ function projectKeyForWorkspace(workspace: string): string {
   return path.basename(workspace);
 }
 
+/**
+ * Whether all three Neo4j credentials are present in the environment.
+ *
+ * A user name is satisfied by either `NEO4J_USER` or the older
+ * `NEO4J_USERNAME` alias, so a workspace configured under either spelling is
+ * treated as ready. Used as a cheap gate before any command that would
+ * otherwise reach {@link createDriver} and throw a usage error.
+ */
 function neo4jConfigured(): boolean {
   return Boolean(
     process.env.NEO4J_URI &&
@@ -162,6 +170,13 @@ function neo4jConfigured(): boolean {
   );
 }
 
+/**
+ * Name exactly which Neo4j credentials are missing, for a usage error.
+ *
+ * Builds the list at call time rather than reporting a generic "not configured",
+ * so an operator who forgot one variable knows which to set. The user-name
+ * slot is reported as `NEO4J_USER` only when both spellings are absent.
+ */
 function neo4jMissingMessage(): string {
   const missing: string[] = [];
   if (!process.env.NEO4J_URI) missing.push("NEO4J_URI");
@@ -170,6 +185,19 @@ function neo4jMissingMessage(): string {
   return `Neo4j is not configured. Set ${missing.join(", ")} before using this command.`;
 }
 
+/**
+ * Lazily load the `neo4j-driver` module, installing it on demand.
+ *
+ * Returns the cached module (`neo4jApi`) once resolved, so repeated commands
+ * pay the import cost once. A first import that fails is treated as a missing
+ * optional dependency rather than a hard failure: `npm install --omit=dev` is
+ * run in {@link packageRoot} and the import retried, so a git-URL install that
+ * shipped without the driver can still self-repair. A failed install throws an
+ * error that carries both the install exit code and the original import error.
+ *
+ * @returns The resolved neo4j-driver module API.
+ * @throws {Error} When the driver cannot be imported and cannot be installed.
+ */
 async function loadNeo4j(): Promise<Neo4jApi> {
   if (neo4jApi) return neo4jApi;
   try {
@@ -258,6 +286,21 @@ function parseNeo4jMs(envVar: string): number | undefined {
   return Math.round(n);
 }
 
+/**
+ * Build a connected Neo4j driver from the environment.
+ *
+ * Throws a usage {@link CommandError} up front when the credentials are not all
+ * set, so the operator gets the actionable missing-variable list rather than a
+ * driver-layer auth error. The connection pool is tuned for a CLI workload
+ * (bounded lifetime, ten-second acquisition, pool of ten), and two timeouts
+ * that would harm an interactive session — the TCP connect cap and the
+ * transaction-retry budget — are left at the driver default unless an operator
+ * opts in via `NEO4J_CONNECTION_TIMEOUT_MS` / `NEO4J_MAX_RETRY_MS`, which is
+ * how CI fails fast without changing production behaviour.
+ *
+ * @returns An authenticated, configured Neo4j driver.
+ * @throws {CommandError} When Neo4j credentials are missing.
+ */
 async function createDriver(): Promise<Neo4jDriver> {
   const uri = process.env.NEO4J_URI!;
   const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME!;
@@ -377,6 +420,15 @@ function toPlain(value: unknown): unknown {
   return value;
 }
 
+/**
+ * Coerce a property value to a plain number, tolerating Neo4j Integers.
+ *
+ * A native number is returned as-is; a Neo4j Integer (an object exposing
+ * `toNumber`) is unwrapped through that method. Anything else — including
+ * `undefined` and unparseable strings — collapses to `0`, so callers that sum
+ * or count never have to special-case a missing value, at the cost of a bogus
+ * zero for genuinely malformed input.
+ */
 function toNumber(value: unknown): number {
   if (typeof value === "number") return value;
   if (value && typeof value === "object" && "toNumber" in value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
@@ -564,6 +616,15 @@ function relationshipType(rawType: unknown): string {
   return text.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
 }
 
+/**
+ * Extract the target item id from a dependency record.
+ *
+ * Dependency records arrive from several sources with different key spellings,
+ * so a fixed priority list (`id`, `target`, `target_id`, `targetId`, `item`,
+ * `item_id`, `itemId`) is tried in order and the first non-empty string value
+ * wins. Returns `null` when the record carries no recognizable target, which
+ * {@link graphFromItems} treats as "skip this edge".
+ */
 function relationshipTarget(dep: Record<string, unknown>): string | null {
   for (const key of ["id", "target", "target_id", "targetId", "item", "item_id", "itemId"]) {
     const value = dep[key];
@@ -576,6 +637,23 @@ function facetNodeId(kind: string, value: string): string {
   return `${kind}:${value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-")}`;
 }
 
+/**
+ * Build a workspace graph (nodes + relationships) from pm item metadata.
+ *
+ * Emits one `PmItem` node per item, then derives edges from the item's
+ * structural fields: `CHILD_OF` for a parent, `BLOCKED_BY` for a blocker, and
+ * a normalized relationship per dependency (merging the legacy `deps[]` and
+ * typed `dependencies[]`, de-duplicated by `from->to:type`). Facet fields
+ * (type/status/assignee/sprint/release) and tags become `PmFacet` nodes with
+ * their own edges. A relationship whose target is not among the items — and
+ * not already a node — is materialized as an `ExternalPmItem` so the graph
+ * never dangles a half-edge.
+ *
+ * @param items - pm item metadata to project.
+ * @param workspace - Workspace path, recorded on the returned graph.
+ * @param depsByItem - Extra dependency records keyed by item id.
+ * @returns The shaped graph with project metadata.
+ */
 function graphFromItems(
   items: readonly ItemMetadata[],
   workspace: string,
@@ -922,6 +1000,17 @@ async function shapedAnalyticsGraph(context: CommandContext, flags: AnalyticsFla
 // Cypher generation (for export)
 // ---------------------------------------------------------------------------
 
+/**
+ * Produce the ordered Cypher statement batch that upserts a graph.
+ *
+ * The first statement `DETACH DELETE`s every `PmGraphNode` tagged with the
+ * graph's project key, so a sync is a clean replace rather than a stale merge;
+ * then one `MERGE` per node and one `MERGE` per relationship, each carrying its
+ * parameters and all stamped with the project key so multiple workspaces can
+ * share one database without colliding.
+ *
+ * @returns Statement/parameter pairs in execution order.
+ */
 function cypherStatements(
   graph: Graph,
 ): Array<{ statement: string; parameters: Record<string, unknown> }> {
@@ -964,7 +1053,9 @@ function cypherStatements(
 // Multi-format export (pm graph export)
 // ---------------------------------------------------------------------------
 
+/** Raw offline render formats accepted by `pm graph export`. */
 export type ExportFormat = "cypher" | "mermaid" | "dot" | "json" | "graphml" | "plantuml";
+/** Which relationship classes an analysis or export should keep. */
 export type EdgeFilter = "deps" | "tags" | "all";
 
 /** A single `--filter` term: keep PmItem nodes whose `key` property is one of `values`. */
@@ -1128,6 +1219,15 @@ function mermaidId(id: string): string {
   return "n_" + id.replace(/[^A-Za-z0-9_]/g, "_");
 }
 
+/**
+ * Render a graph as a Mermaid `graph TD` document.
+ *
+ * Each node is drawn as a boxed label showing title, id, and status, with the
+ * id sanitized through {@link mermaidId} (Mermaid ids must be alphanumeric) and
+ * the label escaped through {@link mermaidLabel}. Relationships become
+ * directed arrows labelled with their type; a blank line separates nodes from
+ * edges only when there are edges, so an edge-free graph stays compact.
+ */
 function renderMermaid(graph: Graph): string {
   const lines: string[] = ["graph TD"];
   for (const node of graph.nodes) {
@@ -1150,6 +1250,16 @@ function dotEscape(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
 
+/**
+ * Render a graph as a Graphviz `digraph` document.
+ *
+ * Nodes use left-to-right ranking and a rounded box shape, with two-line
+ * labels (title over `[id] status`). The DOT line-break directive `\n` is
+ * appended to the already-escaped pieces, not interpolated before escaping, so
+ * {@link dotEscape} does not double-escape the directive's backslash. Every
+ * id and label is run through {@link dotEscape} so a quote or backslash in an
+ * item title cannot break out of the attribute.
+ */
 function renderDot(graph: Graph): string {
   const lines: string[] = ["digraph pm_graph {", "  rankdir=LR;", '  node [shape=box, style=rounded];'];
   for (const node of graph.nodes) {
@@ -1283,6 +1393,14 @@ export function renderPlantuml(graph: Graph): string {
   return lines.join("\n");
 }
 
+/**
+ * Render a graph in the requested offline {@link ExportFormat}.
+ *
+ * Pure dispatcher: each arm delegates to a dedicated renderer and returns the
+ * complete document string, so callers need only pass the format the operator
+ * selected. The `cypher` arm serializes the statement batch with its
+ * parameters inlined as comments, the rest emit a single self-contained file.
+ */
 function renderExport(format: ExportFormat, graph: Graph): string {
   switch (format) {
     case "cypher":
@@ -1302,6 +1420,14 @@ function renderExport(format: ExportFormat, graph: Graph): string {
   }
 }
 
+/**
+ * Read the first present option value across several key spellings.
+ *
+ * Export options arrive from flags and config under inconsistent names, so the
+ * caller lists every acceptable key and this returns the first whose value is
+ * neither `undefined` nor `null`. Returns `undefined` when no listed key is
+ * set, leaving the caller free to apply its own default.
+ */
 function readExportOption(options: Record<string, unknown>, ...keys: string[]): unknown {
   for (const key of keys) {
     const value = options[key];
@@ -1613,6 +1739,21 @@ export function dependencyDepths(
   return depths;
 }
 
+/**
+ * Find the articulation points and bridges of the dependency graph.
+ *
+ * Treats the graph as UNDIRECTED: each edge adds both directions, self-loops
+ * are dropped, and Tarjan's discovery/low DFS flags a node as an articulation
+ * point when its removal would disconnect the graph, and an edge as a bridge
+ * when it is the only connection between two parts. The root is special-cased
+ * (it is critical only with more than one DFS child). Both results are sorted
+ * for deterministic output — these are the items and links whose loss most
+ * damages workspace connectivity.
+ *
+ * @param nodes - Item ids participating in the graph.
+ * @param edges - Structural directed edges; read symmetrically here.
+ * @returns Sorted articulation point ids and sorted bridge edges.
+ */
 export function criticalConnectors(
   nodes: string[],
   edges: StructuralEdge[],
@@ -1891,6 +2032,11 @@ type AnalyzeReport = {
   bridgeEdges: Array<{ from: string; to: string }>;
 };
 
+/**
+ * One immediate neighbour of an explained item, with the relation types that
+ * connect it. Multiple edges to the same neighbour collapse into one entry
+ * whose `relationTypes` lists each.
+ */
 export type ExplainNeighbor = {
   id: string;
   title: string;
@@ -1898,6 +2044,12 @@ export type ExplainNeighbor = {
   relationTypes: string[];
 };
 
+/**
+ * The full focused report for one item: its own fields, its immediate blockers
+ * and dependents, the transitive set that depends on it, dependency depth, the
+ * critical chain leading to it, and every cycle it participates in. Designed
+ * to be small enough to hand directly to an agent.
+ */
 export type ExplainReport = {
   id: string;
   item: {
@@ -1929,6 +2081,14 @@ function readStringProperty(
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
+/**
+ * Read a numeric node property, tolerating Neo4j Integers.
+ *
+ * A native number is returned as-is; a Neo4j Integer (object with `toNumber`)
+ * is unwrapped. Returns `null` for anything else, so callers distinguish "no
+ * priority" from a priority of zero — unlike {@link toNumber}, which collapses
+ * the missing case to zero for summing.
+ */
 function readNumberProperty(
   properties: Record<string, unknown>,
   key: string,
@@ -1957,6 +2117,12 @@ function itemStatus(node: GraphNode | undefined): string | null {
   return readStringProperty(node.properties, "status");
 }
 
+/**
+ * Index only the `PmItem` nodes of a graph by id.
+ *
+ * Facet, tag, and external nodes are excluded so a lookup by item id cannot
+ * accidentally resolve to a facet node that happens to share a synthesized id.
+ */
 function itemNodeMap(graph: Graph): Map<string, GraphNode> {
   const map = new Map<string, GraphNode>();
   for (const node of graph.nodes) {
@@ -2027,6 +2193,12 @@ export function explainItem(graph: Graph, id: string): ExplainReport | null {
   };
 }
 
+/**
+ * Length of the leading characters two strings share.
+ *
+ * Stops at the shorter string's length; zero when the first characters differ.
+ * Used by {@link suggestItemIds} to rank near-miss item ids.
+ */
 function sharedPrefixLength(a: string, b: string): number {
   const max = Math.min(a.length, b.length);
   let i = 0;
@@ -2034,6 +2206,21 @@ function sharedPrefixLength(a: string, b: string): number {
   return i;
 }
 
+/**
+ * Fuzzy-suggest item ids that resemble an operator's input.
+ *
+ * A candidate survives when it contains the (lowercased) query anywhere, OR
+ * shares at least three leading characters with it, so a typo still surfaces
+ * the intended id while a one-character clash does not flood the results.
+ * Survivors are ranked: exact `startsWith` first, then substring includes, then
+ * the longest shared prefix, then alphabetical, and truncated to `limit`.
+ * Returns an empty array for a blank query.
+ *
+ * @param itemIds - Known item ids to search.
+ * @param input - The operator's (possibly misspelled) input.
+ * @param limit - Maximum suggestions to return.
+ * @returns Ranked suggestion ids, possibly empty.
+ */
 function suggestItemIds(itemIds: string[], input: string, limit: number = 5): string[] {
   const query = input.trim().toLowerCase();
   if (!query) return [];
@@ -2062,6 +2249,12 @@ type ItemIdResolution = {
   strategy: "exact" | "case-insensitive" | "prefix";
 };
 
+/**
+ * Build the `NOT_FOUND` error for an item id that matches more than one item.
+ *
+ * Lists up to five matches and notes how many more exist, so the operator can
+ * pick a longer prefix without re-running the command to discover the options.
+ */
 function ambiguousItemIdError(label: string, input: string, matches: string[]): CommandError {
   const shown = matches.slice(0, 5);
   const more = matches.length > shown.length ? ` (+${matches.length - shown.length} more)` : "";
@@ -2071,6 +2264,18 @@ function ambiguousItemIdError(label: string, input: string, matches: string[]): 
   );
 }
 
+/**
+ * Resolve an operator's item-id input to exactly one workspace id.
+ *
+ * Tries exact match, then a case-insensitive match, then a unique prefix, in
+ * that order; an ambiguous case at either fuzzy tier throws an
+ * {@link ambiguousItemIdError}, and a total miss throws a `NOT_FOUND` error
+ * carrying {@link suggestItemIds} suggestions. The id list is de-duplicated and
+ * sorted first so resolution and ambiguity ordering are deterministic.
+ *
+ * @returns The resolved id and the strategy that matched it.
+ * @throws {CommandError} On ambiguity or no match.
+ */
 function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution {
   const requested = input.trim();
   const ids = [...new Set(itemIds)].sort((a, b) => a.localeCompare(b));
@@ -2223,6 +2428,19 @@ type SyncOptions = {
   fullSync: boolean;
 };
 
+/**
+ * Push a graph into Neo4j, replacing or reconciling with what is there.
+ *
+ * A `fullSync` first wipes every `PmGraphNode` for the project key; otherwise
+ * the run is incremental — nodes and relationships are upserted and then any
+ * node whose id was absent from this graph is `DETACH DELETE`d, so deleted
+ * items actually disappear from the store. A `PmGraphSync` marker records the
+ * last-sync timestamp and extension version. Every write error is funnelled
+ * through {@link neo4jFriendlyError}, and the session and driver are closed in
+ * a `finally` so a thrown error never leaks a connection.
+ *
+ * @returns Counts of nodes/relationships written and stale nodes deleted.
+ */
 async function syncNeo4j(
   graph: Graph,
   options: SyncOptions,
@@ -2335,6 +2553,15 @@ const DESTRUCTIVE_NAMES = [
   "SET",
 ] as const;
 
+/**
+ * Detect the first destructive Cypher keyword in a read-only query.
+ *
+ * Scans the upper-cased query against the keywords that mutate the graph
+ * (`CREATE`, `MERGE`, `DELETE`, `DETACH`, `DROP`, `REMOVE`, and `SET` minus
+ * the harmless `SET SESSION`). Returns the first name that matches, or `null`
+ * for a clean read query, so a `pm graph query` guard can reject a write before
+ * it ever reaches the driver.
+ */
 function findDestructiveKeyword(query: string): string | null {
   const upper = query.toUpperCase();
   for (let i = 0; i < DESTRUCTIVE_KEYWORDS.length; i++) {
@@ -2422,6 +2649,15 @@ function argsHaveFlag(args: string[], longName: string): boolean {
 // Command registrations
 // ---------------------------------------------------------------------------
 
+/**
+ * Extension entry point: register the graph commands and output service.
+ *
+ * Registers an `output_format` service override that unwraps the raw-string
+ * marker a `pm-graph export` result carries, so the host renders the document
+ * verbatim instead of re-encoding it; the override defers (`{ handled: false }`)
+ * for every other command so default rendering is untouched. Then registers
+ * each pm-graph command (ping, export, …) against the host API.
+ */
 export function activate(api: ExtensionApi): void {
   // The `pm-graph export --format <fmt>` handler renders the graph into a
   // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
