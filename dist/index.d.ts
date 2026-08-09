@@ -76,7 +76,9 @@ type AnalyticsFlags = {
  * --filter, or a value-less --root/--depth/--format/--filter.
  */
 export declare function parseAnalyticsFlags(args: string[]): AnalyticsFlags;
+/** Raw offline render formats accepted by `pm graph export`. */
 export type ExportFormat = "cypher" | "mermaid" | "dot" | "json" | "graphml" | "plantuml";
+/** Which relationship classes an analysis or export should keep. */
 export type EdgeFilter = "deps" | "tags" | "all";
 /** A single `--filter` term: keep PmItem nodes whose `key` property is one of `values`. */
 export type NodeFilterEntry = {
@@ -170,6 +172,21 @@ export declare function reverseReachable(edges: StructuralEdge[], start: string)
  * deepest node is exactly the far end of the critical path.
  */
 export declare function dependencyDepths(nodes: string[], edges: StructuralEdge[]): Map<string, number>;
+/**
+ * Find the articulation points and bridges of the dependency graph.
+ *
+ * Treats the graph as UNDIRECTED: each edge adds both directions, self-loops
+ * are dropped, and Tarjan's discovery/low DFS flags a node as an articulation
+ * point when its removal would disconnect the graph, and an edge as a bridge
+ * when it is the only connection between two parts. The root is special-cased
+ * (it is critical only with more than one DFS child). Both results are sorted
+ * for deterministic output — these are the items and links whose loss most
+ * damages workspace connectivity.
+ *
+ * @param nodes - Item ids participating in the graph.
+ * @param edges - Structural directed edges; read symmetrically here.
+ * @returns Sorted articulation point ids and sorted bridge edges.
+ */
 export declare function criticalConnectors(nodes: string[], edges: StructuralEdge[]): {
     articulationPoints: string[];
     bridges: Array<{
@@ -272,12 +289,23 @@ type AnalyzeReport = {
         to: string;
     }>;
 };
+/**
+ * One immediate neighbour of an explained item, with the relation types that
+ * connect it. Multiple edges to the same neighbour collapse into one entry
+ * whose `relationTypes` lists each.
+ */
 export type ExplainNeighbor = {
     id: string;
     title: string;
     status: string | null;
     relationTypes: string[];
 };
+/**
+ * The full focused report for one item: its own fields, its immediate blockers
+ * and dependents, the transitive set that depends on it, dependency depth, the
+ * critical chain leading to it, and every cycle it participates in. Designed
+ * to be small enough to hand directly to an agent.
+ */
 export type ExplainReport = {
     id: string;
     item: {
@@ -311,6 +339,15 @@ export declare function explainItem(graph: Graph, id: string): ExplainReport | n
  * All analytics operate on structural edges between item nodes only.
  */
 export declare function analyzeGraph(graph: Graph, topN?: number): AnalyzeReport;
+/**
+ * Extension entry point: register the graph commands and output service.
+ *
+ * Registers an `output_format` service override that unwraps the raw-string
+ * marker a `pm-graph export` result carries, so the host renders the document
+ * verbatim instead of re-encoding it; the override defers (`{ handled: false }`)
+ * for every other command so default rendering is untouched. Then registers
+ * each pm-graph command (ping, export, …) against the host API.
+ */
 export declare function activate(api: ExtensionApi): void;
 declare const _default: {
     activate: typeof activate;
