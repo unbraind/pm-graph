@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Propagate the docstring gate entry guard fix ([pm-graph-r8nz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-r8nz.toon))
+
 ### Other
 
 - Adopt the mandatory docstring gate ([pm-graph-k5ao](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-k5ao.toon))
