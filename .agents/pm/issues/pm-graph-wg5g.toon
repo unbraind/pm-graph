@@ -1,16 +1,19 @@
 id: pm-graph-wg5g
-title: "The pm CLI compatibility floor was declared only where npm enforces it, and absent from the field the CLI actually reads"
+title: "The pm CLI compatibility floor was declared only in peerDependencies, which only npm enforces, and not in manifest.json pm_min_version, which is the field the CLI enforces"
 description: "package.json peerDependencies declares >=2026.8.7 and npm enforces that at install time. manifest.json declares no pm_min_version, and the pm CLI enforces only a top-level pm_min_version. So an older host CLI that npm never sees loads this extension with no floor check at all. Bind the two declarations together and add a regression test so they cannot drift."
 type: Issue
 status: closed
 priority: 2
 tags: []
 created_at: "2026-08-15T23:55:03.097Z"
-updated_at: "2026-08-16T01:45:49.229Z"
+updated_at: "2026-08-16T01:53:59.464Z"
 closed_at: "2026-08-16T00:49:49.304Z"
 completed_at: "2026-08-16T00:49:49.304Z"
 author: claude-code
 acceptance_criteria: manifest.json declares a top-level pm_min_version equal to the peerDependencies floor; the devDependency on the CLI is an exact pin at or above that floor; a test fails if any of the three drift apart
+resolution: "manifest.json now declares pm_min_version 2026.8.7, equal to the peerDependencies floor, and devDependencies exact-pins the CLI at 2026.8.15. compatibility-floor.test.ts asserts all three and each assertion was proved to fail on revert."
+expected_result: "A host CLI older than the package's declared floor is refused before the extension loads, on every install path — including a globally installed CLI that npm never sees."
+actual_result: "Only npm enforced anything, and only for a locally resolved dependency. The pm CLI read manifest.json pm_min_version, which was absent, so an older host CLI activated the extension with no floor check."
 comments[1]{created_at,author,text}:
   "2026-08-16T00:36:23.192Z",claude-code,"Revert-proof, run against this exact tree: baseline exit 0; removing pm_min_version from manifest.json exit 1; loosening the dev pin back to ^2026.8.7 exit 1; setting pm_min_version to a version other than the peer floor exit 1. The enforcement claim was verified directly against pm-cli 2026.8.15 rather than assumed: an extension whose manifest declared pm_min_version 2099.1.1 was refused at install with ok false, its command never registered, and pm health reported extension_pm_min_version_unmet:project:pm-floortest:required=2099.1.1:current=2026.8.15."
 files[4]{path,scope}:
