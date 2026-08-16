@@ -1,12 +1,12 @@
 id: pm-graph-wg5g
-title: The pm CLI compatibility floor is declared where npm enforces it and absent where the CLI enforces it
+title: "The pm CLI compatibility floor was declared only where npm enforces it, and absent from the field the CLI actually reads"
 description: "package.json peerDependencies declares >=2026.8.7 and npm enforces that at install time. manifest.json declares no pm_min_version, and the pm CLI enforces only a top-level pm_min_version. So an older host CLI that npm never sees loads this extension with no floor check at all. Bind the two declarations together and add a regression test so they cannot drift."
 type: Issue
 status: closed
 priority: 2
 tags: []
 created_at: "2026-08-15T23:55:03.097Z"
-updated_at: "2026-08-16T00:49:49.317Z"
+updated_at: "2026-08-16T01:45:49.229Z"
 closed_at: "2026-08-16T00:49:49.304Z"
 completed_at: "2026-08-16T00:49:49.304Z"
 author: claude-code

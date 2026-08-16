@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- The pm CLI compatibility floor is declared where npm enforces it and absent where the CLI enforces it ([pm-graph-wg5g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-wg5g.toon))
+- The pm CLI compatibility floor was declared only where npm enforces it, and absent from the field the CLI actually reads ([pm-graph-wg5g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-wg5g.toon))
 
 ## 2026.8.10 - 2026-08-10
 
