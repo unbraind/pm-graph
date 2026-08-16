@@ -3,6 +3,7 @@
   "version": "2026.8.10",
   "description": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
   "entry": "./dist/index.js",
+  "pm_min_version": "2026.8.7",
   "capabilities": [
     "commands",
     "importers",
