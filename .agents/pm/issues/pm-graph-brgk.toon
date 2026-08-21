@@ -1,0 +1,13 @@
+id: pm-graph-brgk
+title: "Committed CHANGELOG.md drifts from deterministic regeneration after the pm-graph-3svp type classification change, breaking changelog:check on every PR"
+description: "CI job 95464832813 (PR #64) failed at changelog:check because the committed CHANGELOG.md lists pm-graph-3svp under Added while deterministic regeneration files it under Fixed: the tracker item is type Issue and the committed file predates that classification. A changelog that drifts from its own generator fails every future PR, not just dependency bumps. Fix: pin pm-changelog to 2026.8.12 (peer range accepts the pinned @unbrained/pm-cli 2026.8.15; caret resolution to 2026.8.17 would ERESOLVE against the 2026.8.15 pin) and regenerate CHANGELOG.md with the repo-installed binary so the committed file matches deterministic output again. Merge withheld this session pending pm-graph-xc7g (history privacy) and pm-graph-fjfn (fail-closed gates) clearance."
+type: Issue
+status: in_progress
+priority: 1
+tags[3]: changelog,ci,quality-gate
+created_at: "2026-08-21T15:58:44.052Z"
+updated_at: "2026-08-21T15:58:50.579Z"
+author: ox-alpha
+notes[1]{created_at,author,text}:
+  "2026-08-21T15:58:50.565Z",ox-alpha,"Root cause verified locally: repo-installed pm-changelog 2026.8.12 regenerates CHANGELOG.md with pm-graph-3svp (type Issue) under Fixed; committed file had it under Added. npx-isolated runs drop historical sections because the npx cache cannot resolve the sibling @unbrained/pm-cli for unbounded tracker reads - always regenerate with the repo-installed binary. Fix applied on branch fix/changelog-regenerate-3svp-placement: pin pm-changelog 2026.8.12 + regenerated CHANGELOG.md; npm run changelog:check exits 0."
+body: ""
