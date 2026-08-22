@@ -123,9 +123,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --pm-bin ./node_modules/.bin/pm --github-step-summary
-          npx pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --pm-bin ./node_modules/.bin/pm --check
-          npx pm-changelog --pm-root .agents/pm --stdout --all-release-tags --release-version-from-package --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --pm-bin ./node_modules/.bin/pm > RELEASE_NOTES.md
+          # Canonical complete unbounded reads: without these the pinned CLI's
+          # default output budget can truncate the pm workspace read, so the
+          # release could generate an incomplete CHANGELOG.md that the later
+          # unbounded changelog:check then rejects. Mirrors the package.json
+          # changelog scripts, which already pass the same arguments.
+          common=(
+            --pm-root .agents/pm
+            --all-release-tags
+            --release-version-from-package
+            --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm
+            --respect-item-release
+            --pm-bin ./node_modules/.bin/pm
+            --pm-arg=--output-budget
+            --pm-arg=unbounded
+            --pm-arg=--output-limit
+            --pm-arg=unbounded
+          )
+          npx pm-changelog "${common[@]}" --mode replace --output CHANGELOG.md --github-step-summary
+          npx pm-changelog "${common[@]}" --mode replace --output CHANGELOG.md --check
+          npx pm-changelog "${common[@]}" --stdout > RELEASE_NOTES.md
 
       - name: Run release checks
         if: steps.decide.outputs.should_release == 'true'
