@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-### Security
+### Fixed
 
-- Remove absolute host paths and non-public identities from the entire reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
+- Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
 
 ## 2026.8.17 - 2026-08-17
 
