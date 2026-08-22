@@ -6,6 +6,10 @@
 
 - Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
 
+### Other
+
+- Realign changelog branch with main after xc7g release-note rewrite ([pm-graph-1lzu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-1lzu.toon))
+
 ## 2026.8.17 - 2026-08-17
 
 ### Fixed
