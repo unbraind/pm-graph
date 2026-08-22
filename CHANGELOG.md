@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
+
+### Other
+
+- Realign changelog branch with main after xc7g release-note rewrite ([pm-graph-1lzu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-1lzu.toon))
+
 ## 2026.8.17 - 2026-08-17
 
 ### Fixed
@@ -116,11 +126,11 @@
 ### Added
 
 - Canonical pm pm-graph export gains shaping flags (--output/--edges/--root/--depth/--filter/--include-closed) ([pm-graph-83ev](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-83ev.toon))
-- Exporter adapter 'graph' collides with new core pm graph command group (pm-cli 2026.7.18) ([pm-graph-3svp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-3svp.toon))
 
 ### Fixed
 
 - Analytics and sync ignore ctx.pm_root: tracker_not_initialized under custom --pm-path ([pm-graph-swfx](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-swfx.toon))
+- Exporter adapter 'graph' collides with new core pm graph command group (pm-cli 2026.7.18) ([pm-graph-3svp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-3svp.toon))
 
 ## 2026.7.15 - 2026-07-15
 
