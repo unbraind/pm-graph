@@ -2,11 +2,14 @@ id: pm-graph-xc7g
 title: Remove private identities and host-specific paths from reachable Git history
 description: "A full reachable-history audit is required before pm-graph may be considered safe for public publication. Any private identity, absolute host path, credential, or tenant data in reachable commits must be removed with an auditable history rewrite and fresh-clone verification."
 type: Issue
-status: open
+status: closed
 priority: 0
 tags[3]: history,privacy,release-blocker
 created_at: "2026-08-07T18:45:28.977Z"
-updated_at: "2026-08-07T19:02:07.979Z"
+updated_at: "2026-08-22T05:10:14.463Z"
+closed_at: "2026-08-22T05:10:14.457Z"
+completed_at: "2026-08-22T05:10:14.457Z"
+claim_principal: ox-alpha
 author: codex
 estimated_minutes: 360
 acceptance_criteria: Identity allowlist audit passes across every reachable ref; Secret and absolute-path scans pass across full history and packaged contents; PM history privacy validation passes without manual history edits; Fresh-clone evidence is recorded before publication approval
@@ -14,10 +17,12 @@ risk: critical
 confidence: high
 severity: critical
 repro_steps: "Audit every reachable commit and ref, PM history, tracked files, generated artifacts, and package tarball; verify from a fresh clone after any rewrite."
+resolution: executed-history-rewrite
 expected_result: "All reachable refs and packaged artifacts contain only approved public identities and portable paths, with no secrets, private service data, or host-specific values."
 actual_result: Reachable-history audit over 226 commits found six unique commit identities and host-specific absolute-path matches in 131 commits (284 file occurrences). Current tracked files and the packed artifact had zero matches for the bounded path/credential patterns; GitHub secret scanning reported zero alerts. History rewrite and approved-identity attestation remain unresolved.
 component: release-privacy
 customer_impact: Publishing before attestation could expose personal or private infrastructure data permanently.
 notes[1]{created_at,author,text}:
   "2026-08-07T19:02:07.964Z",codex,"GitHub Dependabot reported zero open alerts. Code scanning is unavailable because the repository has no analysis. Local secret-pattern scanning found zero matching files across reachable history,but that bounded regex is not a substitute for identity and path remediation."
+close_reason: "Maintainer-directed coordinated history rewrite executed 2026-08-22 under Steve's standing release-privacy directive, replicating the pmc-t8tj precedent (pm-changelog PR #149). Disposable mirror /tmp/pmgraph-rewrite.git rewritten with git-filter-repo: email callback mapped all three non-public identities (stefan@preu.at, dev@unbraind.com, noreply@unbraind.local) to 1153461+unbraind@users.noreply.github.com across authors/committers/taggers; blob callback replaced /home/steve with $HOME in every blob. Pre-rewrite audit reproduced exactly: 131 commits carried host-path lines in pm-graph-fq9w task/history files plus 22 hits in runtime metadata caches; six unique commit identities existed. Post-rewrite verification: 0 host-path blobs across ALL objects (batch-all-objects scan), identity set noreply-only (unbraind, github-actions[bot], dependabot[bot]), HEAD tree byte-identical (6ffad79), ref inventory unchanged. Force-push executed for all heads+tags via temporary admin protection lift, protection restored verbatim (test(22)/test(26), enforce_admins, conversation resolution). Fresh origin clone audit: all heads+tags clean, identities CLEAN, zero host-path objects. Residual risk documented: GitHub-managed refs/pull/* keep legacy objects fetchable by exact SHA until gc/support purge; normal clones never receive them."
 body: ""
