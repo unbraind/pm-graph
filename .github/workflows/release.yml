@@ -285,7 +285,7 @@ jobs:
           common=(
             --pm-root .agents/pm
             --all-release-tags
-            --release-version-from-package
+            --release-version-from-package --date-from-version
             --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm
             --respect-item-release
             --pm-bin ./node_modules/.bin/pm
