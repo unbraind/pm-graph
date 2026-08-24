@@ -9,9 +9,6 @@
     "importers",
     "services"
   ],
-  "pm": {
-    "compatibility": "v2"
-  },
   "author": "@unbraind",
   "priority": 50
 }

@@ -1,0 +1,23 @@
+id: pm-graph-g2fs
+title: Drop inert pm manifest key and guard the closed manifest vocabulary
+description: "pm-cli 2026.8.19 made its extension-manifest vocabulary a closed set of 18 keys; the inert top-level pm compatibility blob now produces manifest_unknown_key warnings (observed as strict-assertion CI failures in unbraind/pm-linear PRs #75/#76). Remove the key from manifest.json, pin @unbrained/pm-cli to 2026.8.22, add unbounded output-budget args to the changelog scripts so pm-changelog keeps reading the full workspace through the newer pinned CLI, and add a regression test asserting checkExtensionManifestCompatibility reports zero manifest_unknown_key findings."
+type: Chore
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-22T17:36:06.141Z"
+updated_at: "2026-08-22T17:39:32.304Z"
+closed_at: "2026-08-22T17:36:24.104Z"
+completed_at: "2026-08-22T17:36:24.104Z"
+author: ox-alpha
+notes[1]{created_at,author,text}:
+  "2026-08-22T17:36:12.634Z",ox-alpha,"Verified with a temporary re-add of the pm key: test/manifest-vocabulary.test.ts fails (1 fail) while the key is present and passes once removed. npm test: 222 pass, 0 fail. release:check exit 0. ./node_modules/.bin/pm health --strict-exit exit 0 on the pinned 2026.8.22 binary."
+files[4]{path,scope}:
+  manifest.json,project
+  package-lock.json,project
+  package.json,project
+  test/manifest-vocabulary.test.ts,project
+tests[1]{command,path,scope}:
+  PM_PATH=/tmp/pm-mv-pm-graph PM_GLOBAL_PATH=/tmp/pm-mv-g-pm-graph node --test test/manifest-vocabulary.test.ts,test/manifest-vocabulary.test.ts,project
+close_reason: "Removed the inert pm key from manifest.json; pinned @unbrained/pm-cli at 2026.8.22; added unbounded output-budget args to changelog scripts; regression test manifest-vocabulary.test.ts verified to fail on re-add and pass after removal; npm test 222/222, release:check exit 0, pinned pm health --strict-exit exit 0."
+body: ""

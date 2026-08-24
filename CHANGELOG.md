@@ -8,6 +8,7 @@
 
 ### Other
 
+- Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-graph-g2fs](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-g2fs.toon))
 - Realign changelog branch with main after xc7g release-note rewrite ([pm-graph-1lzu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-1lzu.toon))
 
 ## 2026.8.17 - 2026-08-17
