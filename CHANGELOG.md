@@ -6,6 +6,10 @@
 
 - Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
 
+### Security
+
+- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-graph-m8f9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-m8f9.toon))
+
 ### Other
 
 - Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-graph-g2fs](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-g2fs.toon))
