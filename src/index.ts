@@ -12,7 +12,7 @@ import {
 } from "@unbrained/pm-cli/sdk";
 import { runGraph, type GraphCommandOptions } from "@unbrained/pm-cli/sdk/graph";
 
-const EXTENSION_VERSION = "2026.8.27";
+const EXTENSION_VERSION = "2026.8.28";
 
 // ---------------------------------------------------------------------------
 // Error contract
