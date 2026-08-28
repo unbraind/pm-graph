@@ -6,13 +6,14 @@ status: closed
 priority: 1
 tags: []
 created_at: "2026-08-28T20:06:56.896Z"
-updated_at: "2026-08-28T20:40:42.064Z"
+updated_at: "2026-08-28T21:08:54.946Z"
 closed_at: "2026-08-28T20:40:41.082Z"
 completed_at: "2026-08-28T20:40:41.082Z"
 author: pi-agent
 resolution: Scheduled project-scoped pm-github sync is installed and opens or updates a PR from a branch.
-comments[1]{created_at,author,text}:
+comments[2]{created_at,author,text}:
   "2026-08-28T20:16:32.214Z",pi-agent,"Duplicate audit found GitHub issue 50. Existing item pm-graph-of5p covers it, so the dry-run planned 0 new items and 1 update; the atomic import applied 0 new items and 1 update."
+  "2026-08-28T21:08:54.946Z",pi-agent,"Re-verified sync: pm github import --state all applied 0 creates and 1 update (pm-graph-of5p updated_at refresh). pm duplicates count 0, pm health --strict-exit exit 0."
 notes[1]{created_at,author,text}:
   "2026-08-28T20:16:32.810Z",pi-agent,"The first documented install attempt failed under pinned pm 2026.8.22 because npm 12 emits object-shaped npm pack JSON and the installer treated the final } as a tarball name. Pinning @unbrained/pm-cli to 2026.8.28 did not remove the npm-client mismatch, so the verified install uses a temporary npm 10.9.3 path. The published pm-github 2026.8.18 manifest also carried an obsolete pm key and floor 2026.8.3; the workflow removes that key and restores the source floor 2026.8.20 before strict health."
 files[6]{path,scope,note}:
