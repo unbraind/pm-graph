@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- A failed provenance publish silently falls back to an unattested one ([pm-graph-abut](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-abut.toon))
+- A failed provenance publish silently falls back to an unattested one ([pm-graph-y2g7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-y2g7.toon))
+- A failed provenance publish silently falls back to an unattested one ([pm-graph-1fe4](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fe4.toon))
 - Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
 
 ### Security
