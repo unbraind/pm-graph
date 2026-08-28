@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Pilot pm-github issue sync for pm-graph ([pm-graph-7gv0](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-7gv0.toon))
+
 ## 2026.8.28 - 2026-08-28
 
 ### Fixed
@@ -52,7 +58,7 @@
 
 ### Fixed
 
-- Make the id-resolution prefix test re-roll its setup instead of asserting on a random precondition ([pm-graph-of5p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-of5p.toon))
+- id-resolution test can fail in its own setup when three random ids share a prefix ([pm-graph-of5p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-of5p.toon))
 
 ## 2026.8.4 - 2026-08-04
 
