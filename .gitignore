@@ -6,10 +6,15 @@ npm-debug.log*
 .DS_Store
 *.tgz
 RELEASE_NOTES.md
-.agents/pm/extensions/
+# The managed project extension registry is tracked; package artifacts are restored by the workflow.
+.agents/pm/extensions/*
+!.agents/pm/extensions/.managed-extensions.json
 .agents/pm/locks/
 .agents/pm/runtime/
 .agents/pm/search/
+
+# SDK workspace-transaction journals are runtime state and must not be tracked.
+.agents/pm/transactions/
 
 # Local environment
 .env
