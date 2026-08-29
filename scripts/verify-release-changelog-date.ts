@@ -329,7 +329,9 @@ export function verify(root: string, today: string): VerifierResult {
   const sources = tracked.map((file) => ({ file, text: readFileSync(resolve(root, file), "utf-8") }));
   const statics = auditInvocations(sources);
 
-  const probe = "2026.1.2";
+  // A same-day second release carries a numeric suffix. The dependency must
+  // preserve that full version while deriving the date from its CalVer base.
+  const probe = "2026.1.2-1";
   const { bin, lead } = resolveGenerator(root);
   // The generator refuses a truncated workspace read rather than silently
   // omitting entries, so the unbounded controls the real scripts pass are

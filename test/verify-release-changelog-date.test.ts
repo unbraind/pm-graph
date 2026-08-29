@@ -158,7 +158,12 @@ test("a shell segment that runs something else is not judged as a generator invo
   assert.equal(auditInvocations([{ file: ".github/workflows/release.yml", text }]).notes.length, 1);
 });
 
-test("the behavioural half passes only when the flag changes the heading", () => {
+test("the behavioural half derives a suffixed same-day release from its CalVer base", () => {
+  const suffixed = auditHeadings("2026.1.2-1", "2026-08-27", (flagged) =>
+    ({ ok: true, text: flagged ? "## 2026.1.2-1 - 2026-01-02" : "## 2026.1.2-1 - 2026-08-27" }));
+  assert.deepEqual(suffixed.failures, []);
+  assert.match(suffixed.notes[0]!, /2026\.1\.2-1 - 2026-01-02/);
+
   const good = auditHeadings("2026.1.2", "2026-08-27", (flagged) =>
     ({ ok: true, text: flagged ? "## 2026.1.2 - 2026-01-02" : "## 2026.1.2 - 2026-08-27" }));
   assert.deepEqual(good.failures, []);
