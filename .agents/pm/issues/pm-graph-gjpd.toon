@@ -1,0 +1,22 @@
+id: pm-graph-gjpd
+title: Unblock PR 70 suffixed CalVer changelog gate
+description: "Rebase PR 70 after PR 79, adopt the published suffix-safe pm-changelog release, and execute a same-day suffixed-version regression."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-29T04:58:36.090Z"
+updated_at: "2026-08-29T05:19:01.093Z"
+closed_at: "2026-08-29T04:58:39.070Z"
+completed_at: "2026-08-29T04:58:39.070Z"
+author: pi-agent
+comments[2]{created_at,author,text}:
+  "2026-08-29T04:58:38.384Z",pi-agent,"Updated pm-changelog from 2026.8.17 to published 2026.8.22 and changed the behavioural gate to probe 2026.1.2-1, preserving the suffix while expecting date 2026-01-02."
+  "2026-08-29T05:19:01.093Z",pi-agent,"Follow-up CodeRabbit round: stripComment now treats backslashes as escapes only outside single quotes; added a regression where a literal trailing backslash precedes the closing quote and a commented date flag."
+files[4]{path,scope}:
+  package-lock.json,project
+  package.json,project
+  scripts/verify-release-changelog-date.ts,project
+  test/verify-release-changelog-date.test.ts,project
+close_reason: Suffixed CalVer release path now executable and covered
+body: ""

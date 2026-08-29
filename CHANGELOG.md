@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Unblock PR 70 suffixed CalVer changelog gate ([pm-graph-gjpd](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-gjpd.toon))
 - Close PR 79 scalar escape review findings ([pm-graph-ewxc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ewxc.toon))
 
 ### Other
