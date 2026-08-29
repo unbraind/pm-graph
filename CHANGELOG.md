@@ -7,6 +7,8 @@
 - Unblock PR 70 suffixed CalVer changelog gate ([pm-graph-gjpd](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-gjpd.toon))
 - Close PR 79 scalar escape review findings ([pm-graph-ewxc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ewxc.toon))
 
+## 2026.8.29 - 2026-08-29
+
 ### Other
 
 - Pilot pm-github issue sync for pm-graph ([pm-graph-7gv0](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-7gv0.toon))
