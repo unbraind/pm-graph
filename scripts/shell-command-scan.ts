@@ -556,7 +556,7 @@ export function bashArrays(text: string): Map<string, string> {
 
 /** A line opening with one assignment of a fully literal value, ending there or at a `;`. */
 const STANDALONE_ASSIGNMENT =
-  /^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(?:"((?:\\.|[^"\\$`])*)"|'([^']*)'|((?:\\.|[^\s;&|"'`$()\\])+))[ \t]*(?:[;#]|\r?$)/;
+  /^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(?:"((?:\\.|[^"\\$`])*)"|'([^']*)'|((?:\\.|[^\s;&|"'`$()\\])+))(?:[ \t]*;|[ \t]+#|[ \t]*\r?$)/;
 
 /**
  * Index scalar assignments so a command held in a variable can be audited.

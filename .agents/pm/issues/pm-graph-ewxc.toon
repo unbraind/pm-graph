@@ -6,12 +6,13 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-08-29T04:24:13.611Z"
-updated_at: "2026-08-29T04:24:26.780Z"
+updated_at: "2026-08-29T04:50:00.498Z"
 closed_at: "2026-08-29T04:24:24.803Z"
 completed_at: "2026-08-29T04:24:24.803Z"
 author: pi-agent
-comments[1]{created_at,author,text}:
+comments[2]{created_at,author,text}:
   "2026-08-29T04:24:22.665Z",pi-agent,"Refused scalar values whose surviving backslashes would be reparsed by the tokenizer, added audit regressions, and confirmed CRLF assignment handling already exists in STANDALONE_ASSIGNMENT with an existing test."
+  "2026-08-29T04:50:00.498Z",pi-agent,"Follow-up Greptile round: require whitespace before a trailing hash can be treated as a shell comment; added map-level and audit-level regressions for an adjacent hash."
 files[2]{path,scope}:
   scripts/shell-command-scan.ts,project
   test/verify-release-publish-attestation.test.ts,project

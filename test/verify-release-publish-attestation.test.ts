@@ -835,6 +835,8 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     "export still declares a persistent binding");
   assert.equal(shellScalars("NPM=npm # explanation\n").get("NPM"), "npm",
     "a trailing comment does not stop the line being an assignment");
+  assert.equal(shellScalars('FLAG="--provenance"#not-a-comment\n').get("FLAG"), undefined,
+    "a hash adjacent to a quoted value is data, not a shell comment");
   assert.equal(shellScalars("NPM=npm\r\n").get("NPM"), "npm",
     "a CRLF line ending does not hide the assignment");
   // A backslash that survives unescaping is refused, not stored: inlining it
@@ -884,6 +886,14 @@ test("a read-write redirection does not turn its target into the command", () =>
   }]);
   assert.equal(result.failures.length, 1, "the redirected publish must still be audited");
   assert.match(result.failures[0]!, /does not enable --provenance/);
+});
+
+test("a hash adjacent to a quoted scalar cannot manufacture an attestation flag", () => {
+  const result = auditPublishAttestation([{
+    file: "release.yml",
+    text: 'FLAG="--provenance"#not-a-comment\nnpm publish $FLAG\nnpm publish --provenance',
+  }]);
+  assert.equal(result.failures.length, 1);
 });
 
 test("a scalar whose backslash survives unescaping is not inlined into a publish", () => {
