@@ -114,7 +114,7 @@ export function stripComment(command: string): string {
   let double = false;
   for (let index = 0; index < command.length; index += 1) {
     const character = command[index];
-    if (character === "\\") { index += 1; continue; }
+    if (character === "\\" && !single) { index += 1; continue; }
     if (character === "'" && !double) single = !single;
     else if (character === '"' && !single) double = !double;
     else if (character === "#" && !single && !double && (index === 0 || /\s/.test(command[index - 1]))) {

@@ -282,6 +282,10 @@ test("an unquoted trailing comment cannot supply the flag the command is missing
   const quoted = `pm-changelog --release-version-from-package ${DATE_FLAG} --item-url-base "https://example.test/#anchor"`;
   assert.deepEqual(auditInvocations([{ file: "package.json", text: quoted }]).failures, []);
 
+  const singleQuotedBackslash = `pm-changelog --release-version-from-package --item-url-base 'https://example.test/\\' # ${DATE_FLAG}`;
+  assert.equal(auditInvocations([{ file: "package.json", text: singleQuotedBackslash }]).failures.length, 1,
+    "a literal backslash inside single quotes must not escape the closing quote or comment");
+
   assert.equal(stripComment('cmd --flag "a # b" # trailing'), 'cmd --flag "a # b" ');
   assert.equal(stripComment("cmd --flag 'a # b'"), "cmd --flag 'a # b'");
   assert.equal(stripComment("cmd --flag\\# not-a-comment"), "cmd --flag\\# not-a-comment");
