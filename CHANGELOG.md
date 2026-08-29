@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Close PR 79 scalar escape review findings ([pm-graph-ewxc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ewxc.toon))
+
 ### Other
 
 - Pilot pm-github issue sync for pm-graph ([pm-graph-7gv0](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-7gv0.toon))

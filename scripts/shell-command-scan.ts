@@ -595,11 +595,17 @@ const STANDALONE_ASSIGNMENT =
  *
  * Escapes are honoured outside single quotes, so `NPM=npm\\ publish` is one word
  * holding a command while `CMD='"'"'a\\b'"'"' keeps its backslash as the shell does.
- * A value that still carries a substitution, backtick, quote or parenthesis
- * after unescaping is refused: inlining `pkg_name="$(node -p …)"` injects an
- * unbalanced parenthesis into an unrelated command, and the scan then reports
- * invocations that are not there while losing the one that is -- a false
- * verdict in both directions, which is worse than not resolving the variable.
+ * Inside double quotes the shell only treats backslash as special before $,
+ * `, ", \\ and newline; before any other character the backslash is literal, so
+ * only those escapes are unescaped there -- unescaping `\\ ` to ` ` manufactured
+ * a flag the shell never receives. A value that still carries a substitution,
+ * backtick, quote, parenthesis or backslash after unescaping is refused:
+ * inlining `pkg_name="$(node -p …)"` injects an unbalanced parenthesis into
+ * an unrelated command, and the scan then reports invocations that are not
+ * there while losing the one that is -- a false verdict in both directions,
+ * which is worse than not resolving the variable. A surviving backslash is
+ * refused for the same reason: the tokenizer would re-parse it as an escape, so
+ * `\\--provenance` is read as `--provenance` -- a flag the shell does not pass.
  *
  * @param text - File contents with continuations already joined.
  * @returns Variable name mapped to the literal text it holds.
@@ -612,11 +618,19 @@ export function shellScalars(text: string): Map<string, string> {
     // Exactly one of the three value alternatives matches, so the last is the
     // only case left rather than a fallback that could be undefined.
     const raw = assignment[2] ?? assignment[3] ?? assignment[4]!;
-    // Single quotes make a backslash literal, so only the other two forms are
-    // unescaped. Unescaping a single-quoted value turned `'npm publish
-    // \\--provenance'` into an attested-looking command the shell never runs.
-    const value = assignment[3] === undefined ? raw.replace(/\\(.)/g, "$1") : raw;
-    if (/[$`"'()]/.test(value)) continue;
+    // Single quotes make a backslash literal, so a single-quoted value is not
+    // unescaped. Inside double quotes the shell only treats backslash as
+    // special before $, `, ", \ and newline, so only those escapes are removed
+    // there; a backslash before any other character survives and is caught by
+    // the guard. Unquoted values honour every escape. Unescaping a
+    // single-quoted value turned `'npm publish \\--provenance'` into an
+    // attested-looking command the shell never runs; unescaping every
+    // double-quoted backslash did the same to `"--provenance\\ true"`.
+    const value =
+      assignment[3] !== undefined ? raw :
+      assignment[2] !== undefined ? raw.replace(/\\([$`"\\\n])/g, "$1") :
+      raw.replace(/\\(.)/g, "$1");
+    if (/[$`"'()\\]/.test(value)) continue;
     scalars.set(assignment[1]!, value);
   }
   return scalars;

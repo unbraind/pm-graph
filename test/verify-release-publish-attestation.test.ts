@@ -837,11 +837,15 @@ test("a scalar is taken only from a line that is exactly one literal assignment"
     "a trailing comment does not stop the line being an assignment");
   assert.equal(shellScalars("NPM=npm\r\n").get("NPM"), "npm",
     "a CRLF line ending does not hide the assignment");
-  // Refusing these left `$NPM` unresolved, and an attested publish elsewhere in
-  // the file then satisfied the non-vacuity guard -- so being too strict passes
-  // an unattested publish exactly as being too loose does.
-  assert.equal(shellScalars("CMD='npm publish \\--provenance'\n").get("CMD"), "npm publish \\--provenance",
-    "single quotes make a backslash literal, so the value is not unescaped");
+  // A backslash that survives unescaping is refused, not stored: inlining it
+  // puts it back into source text where the tokenizer re-parses it as an
+  // escape, so `\--provenance` is read as `--provenance` -- a flag the shell
+  // does not pass.  Refusing the value leaves `$CMD` unresolved, which is the
+  // conservative outcome (the alternative is a false pass, which is worse).
+  assert.equal(shellScalars("CMD='npm publish \\--provenance'\n").get("CMD"), undefined,
+    "a single-quoted backslash is literal and would be re-parsed, so the value is refused");
+  assert.equal(shellScalars('CMD="npm publish --provenance\\ true"\n').get("CMD"), undefined,
+    "a double-quoted backslash before a space is literal and would be re-parsed, so the value is refused");
   assert.equal(shellScalars("# a; FLAG=--provenance\n").get("FLAG"), undefined,
     "a semicolon inside a comment does not expose an assignment");
 
@@ -880,4 +884,26 @@ test("a read-write redirection does not turn its target into the command", () =>
   }]);
   assert.equal(result.failures.length, 1, "the redirected publish must still be audited");
   assert.match(result.failures[0]!, /does not enable --provenance/);
+});
+
+test("a scalar whose backslash survives unescaping is not inlined into a publish", () => {
+  // A backslash inside a quoted scalar is literal in the shell but would be
+  // re-parsed as an escape by the tokenizer when inlined, so `\--provenance`
+  // is read as `--provenance` -- a flag the shell does not pass.  Refusing the
+  // value leaves `$CMD` unresolved so the publish through it is not analysed
+  // as attested.
+  for (const assignment of [
+    "CMD='npm publish \\--provenance'",
+    'CMD="npm publish --provenance\\ true"',
+  ]) {
+    const result = auditPublishAttestation([{
+      file: "release.yml",
+      text: [
+        `          ${assignment}`,
+        "          $CMD",
+      ].join("\n"),
+    }]);
+    assert.equal(result.failures.length, 1,
+      `a publish routed through ${assignment.trim()} must not borrow a flag from a re-parsed backslash`);
+  }
 });
