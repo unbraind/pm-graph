@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Pin pm-changelog 2026.8.30 before the next release ([pm-graph-g0em](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-g0em.toon))
 - Regenerate the changelog after the release tag was created ([pm-graph-7la7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-7la7.toon))
 
 ## 2026.8.29 - 2026-08-29
