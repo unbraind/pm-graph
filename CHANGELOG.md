@@ -4,10 +4,14 @@
 
 ### Fixed
 
-- Unblock PR 70 suffixed CalVer changelog gate ([pm-graph-gjpd](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-gjpd.toon))
-- Close PR 79 scalar escape review findings ([pm-graph-ewxc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ewxc.toon))
+- Regenerate the changelog after the release tag was created ([pm-graph-7la7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-7la7.toon))
 
 ## 2026.8.29 - 2026-08-29
+
+### Fixed
+
+- Unblock PR 70 suffixed CalVer changelog gate ([pm-graph-gjpd](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-gjpd.toon))
+- Close PR 79 scalar escape review findings ([pm-graph-ewxc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ewxc.toon))
 
 ### Other
 

@@ -1,0 +1,18 @@
+id: pm-graph-7la7
+title: Regenerate the changelog after the release tag was created
+description: "The daily release generated CHANGELOG.md before creating its release tag, leaving the committed Unreleased heading stale and causing changelog:check to fail on main and inherited pull requests. Regenerate the file with the tag present so the committed changelog matches deterministic generation."
+type: Issue
+status: closed
+priority: 2
+tags: []
+created_at: "2026-08-30T15:02:23.620Z"
+updated_at: "2026-08-30T15:02:44.071Z"
+closed_at: "2026-08-30T15:02:31.630Z"
+completed_at: "2026-08-30T15:02:31.630Z"
+claim_principal: pi-agent
+author: pi-agent
+comments[2]{created_at,author,text}:
+  "2026-08-30T15:02:30.999Z",pi-agent,"Evidence plan: regenerate CHANGELOG.md with the release tag present, verify changelog:check reports the file is up to date, and confirm the diff contains only changelog classification changes and this item's tracking files."
+  "2026-08-30T15:02:44.071Z",pi-agent,"Evidence: npm run changelog:full wrote CHANGELOG.md. npm run changelog:check reported: Changelog is up to date. The diff moves the two stale fixes under 2026.8.29, retains this repair item under Unreleased, and adds only this item's tracking files."
+close_reason: "Regenerated CHANGELOG.md with the v2026.08.29 tag present and verified changelog:check passes."
+body: ""
