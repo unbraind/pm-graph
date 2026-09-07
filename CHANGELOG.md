@@ -6,6 +6,10 @@
 
 - Consume the canonical attestation gate instead of carrying a copy of it ([pm-graph-qg2n](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-qg2n.toon))
 
+### Other
+
+- Harden the attestation consumer suite to match the rest of the converged fleet ([pm-graph-53r2](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-53r2.toon))
+
 ## 2026.9.1 - 2026-09-01
 
 ### Fixed
