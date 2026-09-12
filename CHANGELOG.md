@@ -4,7 +4,6 @@
 
 ### Other
 
-- Certify the CLI and SDK on PM 2026.9.7 ([pm-graph-nytb](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-nytb.toon))
 - Certify pm CLI 2026.9.12 and the pm-ops 2026.9.11 auditor ([pm-graph-bwlv](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-bwlv.toon))
 
 ## 2026.9.11 - 2026-09-11
