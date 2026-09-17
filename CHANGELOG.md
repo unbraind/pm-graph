@@ -40,6 +40,7 @@
 
 ### Fixed
 
+- A failed provenance publish silently falls back to an unattested one ([pm-graph-1fe4](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fe4.toon))
 - Unblock PR 70 suffixed CalVer changelog gate ([pm-graph-gjpd](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-gjpd.toon))
 - Close PR 79 scalar escape review findings ([pm-graph-ewxc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ewxc.toon))
 
@@ -51,7 +52,6 @@
 
 ### Fixed
 
-- A failed provenance publish silently falls back to an unattested one ([pm-graph-1fe4](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fe4.toon))
 - Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
 
 ### Security
@@ -277,15 +277,17 @@
 
 - Add multi-format graph exporter (pm graph export): cypher, mermaid, dot, json-graph ([pm-graph-xii9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-xii9.toon))
 
+## 2026.5.30 - 2026-05-30
+
+### Other
+
+- Production-readiness audit 2026-05-28 ([pm-graph-41bm](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-41bm.toon))
+
 ## 2026.5.28 - 2026-05-28
 
 ### Added
 
 - Add publish retry + provenance fallback to release workflow ([pm-graph-e0at](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-e0at.toon))
-
-### Other
-
-- Production-readiness audit 2026-05-28 ([pm-graph-41bm](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-41bm.toon))
 
 ## 2026.5.27 - 2026-05-27
 
