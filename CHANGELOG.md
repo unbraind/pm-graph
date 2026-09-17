@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other
+
+- Certify pm CLI 2026.9.17 ([pm-graph-zfdw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-zfdw.toon))
+
 ## 2026.9.13 - 2026-09-13
 
 ### Other
