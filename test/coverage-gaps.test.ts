@@ -1019,7 +1019,33 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
     }
   });
 
-  test("neighbors returns center+edges and the empty-node message", async () => {
+  test("Neo4j command cleanup failures still close through every command finally", async () => {
+    const ws = freshWorkspace();
+    const original = setNeo4jEnv();
+    try {
+      pm(ws, ["init"]);
+      createItem(ws, "Alpha");
+      const harness = await makeHarness();
+      const pmRoot = path.join(ws, ".agents", "pm");
+      process.env.PM_GRAPH_TEST_CLOSE_FAIL = "1";
+      for (const [command, args] of [
+        ["pm-graph query", ["MATCH (n) RETURN n"]],
+        ["pm-graph neighbors", ["TASK-1"]],
+        ["pm-graph status", []],
+        ["pm-graph sync", []],
+      ] as const) {
+        resetFakeNeo4j();
+        const result = (await harness.runCommand({ command, args, pmRoot })) as CmdResult;
+        assert.match(String(result.errorMessage), /Neo4j (session|driver) close failed/);
+      }
+    } finally {
+      delete process.env.PM_GRAPH_TEST_CLOSE_FAIL;
+      restoreEnv(original);
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+test("neighbors returns center+edges and the empty-node message", async () => {
     const ws = freshWorkspace();
     const original = setNeo4jEnv();
     resetFakeNeo4j();

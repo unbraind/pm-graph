@@ -226,11 +226,13 @@ export function driver(
         },
         async close() {
           state.closed = true;
+          if (process.env.PM_GRAPH_TEST_CLOSE_FAIL === "1") throw new Error("Neo4j session close failed");
         },
       };
     },
     async close() {
       state.closed = true;
+      if (process.env.PM_GRAPH_TEST_CLOSE_FAIL === "1") throw new Error("Neo4j driver close failed");
     },
   };
 }
