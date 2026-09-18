@@ -19,7 +19,7 @@ import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../src/index.ts";
 
 type LoaderGlobal = typeof globalThis & {
-  __pmGraphNeo4jLoaderMode?: "throw-error" | "throw-string" | "pass" | "throw-then-pass";
+  __pmGraphNeo4jLoaderMode?: "throw-error" | "throw-string" | "throw-nonerror-eval" | "pass" | "throw-then-pass" | "throw-then-default";
   __pmGraphNeo4jLoaderCount?: number;
 };
 
@@ -40,10 +40,11 @@ function pm(cwd: string, args: string[]): string {
   return execFileSync("pm", args, { cwd, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
 }
 
-function writeFakeNpm(exitCode: number): string {
+function writeFakeNpm(mode: number | "signal"): string {
   const dir = mkdtempSync(path.join(tmpdir(), "pm-graph-npm-"));
   const bin = path.join(dir, "npm");
-  writeFileSync(bin, `#!/bin/sh\nexit ${exitCode}\n`, { mode: 0o755 });
+  const script = mode === "signal" ? "#!/bin/sh\nkill -TERM $$\n" : `#!/bin/sh\nexit ${mode}\n`;
+  writeFileSync(bin, script, { mode: 0o755 });
   chmodSync(bin, 0o755);
   return dir;
 }
@@ -90,6 +91,14 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
     })) as { errorMessage?: string };
     assert.match(String(failedString.errorMessage), /neo4j-driver missing|npm install --omit=dev failed/);
 
+    g.__pmGraphNeo4jLoaderMode = "throw-nonerror-eval";
+    const failedNonError = (await harness.runCommand({
+      command: "pm-graph query",
+      args: ["MATCH (n) RETURN n"],
+      pmRoot,
+    })) as { errorMessage?: string };
+    assert.match(String(failedNonError.errorMessage), /neo4j-driver missing|npm install --omit=dev failed/);
+
     process.env.PATH = path.join(tmpdir(), "pm-graph-no-such-bin");
     g.__pmGraphNeo4jLoaderMode = "throw-error";
     const missingNpm = (await harness.runCommand({
@@ -99,9 +108,19 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
     })) as { errorMessage?: string };
     assert.match(String(missingNpm.errorMessage), /ENOENT|not found|npm/i);
 
+    const signalBin = writeFakeNpm("signal");
+    process.env.PATH = signalBin;
+    g.__pmGraphNeo4jLoaderMode = "throw-error";
+    const signaledInstall = (await harness.runCommand({
+      command: "pm-graph query",
+      args: ["MATCH (n) RETURN n"],
+      pmRoot,
+    })) as { errorMessage?: string };
+    assert.match(String(signaledInstall.errorMessage), /unknown/);
+
     const okBin = writeFakeNpm(0);
     process.env.PATH = `${okBin}${path.delimiter}${original.PATH ?? ""}`;
-    g.__pmGraphNeo4jLoaderMode = "throw-then-pass";
+    g.__pmGraphNeo4jLoaderMode = "throw-then-default";
     g.__pmGraphNeo4jLoaderCount = 0;
     const retried = (await harness.runCommand({
       command: "pm-graph query",
