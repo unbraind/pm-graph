@@ -3074,10 +3074,12 @@ export function activate(api) {
                 filter: flags.filter,
             });
             const resolvedId = resolveItemIdOrThrow([...itemNodeIds(graph)].sort(), id, "Item").resolved;
+            // `resolvedId` is selected from `itemNodeIds(graph)`, and explainItem's
+            // nullable path is exactly the same PmItem membership check via
+            // `itemNodeMap(graph)`. The two operations share the same graph snapshot,
+            // so a null report is unreachable here; keep the public helper nullable
+            // for callers that do not resolve an id first.
             const report = explainItem(graph, resolvedId);
-            if (!report) {
-                throw new CommandError(`Item "${resolvedId}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
-            }
             return { ok: true, ...report };
         },
     });
