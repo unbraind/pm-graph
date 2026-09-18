@@ -6,12 +6,12 @@ status: open
 priority: 2
 tags: []
 created_at: "2026-09-18T03:27:32.221Z"
-updated_at: "2026-09-18T07:46:40.105Z"
+updated_at: "2026-09-18T08:03:03.405Z"
 assignee: pi-agent
 claim_principal: pi-agent
 author: pi-agent
 acceptance_criteria: "Every source file reports 100.00 line/branch/function coverage; coverageGate.thresholds in package.json set to 100/100/100; npm run release:check exits 0; no gate weakened"
-comments[22]{created_at,author,text}:
+comments[23]{created_at,author,text}:
   "2026-09-18T03:27:36.644Z",pi-agent,"Baseline coverage: lines 85.49% / branches 80.17% / functions 90.43%. Source file src/index.ts: lines 84.22% / branches 78.54% / functions 89.66%. Scripts already at 100%. Uncovered lines concentrated in: Neo4j internal functions (toPlain/toNumber/neo4jFriendlyError/loadNeo4j), command help texts and error paths in activate(), graph analysis branches, and utility function edge cases."
   "2026-09-18T04:02:25.951Z",pi-agent,"Coverage milestone: added behavioral tests in test/coverage-gaps.test.ts and test/neo4j-install-fallback.test.ts with real SDK harness workspaces and a loader-routed Neo4j driver surface. The first full run passes 287/287 tests and reports src/index.ts at L98.61% / B89.12% / F98.86%; scripts remain 100%. Export widenings parseNeo4jMs and workspaceFromPmRoot are justified because their return branches are not observably distinguishable through the command surface (invalid timeout parsing only changes driver config; custom-root workspace derivation requires direct path cases), and both retain production behavior. toPlain/toNumber/neo4jFriendlyError were covered through the actual query/status/neighbors/sync handlers with a loader-routed driver and were not widened."
   "2026-09-18T04:21:23.759Z",pi-agent,"Second coverage milestone: exercised tracker-root discovery (typed and generic errors), unreadable tracker SDK failures, unexpected export/sync/impact error wrapping via real registered handlers, malformed/externally-targeted dependency records, case-insensitive ambiguity and capped id suggestions, and direct Neo4j-friendly default URI/error branches. Targeted tests pass; source exports now include only the documented helpers needed for otherwise unreachable direct branch assertions (parseNeo4jMs, workspaceFromPmRoot, neo4jFriendlyError, resolveItemIdOrThrow, runPmGraph)."
@@ -34,4 +34,5 @@ comments[22]{created_at,author,text}:
   "2026-09-18T07:28:01.644Z",pi-agent,"Seventeenth correction: restored the requireImpactResult JSDoc attachment after adding its complete-impact type aliases; npm build and the docstring gate now pass."
   "2026-09-18T07:29:30.808Z",pi-agent,"Eighteenth coverage milestone: switched the named Neo4j loader fixture to a true ESM named-only module, and added real query/sync/status/neighbors cleanup-failure runs so all command finally paths execute, including session-close rejection. These tests remain loader-backed SDK harness tests, not API doubles."
   "2026-09-18T07:46:40.105Z",pi-agent,"Nineteenth coverage milestone: added isolated real dynamic-import workers for the named-only retry and an Error rejection with an undefined message, closing the remaining loadNeo4j module-shape/message branches. Both use actual SDK command harnesses and deterministic npm/loader fixtures."
+  "2026-09-18T08:03:03.405Z",pi-agent,"Twentieth coverage milestone: distinguished session-close and driver-close failures and ran every real Neo4j command through both cleanup modes, while the friendly-error fixture now uses an Error with an explicitly undefined message. This targets the final cleanup control-flow arms without changing production behavior."
 body: ""

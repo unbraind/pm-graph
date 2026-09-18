@@ -1027,16 +1027,18 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
       createItem(ws, "Alpha");
       const harness = await makeHarness();
       const pmRoot = path.join(ws, ".agents", "pm");
-      process.env.PM_GRAPH_TEST_CLOSE_FAIL = "1";
-      for (const [command, args] of [
-        ["pm-graph query", ["MATCH (n) RETURN n"]],
-        ["pm-graph neighbors", ["TASK-1"]],
-        ["pm-graph status", []],
-        ["pm-graph sync", []],
-      ] as const) {
-        resetFakeNeo4j();
-        const result = (await harness.runCommand({ command, args, pmRoot })) as CmdResult;
-        assert.match(String(result.errorMessage), /Neo4j (session|driver) close failed/);
+      for (const closeMode of ["session", "driver"] as const) {
+        process.env.PM_GRAPH_TEST_CLOSE_FAIL = closeMode;
+        for (const [command, args] of [
+          ["pm-graph query", ["MATCH (n) RETURN n"]],
+          ["pm-graph neighbors", ["TASK-1"]],
+          ["pm-graph status", []],
+          ["pm-graph sync", []],
+        ] as const) {
+          resetFakeNeo4j();
+          const result = (await harness.runCommand({ command, args, pmRoot })) as CmdResult;
+          assert.match(String(result.errorMessage), /Neo4j (session|driver) close failed/);
+        }
       }
     } finally {
       delete process.env.PM_GRAPH_TEST_CLOSE_FAIL;
@@ -1151,7 +1153,8 @@ test("neighbors returns center+edges and the empty-node message", async () => {
       const genericRes = (await harness.runCommand({ command: "pm-graph status", pmRoot })) as CmdResult;
       assert.match(String(genericRes.errorMessage), /Cypher syntax error/);
 
-      const noMessage = Object.create(Error.prototype) as Error;
+      const noMessage = new Error("temporary");
+      Object.defineProperty(noMessage, "message", { value: undefined });
       setFakeNeo4jFail(noMessage);
       const noMessageRes = (await harness.runCommand({ command: "pm-graph status", pmRoot })) as CmdResult;
       assert.equal(noMessageRes.handled, false);
