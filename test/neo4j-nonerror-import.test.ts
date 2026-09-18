@@ -51,7 +51,8 @@ test("loadNeo4j stringifies a non-Error import rejection", async (t) => {
       args: ["MATCH (n) RETURN n"],
       pmRoot: path.join(ws, ".agents", "pm"),
     })) as { errorMessage?: string };
-    assert.match(String(result.errorMessage), /neo4j-driver missing|npm install --omit=dev failed/);
+    assert.match(String(result.errorMessage), /neo4j-driver missing/);
+    assert.match(String(result.errorMessage), /npm install --omit=dev failed/);
     t.diagnostic("non-Error import rejection exercised");
   } finally {
     for (const key of Object.keys(process.env)) {

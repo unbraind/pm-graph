@@ -92,7 +92,8 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
       args: ["MATCH (n) RETURN n"],
       pmRoot,
     })) as { errorMessage?: string };
-    assert.match(String(failedString.errorMessage), /neo4j-driver missing|npm install --omit=dev failed/);
+    assert.match(String(failedString.errorMessage), /neo4j-driver missing/);
+    assert.match(String(failedString.errorMessage), /npm install --omit=dev failed/);
 
     g.__pmGraphNeo4jLoaderMode = "throw-nonerror-eval";
     const failedNonError = (await harness.runCommand({
@@ -100,7 +101,8 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
       args: ["MATCH (n) RETURN n"],
       pmRoot,
     })) as { errorMessage?: string };
-    assert.match(String(failedNonError.errorMessage), /neo4j-driver missing|npm install --omit=dev failed/);
+    assert.match(String(failedNonError.errorMessage), /neo4j-driver missing/);
+    assert.match(String(failedNonError.errorMessage), /npm install --omit=dev failed/);
 
     process.env.PATH = path.join(tmpdir(), "pm-graph-no-such-bin");
     g.__pmGraphNeo4jLoaderMode = "throw-error";
