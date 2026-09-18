@@ -25,12 +25,9 @@ import {
   dependencyDepths,
   findCycles,
   longestChain,
-  matchesNodeFilter,
-  parseAnalyticsFlags,
   topoSort,
   renderAnalysisDiagram,
   renderGraphml,
-  renderPlantuml,
   shortestPath,
 } from "../src/index.ts";
 import extension from "../src/index.ts";
@@ -47,7 +44,6 @@ import {
   resetFakeNeo4j,
   setFakeNeo4jFail,
   setFakeNeo4jRead,
-  setFakeNeo4jWrite,
   wasFakeNeo4jClosed,
 } from "./fixtures/neo4j-fake.ts";
 
@@ -483,7 +479,6 @@ test("export and sync wrap unexpected graph-loading errors", { skip: !pmAvailabl
   try {
     pm(ws, ["init"]);
     const harness = await makeHarness();
-    const pmRoot = path.join(ws, ".agents", "pm");
     const exportHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph export");
     const syncHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph sync");
     assert.ok(exportHandler);
