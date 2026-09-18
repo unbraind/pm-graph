@@ -1285,23 +1285,17 @@ function buildAdjacency(edges) {
 /**
  * Detect all elementary directed cycles among structural edges using an
  * iterative DFS with a recursion stack. Returns each cycle as an ordered id
- * path whose first and last ids are equal (e.g. [E, F, E]). Cycles are
- * de-duplicated by their canonical rotation so A->B->A and B->A->B collapse.
+ * path whose first and last ids are equal (e.g. [E, F, E]). The DFS roots
+ * each cycle at its smallest id, so A->B->A and B->A->B share one key.
  */
 export function findCycles(nodes, edges) {
     const adjacency = buildAdjacency(edges);
     const cycles = [];
     const seenCanonical = new Set();
     const canonical = (cycle) => {
-        // cycle excludes the repeated closing node; rotate to start at min id.
-        const core = cycle.slice(0, -1);
-        let minIdx = 0;
-        for (let i = 1; i < core.length; i++) {
-            if (core[i] < core[minIdx])
-                minIdx = i;
-        }
-        const rotated = [...core.slice(minIdx), ...core.slice(0, minIdx)];
-        return rotated.join("->");
+        // The DFS only extends to ids >= its start id, so every discovered cycle
+        // already starts at its lexicographically smallest id.
+        return cycle.slice(0, -1).join("->");
     };
     for (const start of nodes) {
         // Iterative DFS carrying the current path; detect back-edges to a node
@@ -3031,7 +3025,7 @@ export function activate(api) {
                     direction: logicalDirection,
                     affected,
                     truncated: Boolean(result.truncated),
-                    cost: result.cost ?? null,
+                    cost: result.cost,
                     engine: "core-graph",
                 };
                 if (!wantDiagram)
@@ -3114,7 +3108,7 @@ export function activate(api) {
     // offline formats (cypher | mermaid | dot | json | graphml | plantuml).
     // No Neo4j required. Rich flags live on the canonical `pm pm-graph export`.
     const exporter = async (ctx) => {
-        const options = ctx.options ?? {};
+        const options = ctx.options;
         const rawFormat = String(readExportOption(options, "format") ?? "json").toLowerCase();
         if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(rawFormat)) {
             throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);

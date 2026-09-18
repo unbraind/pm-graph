@@ -186,8 +186,8 @@ type StructuralEdge = {
 /**
  * Detect all elementary directed cycles among structural edges using an
  * iterative DFS with a recursion stack. Returns each cycle as an ordered id
- * path whose first and last ids are equal (e.g. [E, F, E]). Cycles are
- * de-duplicated by their canonical rotation so A->B->A and B->A->B collapse.
+ * path whose first and last ids are equal (e.g. [E, F, E]). The DFS roots
+ * each cycle at its smallest id, so A->B->A and B->A->B share one key.
  */
 export declare function findCycles(nodes: string[], edges: StructuralEdge[]): string[][];
 /**

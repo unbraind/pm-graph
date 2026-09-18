@@ -699,6 +699,11 @@ test("graph-export exporter writes files, filters, and rejects empty output", { 
       process.chdir(originalCwd);
     }
 
+    await assert.rejects(
+      () => harness.runCommand({ command: "pm-graph export", args: ["--edges"], pmRoot }),
+      /Unknown --edges/,
+    );
+
     const { result } = await captureStdout(async () =>
       harness.runExporter({
         exporter: "graph-export",
@@ -810,6 +815,8 @@ test("cypher, neighbors, query, and explain remaining error surfaces", { skip: !
     assert.match(stdout, /graph TD/);
     const limited = (await harness.runCommand({ command: "pm-graph impact", args: [a, "--limit", "1"], pmRoot })) as CmdResult;
     assert.equal(limited.errorMessage, undefined);
+    const bothDirections = (await harness.runCommand({ command: "pm-graph impact", args: [a, "--direction", "both"], pmRoot })) as CmdResult;
+    assert.equal(bothDirections.errorMessage, undefined);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
