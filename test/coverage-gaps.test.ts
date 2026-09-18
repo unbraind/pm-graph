@@ -307,11 +307,12 @@ test("offline analytics cover dangling edges, ties, cycles, components, and spar
         { from: "a", to: "c", type: "DEPENDS_ON" },
         { from: "b", to: "d", type: "DEPENDS_ON" },
         { from: "c", to: "d", type: "DEPENDS_ON" },
+        { from: "d", to: "e", type: "DEPENDS_ON" },
       ],
       "a",
-      "d",
+      "e",
     ),
-    ["a", "b", "d"],
+    ["a", "b", "d", "e"],
   );
   assert.deepEqual(topoSort(["a", "b", "c", "d", "e"], edges), {
     order: ["d", "e"],
@@ -674,6 +675,10 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
       () => requireImpactResult(analyzeResult),
       /pm graph impact returned a "analyze" result envelope/,
     );
+    const completeImpact = await runGraph("impact", id, undefined, {}, { json: true, path: tracker });
+    assert.ok(requireImpactResult(completeImpact).affected instanceof Array);
+    const summaryImpact = await runGraph("impact", id, undefined, { summary: true }, { json: true, path: tracker });
+    assert.deepEqual(requireImpactResult(summaryImpact).affected, []);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }

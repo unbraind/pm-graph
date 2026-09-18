@@ -395,43 +395,11 @@ function resolvePmRootForContext(context) {
         throw new CommandError(`Could not locate a pm tracker: ${msg}`, EXIT_CODE.USAGE);
     }
 }
-/**
- * Invoke the canonical registry-aware graph engine in-process via the SDK's
- * {@link runGraph}, honouring `--path <pm_root>` through `global.path`.
- *
- * This is the same engine that backs `pm graph <subcommand>`; calling it
- * directly rather than spawning `pm` removes the subprocess, the JSON
- * re-parse, and the output-size ceiling that a piped `--json` read imposes —
- * a large workspace could previously exceed the shell-out's buffer and fail
- * the query rather than answer it. It also drops the requirement that a `pm`
- * binary be resolvable on `PATH`, which is not guaranteed for a
- * package-backed extension.
- *
- * Availability is a compile-time guarantee: the engine is imported statically
- * from the declared `@unbrained/pm-cli` peer dependency, so the former
- * `pm graph --help` probe (and its degraded fallback) is no longer meaningful
- * and has been removed.
- *
- * Since pm-cli 2026.8.3 the engine returns `ProjectedGraphResult` — the union
- * of every subcommand envelope intersected with the output-projection
- * declaration. That type is not re-exported from the public `sdk/graph`
- * surface, so the return type here is taken from {@link runGraph} itself via
- * `ReturnType` instead of being re-declared locally, where a hand-maintained
- * copy would drift. Callers narrow the union on the `subcommand` discriminant
- * carried by every envelope, so no cast appears anywhere on this path.
- */
-/**
- * Narrow the SDK's projected graph union at the canonical impact call site.
- *
- * @param result - The real SDK response returned for a graph command.
- * @returns The impact projection when the requested subcommand honored its contract.
- * @throws {CommandError} When the SDK returns a different envelope.
- */
 export function requireImpactResult(result) {
     if (result.subcommand !== "impact") {
         throw new CommandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
     }
-    return result;
+    return { ...result, affected: result.affected ?? [] };
 }
 /**
  * Invoke the canonical SDK graph engine with the extension's tracker context.
@@ -3006,12 +2974,10 @@ export function activate(api) {
                 // full path against the shaped set reproduces the edge-removal
                 // semantics exactly.
                 const shapedItemIds = new Set(itemIds);
-                const rawAffected = Array.isArray(result.affected) ? result.affected : [];
-                const affected = rawAffected.filter((row) => {
+                const affected = result.affected.filter((row) => {
                     if (!shapedItemIds.has(row.id))
                         return false;
-                    const rowPath = Array.isArray(row.path) ? row.path : [];
-                    return rowPath.every((node) => shapedItemIds.has(node));
+                    return row.path.every((node) => shapedItemIds.has(node));
                 });
                 const impacted = affected.map((a) => a.id).sort();
                 const base = {

@@ -579,16 +579,19 @@ type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" |
  * @returns The impact projection when the requested subcommand honored its contract.
  * @throws {CommandError} When the SDK returns a different envelope.
  */
-export function requireImpactResult(
-  result: Awaited<ReturnType<typeof runGraph>>,
-): Extract<Awaited<ReturnType<typeof runGraph>>, { subcommand: "impact" }> {
+type ImpactProjection = Extract<Awaited<ReturnType<typeof runGraph>>, { subcommand: "impact" }>;
+type CompleteImpactProjection = Omit<ImpactProjection, "affected"> & {
+  affected: NonNullable<ImpactProjection["affected"]>;
+};
+
+export function requireImpactResult(result: Awaited<ReturnType<typeof runGraph>>): CompleteImpactProjection {
   if (result.subcommand !== "impact") {
     throw new CommandError(
       `pm graph impact returned a "${result.subcommand}" result envelope`,
       EXIT_CODE.GENERIC_FAILURE,
     );
   }
-  return result;
+  return { ...result, affected: result.affected ?? [] };
 }
 
 /**
@@ -3543,11 +3546,9 @@ export function activate(api: ExtensionApi): void {
         // full path against the shaped set reproduces the edge-removal
         // semantics exactly.
         const shapedItemIds = new Set(itemIds);
-        const rawAffected = Array.isArray(result.affected) ? result.affected : [];
-        const affected = rawAffected.filter((row) => {
+        const affected = result.affected.filter((row) => {
           if (!shapedItemIds.has(row.id)) return false;
-          const rowPath = Array.isArray(row.path) ? row.path : [];
-          return rowPath.every((node) => shapedItemIds.has(node));
+          return row.path.every((node) => shapedItemIds.has(node));
         });
         const impacted = affected.map((a) => a.id).sort();
         const base = {

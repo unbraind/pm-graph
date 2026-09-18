@@ -89,9 +89,13 @@ type Graph = {
  * @returns The impact projection when the requested subcommand honored its contract.
  * @throws {CommandError} When the SDK returns a different envelope.
  */
-export declare function requireImpactResult(result: Awaited<ReturnType<typeof runGraph>>): Extract<Awaited<ReturnType<typeof runGraph>>, {
+type ImpactProjection = Extract<Awaited<ReturnType<typeof runGraph>>, {
     subcommand: "impact";
 }>;
+type CompleteImpactProjection = Omit<ImpactProjection, "affected"> & {
+    affected: NonNullable<ImpactProjection["affected"]>;
+};
+export declare function requireImpactResult(result: Awaited<ReturnType<typeof runGraph>>): CompleteImpactProjection;
 /**
  * Build a workspace graph (nodes + relationships) from pm item metadata.
  *
