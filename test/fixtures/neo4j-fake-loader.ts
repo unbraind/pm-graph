@@ -5,7 +5,7 @@
  * paths without opening a Bolt socket.
  */
 
-const fakeUrl = new URL("./neo4j-fake-named.mjs", import.meta.url).href;
+const fakeUrl = new URL("./neo4j-fake-named.ts", import.meta.url).href;
 
 /**
  * Resolve `neo4j-driver` to {@link fakeUrl}; pass every other specifier through.

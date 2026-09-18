@@ -1,6 +1,6 @@
 /** Fail the first Neo4j import, then return the named-only ESM fixture. */
 
-const namedUrl = new URL("./neo4j-fake-named.mjs", import.meta.url).href;
+const namedUrl = new URL("./neo4j-fake-named.ts", import.meta.url).href;
 let attempts = 0;
 
 /** Resolve Neo4j through one failed import followed by the named-only retry. */
