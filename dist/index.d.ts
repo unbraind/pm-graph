@@ -1,5 +1,4 @@
-import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
-import { runGraph } from "@unbrained/pm-cli/sdk/graph";
+import { type Exporter } from "@unbrained/pm-cli/sdk";
 type CommandContext = {
     command?: string;
     args?: string[];
@@ -57,70 +56,6 @@ type Graph = {
     nodes: GraphNode[];
     relationships: GraphRelationship[];
 };
-/**
- * Invoke the canonical registry-aware graph engine in-process via the SDK's
- * {@link runGraph}, honouring `--path <pm_root>` through `global.path`.
- *
- * This is the same engine that backs `pm graph <subcommand>`; calling it
- * directly rather than spawning `pm` removes the subprocess, the JSON
- * re-parse, and the output-size ceiling that a piped `--json` read imposes —
- * a large workspace could previously exceed the shell-out's buffer and fail
- * the query rather than answer it. It also drops the requirement that a `pm`
- * binary be resolvable on `PATH`, which is not guaranteed for a
- * package-backed extension.
- *
- * Availability is a compile-time guarantee: the engine is imported statically
- * from the declared `@unbrained/pm-cli` peer dependency, so the former
- * `pm graph --help` probe (and its degraded fallback) is no longer meaningful
- * and has been removed.
- *
- * Since pm-cli 2026.8.3 the engine returns `ProjectedGraphResult` — the union
- * of every subcommand envelope intersected with the output-projection
- * declaration. That type is not re-exported from the public `sdk/graph`
- * surface, so the return type here is taken from {@link runGraph} itself via
- * `ReturnType` instead of being re-declared locally, where a hand-maintained
- * copy would drift. Callers narrow the union on the `subcommand` discriminant
- * carried by every envelope, so no cast appears anywhere on this path.
- */
-/**
- * Narrow the SDK's projected graph union at the canonical impact call site.
- *
- * @param result - The real SDK response returned for a graph command.
- * @returns The impact projection when the requested subcommand honored its contract.
- * @throws {CommandError} When the SDK returns a different envelope.
- */
-type ImpactProjection = Extract<Awaited<ReturnType<typeof runGraph>>, {
-    subcommand: "impact";
-}>;
-type CompleteImpactProjection = Omit<ImpactProjection, "affected"> & {
-    affected: NonNullable<ImpactProjection["affected"]>;
-};
-/**
- * Narrow and complete the SDK's impact projection for the command adapter.
- *
- * @param result - The real SDK response returned by the graph engine.
- * @returns An impact envelope with an always-present affected-row array.
- * @throws {CommandError} When the SDK returns a different envelope.
- */
-export declare function requireImpactResult(result: Awaited<ReturnType<typeof runGraph>>): CompleteImpactProjection;
-/**
- * Build a workspace graph (nodes + relationships) from pm item metadata.
- *
- * Emits one `PmItem` node per item, then derives edges from the item's
- * structural fields: `CHILD_OF` for a parent, `BLOCKED_BY` for a blocker, and
- * a normalized relationship per dependency (merging the legacy `deps[]` and
- * typed `dependencies[]`, de-duplicated by `from->to:type`). Facet fields
- * (type/status/assignee/sprint/release) and tags become `PmFacet` nodes with
- * their own edges. A relationship whose target is not among the items — and
- * not already a node — is materialized as an `ExternalPmItem` so the graph
- * never dangles a half-edge.
- *
- * @param items - pm item metadata to project.
- * @param workspace - Workspace path, recorded on the returned graph.
- * @param depsByItem - Extra dependency records keyed by item id.
- * @returns The shaped graph with project metadata.
- */
-export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>): Graph;
 type AnalyticsFlags = {
     json: boolean;
     includeClosed: boolean;
@@ -166,18 +101,6 @@ export declare function parseNodeFilter(raw: string[]): NodeFilter;
  */
 export declare function matchesNodeFilter(node: GraphNode, filter: NodeFilter): boolean;
 /**
- * Render a graph as a Mermaid `graph TD` document.
- *
- * Each node is drawn as a boxed label showing title, id, and status, with the
- * id sanitized through {@link mermaidId} (Mermaid ids must be alphanumeric) and
- * the label escaped through {@link mermaidLabel}. Relationships become
- * directed arrows labelled with their type; a blank line separates nodes from
- * edges only when there are edges, so an edge-free graph stays compact.
- */
-export declare function renderMermaid(graph: Graph): string;
-/** A JSON Graph Format-style document (nodes/edges) for generic graph tooling. */
-export declare function renderJsonGraph(graph: Graph): string;
-/**
  * Render a valid GraphML XML document (consumable by yEd / Gephi / NetworkX).
  * Declares string keys for node title/type/status/labels and edge type, then
  * emits one <node> per graph node and one <edge> per relationship.
@@ -197,8 +120,8 @@ type StructuralEdge = {
 /**
  * Detect all elementary directed cycles among structural edges using an
  * iterative DFS with a recursion stack. Returns each cycle as an ordered id
- * path whose first and last ids are equal (e.g. [E, F, E]). The DFS roots
- * each cycle at its smallest id, so A->B->A and B->A->B share one key.
+ * path whose first and last ids are equal (e.g. [E, F, E]). Cycles are
+ * de-duplicated by their canonical rotation so A->B->A and B->A->B collapse.
  */
 export declare function findCycles(nodes: string[], edges: StructuralEdge[]): string[][];
 /**
@@ -412,53 +335,10 @@ export type ExplainReport = {
  */
 export declare function explainItem(graph: Graph, id: string): ExplainReport | null;
 /**
- * Fuzzy-suggest item ids that resemble an operator's input.
- *
- * A candidate survives when it contains the (lowercased) query anywhere, OR
- * shares at least three leading characters with it, so a typo still surfaces
- * the intended id while a one-character clash does not flood the results.
- * Survivors are ranked: exact `startsWith` first, then substring includes, then
- * the longest shared prefix, then alphabetical, and truncated to `limit`.
- * Returns an empty array for a blank query.
- *
- * @param itemIds - Known item ids to search.
- * @param input - The operator's (possibly misspelled) input.
- * @param limit - Maximum suggestions to return.
- * @returns Ranked suggestion ids, possibly empty.
- */
-export declare function suggestItemIds(itemIds: string[], input: string, limit?: number): string[];
-type ItemIdResolution = {
-    input: string;
-    resolved: string;
-    strategy: "exact" | "case-insensitive" | "prefix";
-};
-/**
- * Resolve an operator's item-id input to exactly one workspace id.
- *
- * Tries exact match, then a case-insensitive match, then a unique prefix, in
- * that order; an ambiguous case at either fuzzy tier throws an
- * {@link ambiguousItemIdError}, and a total miss throws a `NOT_FOUND` error
- * carrying {@link suggestItemIds} suggestions. The id list is de-duplicated and
- * sorted first so resolution and ambiguity ordering are deterministic.
- *
- * @returns The resolved id and the strategy that matched it.
- * @throws {CommandError} On ambiguity or no match.
- */
-export declare function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution;
-/**
  * Compute a comprehensive offline graph-health report from a shaped graph.
  * All analytics operate on structural edges between item nodes only.
  */
 export declare function analyzeGraph(graph: Graph, topN?: number): AnalyzeReport;
-/**
- * Collect ALL occurrences of a repeatable string flag (`--flag value` /
- * `--flag=value`). A `null` entry marks an occurrence with a missing value
- * (bare trailing flag, or one followed by another flag) so callers can reject
- * it instead of silently dropping the flag.
- */
-export declare function readFlagStringValues(args: string[], longName: string): (string | null)[];
-/** Strictly parse a non-negative integer (""/"2abc"/"2.5" are rejected, unlike parseInt). */
-export declare function parseNonNegativeInt(raw: unknown): number | undefined;
 /**
  * Extension entry point: register the graph commands and output service.
  *

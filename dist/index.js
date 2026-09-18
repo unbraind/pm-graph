@@ -127,12 +127,6 @@ async function loadNeo4j() {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
-/** Close a Neo4j session and driver after a command settles. */
-async function closeNeo4jResources(session, driver) {
-    await session.close();
-    await driver.close();
-}
-/** Map a Neo4j connection failure to an operator-facing error. */
 function neo4jFriendlyError(err) {
     if (!(err instanceof Error))
         return new Error(String(err));
@@ -284,14 +278,14 @@ function toPlain(value) {
     }
     if (Array.isArray(value))
         return value.map(toPlain);
-    // After the non-object early return, `value` is a non-null object. Arrays are
-    // handled above; every remaining value is a plain object (or a Neo4j type that
-    // did not match the structural checks), so a final `return value` is unreachable.
-    const obj = {};
-    for (const [k, v] of Object.entries(value)) {
-        obj[k] = toPlain(v);
+    if (typeof value === "object") {
+        const obj = {};
+        for (const [k, v] of Object.entries(value)) {
+            obj[k] = toPlain(v);
+        }
+        return obj;
     }
-    return obj;
+    return value;
 }
 /**
  * Coerce a property value to a plain number, tolerating Neo4j Integers.
@@ -402,27 +396,29 @@ function resolvePmRootForContext(context) {
     }
 }
 /**
- * Narrow and complete the SDK's impact projection for the command adapter.
+ * Invoke the canonical registry-aware graph engine in-process via the SDK's
+ * {@link runGraph}, honouring `--path <pm_root>` through `global.path`.
  *
- * @param result - The real SDK response returned by the graph engine.
- * @returns An impact envelope with an always-present affected-row array.
- * @throws {CommandError} When the SDK returns a different envelope.
- */
-export function requireImpactResult(result) {
-    if (result.subcommand !== "impact") {
-        throw new CommandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
-    }
-    return { ...result, affected: result.affected ?? [] };
-}
-/**
- * Invoke the canonical SDK graph engine with the extension's tracker context.
+ * This is the same engine that backs `pm graph <subcommand>`; calling it
+ * directly rather than spawning `pm` removes the subprocess, the JSON
+ * re-parse, and the output-size ceiling that a piped `--json` read imposes —
+ * a large workspace could previously exceed the shell-out's buffer and fail
+ * the query rather than answer it. It also drops the requirement that a `pm`
+ * binary be resolvable on `PATH`, which is not guaranteed for a
+ * package-backed extension.
  *
- * @param subcommand - Canonical graph operation name.
- * @param id - Optional operation root item.
- * @param flags - Parsed graph options.
- * @param context - Extension command context carrying the tracker root.
- * @returns The SDK's projected graph result.
- * @throws {CommandError} When graph execution fails.
+ * Availability is a compile-time guarantee: the engine is imported statically
+ * from the declared `@unbrained/pm-cli` peer dependency, so the former
+ * `pm graph --help` probe (and its degraded fallback) is no longer meaningful
+ * and has been removed.
+ *
+ * Since pm-cli 2026.8.3 the engine returns `ProjectedGraphResult` — the union
+ * of every subcommand envelope intersected with the output-projection
+ * declaration. That type is not re-exported from the public `sdk/graph`
+ * surface, so the return type here is taken from {@link runGraph} itself via
+ * `ReturnType` instead of being re-declared locally, where a hand-maintained
+ * copy would drift. Callers narrow the union on the `subcommand` discriminant
+ * carried by every envelope, so no cast appears anywhere on this path.
  */
 async function runPmGraph(subcommand, id, flags, context) {
     const options = {};
@@ -449,7 +445,7 @@ async function runPmGraph(subcommand, id, flags, context) {
             json: true,
             path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
         };
-        return await runGraph(subcommand, id, undefined, options, globalOptions);
+        return await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions);
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -500,7 +496,7 @@ function facetNodeId(kind, value) {
  * @param depsByItem - Extra dependency records keyed by item id.
  * @returns The shaped graph with project metadata.
  */
-export function graphFromItems(items, workspace, depsByItem) {
+function graphFromItems(items, workspace, depsByItem) {
     const nodesById = new Map();
     const relationships = [];
     const addNode = (node) => {
@@ -646,13 +642,13 @@ function workspaceFromPmRoot(pmRoot) {
     const normalized = path.resolve(pmRoot);
     const parts = normalized.split(path.sep);
     if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
-        return path.dirname(path.dirname(normalized));
+        return parts.slice(0, -2).join(path.sep) || path.sep;
     }
     // Custom hidden storage dirs (e.g. `<workspace>/.pm` via --pm-path): treat
     // the parent as the logical workspace so projectKey doesn't become ".pm".
     const last = parts[parts.length - 1];
     if (parts.length >= 2 && last.startsWith(".") && last.length > 1) {
-        return path.dirname(normalized);
+        return parts.slice(0, -1).join(path.sep) || path.sep;
     }
     return normalized;
 }
@@ -1014,7 +1010,7 @@ function mermaidId(id) {
  * directed arrows labelled with their type; a blank line separates nodes from
  * edges only when there are edges, so an edge-free graph stays compact.
  */
-export function renderMermaid(graph) {
+function renderMermaid(graph) {
     const lines = ["graph TD"];
     for (const node of graph.nodes) {
         const title = typeof node.properties.title === "string" && node.properties.title
@@ -1065,7 +1061,7 @@ function renderDot(graph) {
     return lines.join("\n");
 }
 /** A JSON Graph Format-style document (nodes/edges) for generic graph tooling. */
-export function renderJsonGraph(graph) {
+function renderJsonGraph(graph) {
     const doc = {
         graph: {
             directed: true,
@@ -1266,17 +1262,23 @@ function buildAdjacency(edges) {
 /**
  * Detect all elementary directed cycles among structural edges using an
  * iterative DFS with a recursion stack. Returns each cycle as an ordered id
- * path whose first and last ids are equal (e.g. [E, F, E]). The DFS roots
- * each cycle at its smallest id, so A->B->A and B->A->B share one key.
+ * path whose first and last ids are equal (e.g. [E, F, E]). Cycles are
+ * de-duplicated by their canonical rotation so A->B->A and B->A->B collapse.
  */
 export function findCycles(nodes, edges) {
     const adjacency = buildAdjacency(edges);
     const cycles = [];
     const seenCanonical = new Set();
     const canonical = (cycle) => {
-        // The DFS only extends to ids >= its start id, so every discovered cycle
-        // already starts at its lexicographically smallest id.
-        return cycle.slice(0, -1).join("->");
+        // cycle excludes the repeated closing node; rotate to start at min id.
+        const core = cycle.slice(0, -1);
+        let minIdx = 0;
+        for (let i = 1; i < core.length; i++) {
+            if (core[i] < core[minIdx])
+                minIdx = i;
+        }
+        const rotated = [...core.slice(minIdx), ...core.slice(0, minIdx)];
+        return rotated.join("->");
     };
     for (const start of nodes) {
         // Iterative DFS carrying the current path; detect back-edges to a node
@@ -1536,8 +1538,7 @@ export function criticalConnectors(nodes, edges) {
         disc.set(u, ++time);
         low.set(u, disc.get(u));
         let childCount = 0;
-        // Every DFS vertex came from `nodeSet`, which initializes adjacency.
-        for (const v of [...adjacency.get(u)].sort()) {
+        for (const v of [...(adjacency.get(u) ?? [])].sort()) {
             if (!disc.has(v)) {
                 parent.set(v, u);
                 childCount++;
@@ -1767,10 +1768,14 @@ function readNumberProperty(properties, key) {
     return null;
 }
 function itemTitle(node, fallbackId) {
+    if (!node)
+        return fallbackId;
     const title = readStringProperty(node.properties, "title");
-    return title ?? fallbackId;
+    return title ?? node.id;
 }
 function itemStatus(node) {
+    if (!node)
+        return null;
     return readStringProperty(node.properties, "status");
 }
 /**
@@ -1794,6 +1799,8 @@ function itemNodeMap(graph) {
  */
 export function explainItem(graph, id) {
     const items = [...itemNodeIds(graph)].sort();
+    if (!items.includes(id))
+        return null;
     const edges = structuralEdges(graph);
     const nodesById = itemNodeMap(graph);
     const node = nodesById.get(id);
@@ -1813,9 +1820,6 @@ export function explainItem(graph, id) {
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([neighborId, types]) => ({
         id: neighborId,
-        // Structural edges are filtered to itemNodeMap's exact item set, so
-        // every neighbor id is present in this map. Keep the nullable public
-        // graph helpers defensive while using that invariant internally.
         title: itemTitle(nodesById.get(neighborId), neighborId),
         status: itemStatus(nodesById.get(neighborId)),
         relationTypes: [...types].sort(),
@@ -1838,8 +1842,7 @@ export function explainItem(graph, id) {
         blockers: mapNeighbors(blockerTypes),
         dependents: mapNeighbors(dependentTypes),
         transitiveDependents: reverseReachable(edges, id),
-        // dependencyDepths initializes one entry for every id in `items`.
-        dependencyDepth: depths.get(id),
+        dependencyDepth: depths.get(id) ?? 0,
         criticalChainFromItem: longestChain([id], edges),
         inCycle: cycles.length > 0,
         cycleCount: cycles.length,
@@ -1874,7 +1877,7 @@ function sharedPrefixLength(a, b) {
  * @param limit - Maximum suggestions to return.
  * @returns Ranked suggestion ids, possibly empty.
  */
-export function suggestItemIds(itemIds, input, limit = 5) {
+function suggestItemIds(itemIds, input, limit = 5) {
     const query = input.trim().toLowerCase();
     if (!query)
         return [];
@@ -1917,7 +1920,7 @@ function ambiguousItemIdError(label, input, matches) {
  * @returns The resolved id and the strategy that matched it.
  * @throws {CommandError} On ambiguity or no match.
  */
-export function resolveItemIdOrThrow(itemIds, input, label) {
+function resolveItemIdOrThrow(itemIds, input, label) {
     const requested = input.trim();
     const ids = [...new Set(itemIds)].sort((a, b) => a.localeCompare(b));
     if (ids.includes(requested)) {
@@ -1955,18 +1958,16 @@ export function analyzeGraph(graph, topN = 10) {
         inDegree.set(id, 0);
         outDegree.set(id, 0);
     }
-    // structuralEdges is restricted to `items`, and both degree maps are
-    // initialized for every item above; these lookups cannot be absent here.
     for (const e of edges) {
-        outDegree.set(e.from, outDegree.get(e.from) + 1);
-        inDegree.set(e.to, inDegree.get(e.to) + 1);
+        outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1);
+        inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
     }
     // Orphans: no structural edges at all (no in, no out).
-    const orphans = items.filter((id) => inDegree.get(id) === 0 && outDegree.get(id) === 0);
+    const orphans = items.filter((id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) === 0);
     // Roots: have outgoing/incoming structure but no INCOMING dependency edge.
-    const roots = items.filter((id) => inDegree.get(id) === 0 && outDegree.get(id) > 0);
+    const roots = items.filter((id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) > 0);
     // Leaves: have incoming structure but no outgoing dependency edge.
-    const leaves = items.filter((id) => outDegree.get(id) === 0 && inDegree.get(id) > 0);
+    const leaves = items.filter((id) => (outDegree.get(id) ?? 0) === 0 && (inDegree.get(id) ?? 0) > 0);
     const cycles = findCycles(items, edges);
     const longest = longestChain(items, edges);
     // Connected components over the UNDIRECTED projection of structural edges.
@@ -1987,8 +1988,7 @@ export function analyzeGraph(graph, topN = 10) {
         visited.add(id);
         while (queue.length > 0) {
             const cur = queue.shift();
-            // Every queued id came from `items`, which initialized `undirected`.
-            for (const next of undirected.get(cur)) {
+            for (const next of undirected.get(cur) ?? []) {
                 if (!visited.has(next)) {
                     visited.add(next);
                     queue.push(next);
@@ -2001,9 +2001,9 @@ export function analyzeGraph(graph, topN = 10) {
     const topDegreeCentrality = items
         .map((id) => ({
         id,
-        degree: inDegree.get(id) + outDegree.get(id),
-        inDegree: inDegree.get(id),
-        outDegree: outDegree.get(id),
+        degree: (inDegree.get(id) ?? 0) + (outDegree.get(id) ?? 0),
+        inDegree: inDegree.get(id) ?? 0,
+        outDegree: outDegree.get(id) ?? 0,
     }))
         .filter((d) => d.degree > 0)
         .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
@@ -2012,8 +2012,7 @@ export function analyzeGraph(graph, topN = 10) {
     // item (distance to a leaf). maxDepth is the depth of the critical path.
     const depths = dependencyDepths(items, edges);
     const depthByItem = items
-        // dependencyDepths initializes one entry for every item id.
-        .map((id) => ({ id, depth: depths.get(id) }))
+        .map((id) => ({ id, depth: depths.get(id) ?? 0 }))
         .sort((a, b) => b.depth - a.depth || a.id.localeCompare(b.id));
     const maxDepth = depthByItem.reduce((max, d) => (d.depth > max ? d.depth : max), 0);
     const connectors = criticalConnectors(items, edges);
@@ -2066,49 +2065,51 @@ async function syncNeo4j(graph, options) {
     const session = driver.session({ database: process.env.NEO4J_DATABASE });
     const projectKey = graph.projectKey;
     const currentIds = new Set(graph.nodes.map((n) => n.id));
-    return (async () => {
-        try {
-            if (options.fullSync) {
-                // Full resync: wipe all graph nodes for this project first
-                await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n", { projectKey }));
-            }
-            // Upsert nodes with progress-friendly batching
-            for (let i = 0; i < graph.nodes.length; i++) {
-                const node = graph.nodes[i];
-                await session.executeWrite((tx) => tx.run("MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
-                    projectKey,
-                    id: node.id,
-                    labels: node.labels,
-                    properties: { ...node.properties, projectKey },
-                }));
-            }
-            // Upsert relationships
-            for (const relationship of graph.relationships) {
-                await session.executeWrite((tx) => tx.run(`MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`, {
-                    projectKey,
-                    from: relationship.from,
-                    to: relationship.to,
-                    properties: relationship.properties,
-                }));
-            }
-            // Incremental mode: delete stale nodes that were not in this sync
-            let deletedStaleNodes = 0;
-            if (!options.fullSync && currentIds.size > 0) {
-                const deleteResult = await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) WHERE NOT n.id IN $currentIds DETACH DELETE n RETURN count(n) AS deleted", { projectKey, currentIds: [...currentIds] }));
-                deletedStaleNodes = toNumber(deleteResult.records[0]?.get("deleted"));
-            }
-            // Store last sync timestamp
-            await session.executeWrite((tx) => tx.run("MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version", { projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION }));
-            return {
-                syncedNodes: graph.nodes.length,
-                syncedRelationships: graph.relationships.length,
-                deletedStaleNodes,
-            };
+    try {
+        if (options.fullSync) {
+            // Full resync: wipe all graph nodes for this project first
+            await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n", { projectKey }));
         }
-        catch (err) {
-            throw neo4jFriendlyError(err);
+        // Upsert nodes with progress-friendly batching
+        for (let i = 0; i < graph.nodes.length; i++) {
+            const node = graph.nodes[i];
+            await session.executeWrite((tx) => tx.run("MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
+                projectKey,
+                id: node.id,
+                labels: node.labels,
+                properties: { ...node.properties, projectKey },
+            }));
         }
-    })().finally(() => closeNeo4jResources(session, driver));
+        // Upsert relationships
+        for (const relationship of graph.relationships) {
+            await session.executeWrite((tx) => tx.run(`MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`, {
+                projectKey,
+                from: relationship.from,
+                to: relationship.to,
+                properties: relationship.properties,
+            }));
+        }
+        // Incremental mode: delete stale nodes that were not in this sync
+        let deletedStaleNodes = 0;
+        if (!options.fullSync && currentIds.size > 0) {
+            const deleteResult = await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) WHERE NOT n.id IN $currentIds DETACH DELETE n RETURN count(n) AS deleted", { projectKey, currentIds: [...currentIds] }));
+            deletedStaleNodes = toNumber(deleteResult.records[0]?.get("deleted"));
+        }
+        // Store last sync timestamp
+        await session.executeWrite((tx) => tx.run("MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version", { projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION }));
+        return {
+            syncedNodes: graph.nodes.length,
+            syncedRelationships: graph.relationships.length,
+            deletedStaleNodes,
+        };
+    }
+    catch (err) {
+        throw neo4jFriendlyError(err);
+    }
+    finally {
+        await session.close();
+        await driver.close();
+    }
 }
 // ---------------------------------------------------------------------------
 // Cypher query sanitisation
@@ -2187,7 +2188,7 @@ function readFlagStringValue(args, longName) {
  * (bare trailing flag, or one followed by another flag) so callers can reject
  * it instead of silently dropping the flag.
  */
-export function readFlagStringValues(args, longName) {
+function readFlagStringValues(args, longName) {
     const equalsForm = `${longName}=`;
     const values = [];
     for (let i = 0; i < args.length; i++) {
@@ -2209,7 +2210,7 @@ export function readFlagStringValues(args, longName) {
     return values;
 }
 /** Strictly parse a non-negative integer (""/"2abc"/"2.5" are rejected, unlike parseInt). */
-export function parseNonNegativeInt(raw) {
+function parseNonNegativeInt(raw) {
     const text = String(raw).trim();
     if (text.length === 0)
         return undefined;
@@ -2556,32 +2557,34 @@ export function activate(api) {
             }
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
-            return (async () => {
-                try {
-                    const nodeResult = await session.executeRead((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count", { projectKey }));
-                    const nodeCount = toNumber(nodeResult.records[0]?.get("count"));
-                    const relResult = await session.executeRead((tx) => tx.run("MATCH (:PmGraphNode {projectKey: $projectKey})-[r]->(:PmGraphNode {projectKey: $projectKey}) RETURN count(r) AS count", { projectKey }));
-                    const relCount = toNumber(relResult.records[0]?.get("count"));
-                    const syncResult = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphSync {projectKey: $projectKey}) RETURN m.lastSyncedAt AS lastSyncedAt, m.syncVersion AS syncVersion", { projectKey }));
-                    const lastSyncedAt = syncResult.records[0]?.get("lastSyncedAt") ?? null;
-                    const syncVersion = syncResult.records[0]?.get("syncVersion") ?? null;
-                    return {
-                        ok: true,
-                        neo4jConfigured: true,
-                        projectKey,
-                        workspace,
-                        localItemCount,
-                        nodeCount,
-                        relationshipCount: relCount,
-                        lastSyncedAt,
-                        syncVersion,
-                        version: EXTENSION_VERSION,
-                    };
-                }
-                catch (err) {
-                    throw neo4jFriendlyError(err);
-                }
-            })().finally(() => closeNeo4jResources(session, driver));
+            try {
+                const nodeResult = await session.executeRead((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count", { projectKey }));
+                const nodeCount = toNumber(nodeResult.records[0]?.get("count"));
+                const relResult = await session.executeRead((tx) => tx.run("MATCH (:PmGraphNode {projectKey: $projectKey})-[r]->(:PmGraphNode {projectKey: $projectKey}) RETURN count(r) AS count", { projectKey }));
+                const relCount = toNumber(relResult.records[0]?.get("count"));
+                const syncResult = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphSync {projectKey: $projectKey}) RETURN m.lastSyncedAt AS lastSyncedAt, m.syncVersion AS syncVersion", { projectKey }));
+                const lastSyncedAt = syncResult.records[0]?.get("lastSyncedAt") ?? null;
+                const syncVersion = syncResult.records[0]?.get("syncVersion") ?? null;
+                return {
+                    ok: true,
+                    neo4jConfigured: true,
+                    projectKey,
+                    workspace,
+                    localItemCount,
+                    nodeCount,
+                    relationshipCount: relCount,
+                    lastSyncedAt,
+                    syncVersion,
+                    version: EXTENSION_VERSION,
+                };
+            }
+            catch (err) {
+                throw neo4jFriendlyError(err);
+            }
+            finally {
+                await session.close();
+                await driver.close();
+            }
         },
     });
     // --- pm-graph query ------------------------------------------------------
@@ -2626,22 +2629,24 @@ export function activate(api) {
             }
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
-            return (async () => {
-                try {
-                    const result = await session.executeRead((tx) => tx.run(query));
-                    const records = result.records.map((record) => {
-                        const obj = {};
-                        for (const key of record.keys) {
-                            obj[key] = toPlain(record.get(key));
-                        }
-                        return obj;
-                    });
-                    return { ok: true, count: records.length, records };
-                }
-                catch (err) {
-                    throw neo4jFriendlyError(err);
-                }
-            })().finally(() => closeNeo4jResources(session, driver));
+            try {
+                const result = await session.executeRead((tx) => tx.run(query));
+                const records = result.records.map((record) => {
+                    const obj = {};
+                    for (const key of record.keys) {
+                        obj[key] = toPlain(record.get(key));
+                    }
+                    return obj;
+                });
+                return { ok: true, count: records.length, records };
+            }
+            catch (err) {
+                throw neo4jFriendlyError(err);
+            }
+            finally {
+                await session.close();
+                await driver.close();
+            }
         },
     });
     // --- pm-graph neighbors --------------------------------------------------
@@ -2676,34 +2681,36 @@ export function activate(api) {
             const projectKey = projectKeyForWorkspace(getWorkspace(context));
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
-            return (async () => {
-                try {
-                    const result = await session.executeRead((tx) => tx.run(`MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
+            try {
+                const result = await session.executeRead((tx) => tx.run(`MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
              RETURN center, r, neighbor, type(r) AS relType,
                     CASE WHEN startNode(r) = center THEN 'outgoing' ELSE 'incoming' END AS direction`, { projectKey, nodeId }));
-                    if (result.records.length === 0) {
-                        return {
-                            ok: true,
-                            center: null,
-                            neighbors: [],
-                            message: `No node found with id "${nodeId}" for project "${projectKey}".`,
-                        };
-                    }
-                    const center = toPlain(result.records[0].get("center"));
-                    const neighbors = result.records.map((record) => ({
-                        node: toPlain(record.get("neighbor")),
-                        relationship: {
-                            type: record.get("relType"),
-                            direction: record.get("direction"),
-                            properties: toPlain(record.get("r")),
-                        },
-                    }));
-                    return { ok: true, center, neighbors };
+                if (result.records.length === 0) {
+                    return {
+                        ok: true,
+                        center: null,
+                        neighbors: [],
+                        message: `No node found with id "${nodeId}" for project "${projectKey}".`,
+                    };
                 }
-                catch (err) {
-                    throw neo4jFriendlyError(err);
-                }
-            })().finally(() => closeNeo4jResources(session, driver));
+                const center = toPlain(result.records[0].get("center"));
+                const neighbors = result.records.map((record) => ({
+                    node: toPlain(record.get("neighbor")),
+                    relationship: {
+                        type: record.get("relType"),
+                        direction: record.get("direction"),
+                        properties: toPlain(record.get("r")),
+                    },
+                }));
+                return { ok: true, center, neighbors };
+            }
+            catch (err) {
+                throw neo4jFriendlyError(err);
+            }
+            finally {
+                await session.close();
+                await driver.close();
+            }
         },
     });
     // --- pm-graph analyze ----------------------------------------------------
@@ -2963,7 +2970,15 @@ export function activate(api) {
                     pmGraphFlags.maxDepth = flags.depth;
                 if (flags.limit !== undefined)
                     pmGraphFlags.limit = flags.limit;
-                const result = requireImpactResult(await runPmGraph("impact", resolvedId, pmGraphFlags, context));
+                const result = await runPmGraph("impact", resolvedId, pmGraphFlags, context);
+                // runGraph returns the projected union of every subcommand envelope.
+                // This call site only ever asks for "impact", so checking the
+                // subcommand discriminant narrows the union to the impact projection
+                // with no cast at all; any other envelope means the engine drifted
+                // from its contract, which is a generic failure here, not a usage one.
+                if (result.subcommand !== "impact") {
+                    throw new CommandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
+                }
                 // The canonical engine traverses the FULL workspace graph and never
                 // sees pm-graph's presentation flags. Post-filter the returned rows to
                 // the same shaped item-id universe that `--filter` (and the default
@@ -2979,10 +2994,12 @@ export function activate(api) {
                 // full path against the shaped set reproduces the edge-removal
                 // semantics exactly.
                 const shapedItemIds = new Set(itemIds);
-                const affected = result.affected.filter((row) => {
+                const rawAffected = Array.isArray(result.affected) ? result.affected : [];
+                const affected = rawAffected.filter((row) => {
                     if (!shapedItemIds.has(row.id))
                         return false;
-                    return row.path.every((node) => shapedItemIds.has(node));
+                    const rowPath = Array.isArray(row.path) ? row.path : [];
+                    return rowPath.every((node) => shapedItemIds.has(node));
                 });
                 const impacted = affected.map((a) => a.id).sort();
                 const base = {
@@ -2996,7 +3013,7 @@ export function activate(api) {
                     direction: logicalDirection,
                     affected,
                     truncated: Boolean(result.truncated),
-                    cost: result.cost,
+                    cost: result.cost ?? null,
                     engine: "core-graph",
                 };
                 if (!wantDiagram)
@@ -3059,12 +3076,10 @@ export function activate(api) {
                 filter: flags.filter,
             });
             const resolvedId = resolveItemIdOrThrow([...itemNodeIds(graph)].sort(), id, "Item").resolved;
-            // `resolvedId` is selected from `itemNodeIds(graph)`, and explainItem's
-            // nullable path is exactly the same PmItem membership check via
-            // `itemNodeMap(graph)`. The two operations share the same graph snapshot,
-            // so a null report is unreachable here; keep the public helper nullable
-            // for callers that do not resolve an id first.
             const report = explainItem(graph, resolvedId);
+            if (!report) {
+                throw new CommandError(`Item "${resolvedId}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+            }
             return { ok: true, ...report };
         },
     });
@@ -3079,7 +3094,7 @@ export function activate(api) {
     // offline formats (cypher | mermaid | dot | json | graphml | plantuml).
     // No Neo4j required. Rich flags live on the canonical `pm pm-graph export`.
     const exporter = async (ctx) => {
-        const options = ctx.options;
+        const options = ctx.options ?? {};
         const rawFormat = String(readExportOption(options, "format") ?? "json").toLowerCase();
         if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(rawFormat)) {
             throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);

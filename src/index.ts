@@ -229,13 +229,6 @@ async function loadNeo4j(): Promise<Neo4jApi> {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
-/** Close a Neo4j session and driver after a command settles. */
-async function closeNeo4jResources(session: Neo4jSession, driver: Neo4jDriver): Promise<void> {
-  await session.close();
-  await driver.close();
-}
-
-/** Map a Neo4j connection failure to an operator-facing error. */
 function neo4jFriendlyError(err: unknown): Error {
   if (!(err instanceof Error)) return new Error(String(err));
 
@@ -416,14 +409,15 @@ function toPlain(value: unknown): unknown {
 
   if (Array.isArray(value)) return value.map(toPlain);
 
-  // After the non-object early return, `value` is a non-null object. Arrays are
-  // handled above; every remaining value is a plain object (or a Neo4j type that
-  // did not match the structural checks), so a final `return value` is unreachable.
-  const obj: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    obj[k] = toPlain(v);
+  if (typeof value === "object") {
+    const obj: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      obj[k] = toPlain(v);
+    }
+    return obj;
   }
-  return obj;
+
+  return value;
 }
 
 /**
@@ -579,48 +573,9 @@ type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" |
  * copy would drift. Callers narrow the union on the `subcommand` discriminant
  * carried by every envelope, so no cast appears anywhere on this path.
  */
-/**
- * Narrow the SDK's projected graph union at the canonical impact call site.
- *
- * @param result - The real SDK response returned for a graph command.
- * @returns The impact projection when the requested subcommand honored its contract.
- * @throws {CommandError} When the SDK returns a different envelope.
- */
-type ImpactProjection = Extract<Awaited<ReturnType<typeof runGraph>>, { subcommand: "impact" }>;
-type CompleteImpactProjection = Omit<ImpactProjection, "affected"> & {
-  affected: NonNullable<ImpactProjection["affected"]>;
-};
-
-/**
- * Narrow and complete the SDK's impact projection for the command adapter.
- *
- * @param result - The real SDK response returned by the graph engine.
- * @returns An impact envelope with an always-present affected-row array.
- * @throws {CommandError} When the SDK returns a different envelope.
- */
-export function requireImpactResult(result: Awaited<ReturnType<typeof runGraph>>): CompleteImpactProjection {
-  if (result.subcommand !== "impact") {
-    throw new CommandError(
-      `pm graph impact returned a "${result.subcommand}" result envelope`,
-      EXIT_CODE.GENERIC_FAILURE,
-    );
-  }
-  return { ...result, affected: result.affected ?? [] };
-}
-
-/**
- * Invoke the canonical SDK graph engine with the extension's tracker context.
- *
- * @param subcommand - Canonical graph operation name.
- * @param id - Optional operation root item.
- * @param flags - Parsed graph options.
- * @param context - Extension command context carrying the tracker root.
- * @returns The SDK's projected graph result.
- * @throws {CommandError} When graph execution fails.
- */
 async function runPmGraph(
   subcommand: string,
-  id: string,
+  id: string | null,
   flags: PmGraphFlags,
   context: CommandContext,
 ): Promise<Awaited<ReturnType<typeof runGraph>>> {
@@ -645,7 +600,7 @@ async function runPmGraph(
       json: true,
       path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
     };
-    return await runGraph(subcommand, id, undefined, options, globalOptions);
+    return await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new CommandError(`Failed to run pm graph ${subcommand}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
@@ -699,7 +654,7 @@ function facetNodeId(kind: string, value: string): string {
  * @param depsByItem - Extra dependency records keyed by item id.
  * @returns The shaped graph with project metadata.
  */
-export function graphFromItems(
+function graphFromItems(
   items: readonly ItemMetadata[],
   workspace: string,
   depsByItem: Map<string, Array<Record<string, unknown>>>,
@@ -859,13 +814,13 @@ function workspaceFromPmRoot(pmRoot: string): string {
   const normalized = path.resolve(pmRoot);
   const parts = normalized.split(path.sep);
   if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
-    return path.dirname(path.dirname(normalized));
+    return parts.slice(0, -2).join(path.sep) || path.sep;
   }
   // Custom hidden storage dirs (e.g. `<workspace>/.pm` via --pm-path): treat
   // the parent as the logical workspace so projectKey doesn't become ".pm".
   const last = parts[parts.length - 1];
   if (parts.length >= 2 && last.startsWith(".") && last.length > 1) {
-    return path.dirname(normalized);
+    return parts.slice(0, -1).join(path.sep) || path.sep;
   }
   return normalized;
 }
@@ -1273,7 +1228,7 @@ function mermaidId(id: string): string {
  * directed arrows labelled with their type; a blank line separates nodes from
  * edges only when there are edges, so an edge-free graph stays compact.
  */
-export function renderMermaid(graph: Graph): string {
+function renderMermaid(graph: Graph): string {
   const lines: string[] = ["graph TD"];
   for (const node of graph.nodes) {
     const title = typeof node.properties.title === "string" && node.properties.title
@@ -1326,7 +1281,7 @@ function renderDot(graph: Graph): string {
 }
 
 /** A JSON Graph Format-style document (nodes/edges) for generic graph tooling. */
-export function renderJsonGraph(graph: Graph): string {
+function renderJsonGraph(graph: Graph): string {
   const doc = {
     graph: {
       directed: true,
@@ -1537,8 +1492,8 @@ function buildAdjacency(edges: StructuralEdge[]): Map<string, string[]> {
 /**
  * Detect all elementary directed cycles among structural edges using an
  * iterative DFS with a recursion stack. Returns each cycle as an ordered id
- * path whose first and last ids are equal (e.g. [E, F, E]). The DFS roots
- * each cycle at its smallest id, so A->B->A and B->A->B share one key.
+ * path whose first and last ids are equal (e.g. [E, F, E]). Cycles are
+ * de-duplicated by their canonical rotation so A->B->A and B->A->B collapse.
  */
 export function findCycles(nodes: string[], edges: StructuralEdge[]): string[][] {
   const adjacency = buildAdjacency(edges);
@@ -1546,9 +1501,14 @@ export function findCycles(nodes: string[], edges: StructuralEdge[]): string[][]
   const seenCanonical = new Set<string>();
 
   const canonical = (cycle: string[]): string => {
-    // The DFS only extends to ids >= its start id, so every discovered cycle
-    // already starts at its lexicographically smallest id.
-    return cycle.slice(0, -1).join("->");
+    // cycle excludes the repeated closing node; rotate to start at min id.
+    const core = cycle.slice(0, -1);
+    let minIdx = 0;
+    for (let i = 1; i < core.length; i++) {
+      if (core[i] < core[minIdx]) minIdx = i;
+    }
+    const rotated = [...core.slice(minIdx), ...core.slice(0, minIdx)];
+    return rotated.join("->");
   };
 
   for (const start of nodes) {
@@ -1822,8 +1782,7 @@ export function criticalConnectors(
     low.set(u, disc.get(u)!);
     let childCount = 0;
 
-    // Every DFS vertex came from `nodeSet`, which initializes adjacency.
-    for (const v of [...(adjacency.get(u) as Set<string>)].sort()) {
+    for (const v of [...(adjacency.get(u) ?? [])].sort()) {
       if (!disc.has(v)) {
         parent.set(v, u);
         childCount++;
@@ -2147,12 +2106,14 @@ function readNumberProperty(
   return null;
 }
 
-function itemTitle(node: GraphNode, fallbackId: string): string {
+function itemTitle(node: GraphNode | undefined, fallbackId: string): string {
+  if (!node) return fallbackId;
   const title = readStringProperty(node.properties, "title");
-  return title ?? fallbackId;
+  return title ?? node.id;
 }
 
-function itemStatus(node: GraphNode): string | null {
+function itemStatus(node: GraphNode | undefined): string | null {
+  if (!node) return null;
   return readStringProperty(node.properties, "status");
 }
 
@@ -2177,6 +2138,8 @@ function itemNodeMap(graph: Graph): Map<string, GraphNode> {
  */
 export function explainItem(graph: Graph, id: string): ExplainReport | null {
   const items = [...itemNodeIds(graph)].sort();
+  if (!items.includes(id)) return null;
+
   const edges = structuralEdges(graph);
   const nodesById = itemNodeMap(graph);
   const node = nodesById.get(id);
@@ -2198,11 +2161,8 @@ export function explainItem(graph: Graph, id: string): ExplainReport | null {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([neighborId, types]) => ({
         id: neighborId,
-        // Structural edges are filtered to itemNodeMap's exact item set, so
-        // every neighbor id is present in this map. Keep the nullable public
-        // graph helpers defensive while using that invariant internally.
-        title: itemTitle(nodesById.get(neighborId) as GraphNode, neighborId),
-        status: itemStatus(nodesById.get(neighborId) as GraphNode),
+        title: itemTitle(nodesById.get(neighborId), neighborId),
+        status: itemStatus(nodesById.get(neighborId)),
         relationTypes: [...types].sort(),
       }));
 
@@ -2225,8 +2185,7 @@ export function explainItem(graph: Graph, id: string): ExplainReport | null {
     blockers: mapNeighbors(blockerTypes),
     dependents: mapNeighbors(dependentTypes),
     transitiveDependents: reverseReachable(edges, id),
-    // dependencyDepths initializes one entry for every id in `items`.
-    dependencyDepth: depths.get(id) as number,
+    dependencyDepth: depths.get(id) ?? 0,
     criticalChainFromItem: longestChain([id], edges),
     inCycle: cycles.length > 0,
     cycleCount: cycles.length,
@@ -2262,7 +2221,7 @@ function sharedPrefixLength(a: string, b: string): number {
  * @param limit - Maximum suggestions to return.
  * @returns Ranked suggestion ids, possibly empty.
  */
-export function suggestItemIds(itemIds: string[], input: string, limit: number = 5): string[] {
+function suggestItemIds(itemIds: string[], input: string, limit: number = 5): string[] {
   const query = input.trim().toLowerCase();
   if (!query) return [];
   return itemIds
@@ -2317,7 +2276,7 @@ function ambiguousItemIdError(label: string, input: string, matches: string[]): 
  * @returns The resolved id and the strategy that matched it.
  * @throws {CommandError} On ambiguity or no match.
  */
-export function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution {
+function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution {
   const requested = input.trim();
   const ids = [...new Set(itemIds)].sort((a, b) => a.localeCompare(b));
 
@@ -2364,22 +2323,20 @@ export function analyzeGraph(graph: Graph, topN: number = 10): AnalyzeReport {
     inDegree.set(id, 0);
     outDegree.set(id, 0);
   }
-  // structuralEdges is restricted to `items`, and both degree maps are
-  // initialized for every item above; these lookups cannot be absent here.
   for (const e of edges) {
-    outDegree.set(e.from, (outDegree.get(e.from) as number) + 1);
-    inDegree.set(e.to, (inDegree.get(e.to) as number) + 1);
+    outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1);
+    inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
   }
 
   // Orphans: no structural edges at all (no in, no out).
-  const orphans = items.filter((id) => (inDegree.get(id) as number) === 0 && (outDegree.get(id) as number) === 0);
+  const orphans = items.filter((id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) === 0);
   // Roots: have outgoing/incoming structure but no INCOMING dependency edge.
   const roots = items.filter(
-    (id) => (inDegree.get(id) as number) === 0 && (outDegree.get(id) as number) > 0,
+    (id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) > 0,
   );
   // Leaves: have incoming structure but no outgoing dependency edge.
   const leaves = items.filter(
-    (id) => (outDegree.get(id) as number) === 0 && (inDegree.get(id) as number) > 0,
+    (id) => (outDegree.get(id) ?? 0) === 0 && (inDegree.get(id) ?? 0) > 0,
   );
 
   const cycles = findCycles(items, edges);
@@ -2401,8 +2358,7 @@ export function analyzeGraph(graph: Graph, topN: number = 10): AnalyzeReport {
     visited.add(id);
     while (queue.length > 0) {
       const cur = queue.shift()!;
-      // Every queued id came from `items`, which initialized `undirected`.
-      for (const next of undirected.get(cur) as Set<string>) {
+      for (const next of undirected.get(cur) ?? []) {
         if (!visited.has(next)) {
           visited.add(next);
           queue.push(next);
@@ -2419,9 +2375,9 @@ export function analyzeGraph(graph: Graph, topN: number = 10): AnalyzeReport {
   const topDegreeCentrality = items
     .map((id) => ({
       id,
-      degree: (inDegree.get(id) as number) + (outDegree.get(id) as number),
-      inDegree: inDegree.get(id) as number,
-      outDegree: outDegree.get(id) as number,
+      degree: (inDegree.get(id) ?? 0) + (outDegree.get(id) ?? 0),
+      inDegree: inDegree.get(id) ?? 0,
+      outDegree: outDegree.get(id) ?? 0,
     }))
     .filter((d) => d.degree > 0)
     .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
@@ -2431,8 +2387,7 @@ export function analyzeGraph(graph: Graph, topN: number = 10): AnalyzeReport {
   // item (distance to a leaf). maxDepth is the depth of the critical path.
   const depths = dependencyDepths(items, edges);
   const depthByItem = items
-    // dependencyDepths initializes one entry for every item id.
-    .map((id) => ({ id, depth: depths.get(id) as number }))
+    .map((id) => ({ id, depth: depths.get(id) ?? 0 }))
     .sort((a, b) => b.depth - a.depth || a.id.localeCompare(b.id));
   const maxDepth = depthByItem.reduce((max, d) => (d.depth > max ? d.depth : max), 0);
   const connectors = criticalConnectors(items, edges);
@@ -2503,9 +2458,8 @@ async function syncNeo4j(
   const projectKey = graph.projectKey;
   const currentIds = new Set(graph.nodes.map((n) => n.id));
 
-  return (async () => {
-    try {
-      if (options.fullSync) {
+  try {
+    if (options.fullSync) {
       // Full resync: wipe all graph nodes for this project first
       await session.executeWrite((tx) =>
         tx.run(
@@ -2571,10 +2525,12 @@ async function syncNeo4j(
       syncedRelationships: graph.relationships.length,
       deletedStaleNodes,
     };
-    } catch (err: unknown) {
-      throw neo4jFriendlyError(err);
-    }
-  })().finally(() => closeNeo4jResources(session, driver));
+  } catch (err: unknown) {
+    throw neo4jFriendlyError(err);
+  } finally {
+    await session.close();
+    await driver.close();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2659,7 +2615,7 @@ function readFlagStringValue(args: string[], longName: string): string | null | 
  * (bare trailing flag, or one followed by another flag) so callers can reject
  * it instead of silently dropping the flag.
  */
-export function readFlagStringValues(args: string[], longName: string): (string | null)[] {
+function readFlagStringValues(args: string[], longName: string): (string | null)[] {
   const equalsForm = `${longName}=`;
   const values: (string | null)[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -2680,7 +2636,7 @@ export function readFlagStringValues(args: string[], longName: string): (string 
 }
 
 /** Strictly parse a non-negative integer (""/"2abc"/"2.5" are rejected, unlike parseInt). */
-export function parseNonNegativeInt(raw: unknown): number | undefined {
+function parseNonNegativeInt(raw: unknown): number | undefined {
   const text = String(raw).trim();
   if (text.length === 0) return undefined;
   const parsed = Number(text);
@@ -3056,9 +3012,8 @@ export function activate(api: ExtensionApi): void {
 
       const driver = await createDriver();
       const session = driver.session({ database: process.env.NEO4J_DATABASE });
-      return (async () => {
-        try {
-          const nodeResult = await session.executeRead((tx) =>
+      try {
+        const nodeResult = await session.executeRead((tx) =>
           tx.run(
             "MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count",
             { projectKey },
@@ -3095,10 +3050,12 @@ export function activate(api: ExtensionApi): void {
           syncVersion,
           version: EXTENSION_VERSION,
         };
-        } catch (err: unknown) {
-          throw neo4jFriendlyError(err);
-        }
-      })().finally(() => closeNeo4jResources(session, driver));
+      } catch (err: unknown) {
+        throw neo4jFriendlyError(err);
+      } finally {
+        await session.close();
+        await driver.close();
+      }
     },
   });
 
@@ -3154,9 +3111,8 @@ export function activate(api: ExtensionApi): void {
 
       const driver = await createDriver();
       const session = driver.session({ database: process.env.NEO4J_DATABASE });
-      return (async () => {
-        try {
-          const result = await session.executeRead((tx) => tx.run(query));
+      try {
+        const result = await session.executeRead((tx) => tx.run(query));
 
         const records = result.records.map((record) => {
           const obj: Record<string, unknown> = {};
@@ -3167,10 +3123,12 @@ export function activate(api: ExtensionApi): void {
         });
 
         return { ok: true, count: records.length, records };
-        } catch (err: unknown) {
-          throw neo4jFriendlyError(err);
-        }
-      })().finally(() => closeNeo4jResources(session, driver));
+      } catch (err: unknown) {
+        throw neo4jFriendlyError(err);
+      } finally {
+        await session.close();
+        await driver.close();
+      }
     },
   });
 
@@ -3212,11 +3170,10 @@ export function activate(api: ExtensionApi): void {
       const projectKey = projectKeyForWorkspace(getWorkspace(context));
       const driver = await createDriver();
       const session = driver.session({ database: process.env.NEO4J_DATABASE });
-      return (async () => {
-        try {
-          const result = await session.executeRead((tx) =>
-            tx.run(
-              `MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
+      try {
+        const result = await session.executeRead((tx) =>
+          tx.run(
+            `MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
              RETURN center, r, neighbor, type(r) AS relType,
                     CASE WHEN startNode(r) = center THEN 'outgoing' ELSE 'incoming' END AS direction`,
             { projectKey, nodeId },
@@ -3243,10 +3200,12 @@ export function activate(api: ExtensionApi): void {
         }));
 
         return { ok: true, center, neighbors };
-        } catch (err: unknown) {
-          throw neo4jFriendlyError(err);
-        }
-      })().finally(() => closeNeo4jResources(session, driver));
+      } catch (err: unknown) {
+        throw neo4jFriendlyError(err);
+      } finally {
+        await session.close();
+        await driver.close();
+      }
     },
   });
 
@@ -3540,7 +3499,18 @@ export function activate(api: ExtensionApi): void {
         const pmGraphFlags: PmGraphFlags = { direction: canonicalDirection };
         if (flags.depth !== undefined) pmGraphFlags.maxDepth = flags.depth;
         if (flags.limit !== undefined) pmGraphFlags.limit = flags.limit;
-        const result = requireImpactResult(await runPmGraph("impact", resolvedId, pmGraphFlags, context));
+        const result = await runPmGraph("impact", resolvedId, pmGraphFlags, context);
+        // runGraph returns the projected union of every subcommand envelope.
+        // This call site only ever asks for "impact", so checking the
+        // subcommand discriminant narrows the union to the impact projection
+        // with no cast at all; any other envelope means the engine drifted
+        // from its contract, which is a generic failure here, not a usage one.
+        if (result.subcommand !== "impact") {
+          throw new CommandError(
+            `pm graph impact returned a "${result.subcommand}" result envelope`,
+            EXIT_CODE.GENERIC_FAILURE,
+          );
+        }
         // The canonical engine traverses the FULL workspace graph and never
         // sees pm-graph's presentation flags. Post-filter the returned rows to
         // the same shaped item-id universe that `--filter` (and the default
@@ -3556,9 +3526,11 @@ export function activate(api: ExtensionApi): void {
         // full path against the shaped set reproduces the edge-removal
         // semantics exactly.
         const shapedItemIds = new Set(itemIds);
-        const affected = result.affected.filter((row) => {
+        const rawAffected = Array.isArray(result.affected) ? result.affected : [];
+        const affected = rawAffected.filter((row) => {
           if (!shapedItemIds.has(row.id)) return false;
-          return row.path.every((node) => shapedItemIds.has(node));
+          const rowPath = Array.isArray(row.path) ? row.path : [];
+          return rowPath.every((node) => shapedItemIds.has(node));
         });
         const impacted = affected.map((a) => a.id).sort();
         const base = {
@@ -3572,7 +3544,7 @@ export function activate(api: ExtensionApi): void {
           direction: logicalDirection,
           affected,
           truncated: Boolean(result.truncated),
-          cost: result.cost,
+          cost: result.cost ?? null,
           engine: "core-graph" as const,
         };
         if (!wantDiagram) return base;
@@ -3643,12 +3615,13 @@ export function activate(api: ExtensionApi): void {
         filter: flags.filter,
       });
       const resolvedId = resolveItemIdOrThrow([...itemNodeIds(graph)].sort(), id, "Item").resolved;
-      // `resolvedId` is selected from `itemNodeIds(graph)`, and explainItem's
-      // nullable path is exactly the same PmItem membership check via
-      // `itemNodeMap(graph)`. The two operations share the same graph snapshot,
-      // so a null report is unreachable here; keep the public helper nullable
-      // for callers that do not resolve an id first.
-      const report = explainItem(graph, resolvedId) as ExplainReport;
+      const report = explainItem(graph, resolvedId);
+      if (!report) {
+        throw new CommandError(
+          `Item "${resolvedId}" was not found in the workspace graph.`,
+          EXIT_CODE.NOT_FOUND,
+        );
+      }
       return { ok: true, ...report };
     },
   });
@@ -3664,7 +3637,7 @@ export function activate(api: ExtensionApi): void {
   // offline formats (cypher | mermaid | dot | json | graphml | plantuml).
   // No Neo4j required. Rich flags live on the canonical `pm pm-graph export`.
   const exporter: Exporter = async (ctx: ImportExportContext) => {
-    const options = ctx.options;
+    const options = ctx.options ?? {};
 
     const rawFormat = String(readExportOption(options, "format") ?? "json").toLowerCase();
     if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(rawFormat)) {
