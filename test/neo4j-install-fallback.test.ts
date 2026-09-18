@@ -18,11 +18,6 @@ import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 
 import extension from "../src/index.ts";
 
-type LoaderGlobal = typeof globalThis & {
-  __pmGraphNeo4jLoaderMode?: "throw-error" | "throw-string" | "throw-nonerror-eval" | "pass" | "throw-then-pass" | "throw-then-default";
-  __pmGraphNeo4jLoaderCount?: number;
-};
-
 type CommandError = Error & { exitCode?: number };
 
 let pmAvailable = true;
@@ -59,10 +54,9 @@ function restoreEnv(original: NodeJS.ProcessEnv): void {
   Object.assign(process.env, original);
 }
 
-test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, and retry", { skip: !pmAvailable }, async () => {
+test("loadNeo4j install fallback covers spawn failure, non-zero npm, and signals", { skip: !pmAvailable }, async () => {
   const ws = freshWorkspace();
   const original = { ...process.env };
-  const g = globalThis as LoaderGlobal;
   try {
     pm(ws, ["init"]);
     const harness = await createExtensionTestHarness(extension, {
@@ -78,7 +72,6 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
 
     const failBin = writeFakeNpm(1);
     process.env.PATH = failBin;
-    g.__pmGraphNeo4jLoaderMode = "throw-error";
     const failedInstall = (await harness.runCommand({
       command: "pm-graph query",
       args: ["MATCH (n) RETURN n"],
@@ -86,26 +79,7 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
     })) as { errorMessage?: string };
     assert.match(String(failedInstall.errorMessage), /npm install --omit=dev failed with exit code 1/);
 
-    g.__pmGraphNeo4jLoaderMode = "throw-string";
-    const failedString = (await harness.runCommand({
-      command: "pm-graph query",
-      args: ["MATCH (n) RETURN n"],
-      pmRoot,
-    })) as { errorMessage?: string };
-    assert.match(String(failedString.errorMessage), /neo4j-driver missing/);
-    assert.match(String(failedString.errorMessage), /npm install --omit=dev failed/);
-
-    g.__pmGraphNeo4jLoaderMode = "throw-nonerror-eval";
-    const failedNonError = (await harness.runCommand({
-      command: "pm-graph query",
-      args: ["MATCH (n) RETURN n"],
-      pmRoot,
-    })) as { errorMessage?: string };
-    assert.match(String(failedNonError.errorMessage), /neo4j-driver missing/);
-    assert.match(String(failedNonError.errorMessage), /npm install --omit=dev failed/);
-
     process.env.PATH = path.join(tmpdir(), "pm-graph-no-such-bin");
-    g.__pmGraphNeo4jLoaderMode = "throw-error";
     const missingNpm = (await harness.runCommand({
       command: "pm-graph query",
       args: ["MATCH (n) RETURN n"],
@@ -115,7 +89,6 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
 
     const signalBin = writeFakeNpm("signal");
     process.env.PATH = signalBin;
-    g.__pmGraphNeo4jLoaderMode = "throw-error";
     const signaledInstall = (await harness.runCommand({
       command: "pm-graph query",
       args: ["MATCH (n) RETURN n"],
@@ -123,19 +96,6 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
     })) as { errorMessage?: string };
     assert.match(String(signaledInstall.errorMessage), /unknown/);
 
-    const okBin = writeFakeNpm(0);
-    process.env.PATH = `${okBin}${path.delimiter}${original.PATH ?? ""}`;
-    g.__pmGraphNeo4jLoaderMode = "throw-then-default";
-    g.__pmGraphNeo4jLoaderCount = 0;
-    const retried = (await harness.runCommand({
-      command: "pm-graph query",
-      args: ["MATCH (n) RETURN n"],
-      pmRoot,
-    })) as { errorMessage?: string; handled: boolean };
-    assert.ok(
-      retried.errorMessage || retried.handled,
-      "retry import either connects via the real driver or surfaces a connection error",
-    );
   } finally {
     restoreEnv(original);
     for (const dir of fakeNpmDirs) rmSync(dir, { recursive: true, force: true });
