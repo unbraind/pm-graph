@@ -15,9 +15,12 @@ import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 
 import extension from "../src/index.ts";
 
+const fakeNpmDirs = new Set<string>();
+
 /** Create an npm executable that reports a successful install. */
 function fakeNpm(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "pm-graph-retry-npm-"));
+  fakeNpmDirs.add(dir);
   const bin = path.join(dir, "npm");
   writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   chmodSync(bin, 0o755);
@@ -55,6 +58,8 @@ test("loadNeo4j retries with a default-exported driver after install", async (t)
       if (!(key in original)) delete process.env[key];
     }
     Object.assign(process.env, original);
+    for (const dir of fakeNpmDirs) rmSync(dir, { recursive: true, force: true });
+    fakeNpmDirs.clear();
     rmSync(ws, { recursive: true, force: true });
   }
 });

@@ -32,6 +32,8 @@ try {
   pmAvailable = false;
 }
 
+const fakeNpmDirs = new Set<string>();
+
 function freshWorkspace(): string {
   return mkdtempSync(path.join(tmpdir(), "pm-graph-"));
 }
@@ -42,6 +44,7 @@ function pm(cwd: string, args: string[]): string {
 
 function writeFakeNpm(mode: number | "signal"): string {
   const dir = mkdtempSync(path.join(tmpdir(), "pm-graph-npm-"));
+  fakeNpmDirs.add(dir);
   const bin = path.join(dir, "npm");
   const script = mode === "signal" ? "#!/bin/sh\nkill -TERM $$\n" : `#!/bin/sh\nexit ${mode}\n`;
   writeFileSync(bin, script, { mode: 0o755 });
@@ -133,6 +136,8 @@ test("loadNeo4j install fallback covers spawn failure, non-zero npm, stringify, 
     );
   } finally {
     restoreEnv(original);
+    for (const dir of fakeNpmDirs) rmSync(dir, { recursive: true, force: true });
+    fakeNpmDirs.clear();
     rmSync(ws, { recursive: true, force: true });
   }
 });

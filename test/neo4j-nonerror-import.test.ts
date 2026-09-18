@@ -15,9 +15,12 @@ import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 
 import extension from "../src/index.ts";
 
+const fakeNpmDirs = new Set<string>();
+
 /** Create an npm executable that returns a deterministic install status. */
 function fakeNpm(exitCode: number): string {
   const dir = mkdtempSync(path.join(tmpdir(), "pm-graph-nonerror-npm-"));
+  fakeNpmDirs.add(dir);
   const bin = path.join(dir, "npm");
   writeFileSync(bin, `#!/bin/sh\nexit ${exitCode}\n`, { mode: 0o755 });
   chmodSync(bin, 0o755);
@@ -55,6 +58,8 @@ test("loadNeo4j stringifies a non-Error import rejection", async (t) => {
       if (!(key in original)) delete process.env[key];
     }
     Object.assign(process.env, original);
+    for (const dir of fakeNpmDirs) rmSync(dir, { recursive: true, force: true });
+    fakeNpmDirs.clear();
     rmSync(ws, { recursive: true, force: true });
   }
 });
