@@ -395,6 +395,13 @@ function resolvePmRootForContext(context) {
         throw new CommandError(`Could not locate a pm tracker: ${msg}`, EXIT_CODE.USAGE);
     }
 }
+/**
+ * Narrow and complete the SDK's impact projection for the command adapter.
+ *
+ * @param result - The real SDK response returned by the graph engine.
+ * @returns An impact envelope with an always-present affected-row array.
+ * @throws {CommandError} When the SDK returns a different envelope.
+ */
 export function requireImpactResult(result) {
     if (result.subcommand !== "impact") {
         throw new CommandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
