@@ -6,12 +6,12 @@ status: open
 priority: 2
 tags: []
 created_at: "2026-09-18T03:27:32.221Z"
-updated_at: "2026-09-18T09:14:44.472Z"
+updated_at: "2026-09-18T09:15:11.897Z"
 assignee: pi-agent
 claim_principal: pi-agent
 author: pi-agent
 acceptance_criteria: "Every source file reports 100.00 line/branch/function coverage; coverageGate.thresholds in package.json set to 100/100/100; npm run release:check exits 0; no gate weakened"
-comments[28]{created_at,author,text}:
+comments[29]{created_at,author,text}:
   "2026-09-18T03:27:36.644Z",pi-agent,"Baseline coverage: lines 85.49% / branches 80.17% / functions 90.43%. Source file src/index.ts: lines 84.22% / branches 78.54% / functions 89.66%. Scripts already at 100%. Uncovered lines concentrated in: Neo4j internal functions (toPlain/toNumber/neo4jFriendlyError/loadNeo4j), command help texts and error paths in activate(), graph analysis branches, and utility function edge cases."
   "2026-09-18T04:02:25.951Z",pi-agent,"Coverage milestone: added behavioral tests in test/coverage-gaps.test.ts and test/neo4j-install-fallback.test.ts with real SDK harness workspaces and a loader-routed Neo4j driver surface. The first full run passes 287/287 tests and reports src/index.ts at L98.61% / B89.12% / F98.86%; scripts remain 100%. Export widenings parseNeo4jMs and workspaceFromPmRoot are justified because their return branches are not observably distinguishable through the command surface (invalid timeout parsing only changes driver config; custom-root workspace derivation requires direct path cases), and both retain production behavior. toPlain/toNumber/neo4jFriendlyError were covered through the actual query/status/neighbors/sync handlers with a loader-routed driver and were not widened."
   "2026-09-18T04:21:23.759Z",pi-agent,"Second coverage milestone: exercised tracker-root discovery (typed and generic errors), unreadable tracker SDK failures, unexpected export/sync/impact error wrapping via real registered handlers, malformed/externally-targeted dependency records, case-insensitive ambiguity and capped id suggestions, and direct Neo4j-friendly default URI/error branches. Targeted tests pass; source exports now include only the documented helpers needed for otherwise unreachable direct branch assertions (parseNeo4jMs, workspaceFromPmRoot, neo4jFriendlyError, resolveItemIdOrThrow, runPmGraph)."
@@ -40,6 +40,7 @@ comments[28]{created_at,author,text}:
   "2026-09-18T08:51:12.417Z",pi-agent,"Removed tests that existed only to call widened private helpers or rejected production changes: graphFromItems legacy-shape direct tests, private parser/renderer/suggestion tests, direct resolver tests, and requireImpactResult/runGraph direct tests. Remaining new tests use registered extension commands/exporters or pre-existing public analytics APIs."
   "2026-09-18T09:01:46.013Z",pi-agent,"Honest full-suite result with src/index.ts byte-identical to origin/main: aggregate lines 99.66%, branches 94.32%, functions 100.00%; src/index.ts lines 99.62%, branches 93.95%, functions 100.00%. Ratcheted integer coverage thresholds from 81/77/88 to measured floors 99/94/100. Remaining uncovered src/index.ts lines: 419-420, 2293-2294, 3509-3513, 3620-3624. Item remains open because line and branch coverage are not 100%."
   "2026-09-18T09:14:44.472Z",pi-agent,"Release gate passed on the ratcheted branch: npm run release:check completed typecheck, build, docstring, full 298-test coverage, production audit, pack dry-run, changelog check, publish-attestation verification, and release-date verification. Production source remains byte-identical to origin/main."
+  "2026-09-18T09:15:11.897Z",pi-agent,"Opened PR #105: https://github.com/unbraind/pm-graph/pull/105 — Cover pm-graph’s commands with behavioural tests and ratchet the coverage gate. Requested a full CodeRabbit review. Do not merge; PM item remains open because coverage is not 100%."
 files[3]{path,scope}:
   package.json,project
   test/coverage-gaps.test.ts,project
