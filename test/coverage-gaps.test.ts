@@ -1163,7 +1163,12 @@ test("fetching an unreadable tracker reports a wrapped SDK failure", { skip: !pm
 
 test("status swallows an unusable tracker when counting local items", { skip: !pmAvailable }, async () => {
   const ws = freshWorkspace();
+  const original = { ...process.env };
   try {
+    delete process.env.NEO4J_URI;
+    delete process.env.NEO4J_USER;
+    delete process.env.NEO4J_USERNAME;
+    delete process.env.NEO4J_PASSWORD;
     const harness = await makeHarness();
     const res = (await harness.runCommand({
       command: "pm-graph status",
@@ -1174,6 +1179,7 @@ test("status swallows an unusable tracker when counting local items", { skip: !p
     assert.equal(result.localItemCount, 0);
     assert.equal(result.neo4jConfigured, false);
   } finally {
+    restoreEnv(original);
     rmSync(ws, { recursive: true, force: true });
   }
 });
