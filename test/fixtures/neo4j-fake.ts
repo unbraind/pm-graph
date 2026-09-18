@@ -213,6 +213,7 @@ export function driver(
 } {
   state.lastUri = uri;
   state.lastConfig = config;
+  if (process.env.PM_GRAPH_TEST_DROP_URI === "1") delete process.env.NEO4J_URI;
   return {
     session(sessionConfig?: Record<string, unknown>) {
       state.lastSessionConfig = sessionConfig;

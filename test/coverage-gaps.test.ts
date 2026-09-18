@@ -25,6 +25,7 @@ import {
   analyzeGraph,
   criticalConnectors,
   dependencyDepths,
+  findCycles,
   graphFromItems,
   longestChain,
   requireImpactResult,
@@ -39,6 +40,7 @@ import {
   renderMermaid,
   renderPlantuml,
   resolveItemIdOrThrow,
+  shortestPath,
   suggestItemIds,
 } from "../src/index.ts";
 import extension from "../src/index.ts";
@@ -292,6 +294,25 @@ test("offline analytics cover dangling edges, ties, cycles, components, and spar
     { from: "missing", to: "a", type: "DEPENDS_ON" },
   ] as Parameters<typeof longestChain>[1];
   assert.deepEqual(longestChain(["a", "b", "c", "d", "e"], edges), ["a", "b", "c"]);
+  const rotatedCycleEdges = [
+    { from: "z", to: "b", type: "DEPENDS_ON" },
+    { from: "b", to: "a", type: "DEPENDS_ON" },
+    { from: "a", to: "z", type: "DEPENDS_ON" },
+  ] as Parameters<typeof findCycles>[1];
+  assert.deepEqual(findCycles(["z", "b", "a"], rotatedCycleEdges), [["a", "z", "b", "a"]]);
+  assert.deepEqual(
+    shortestPath(
+      [
+        { from: "a", to: "b", type: "DEPENDS_ON" },
+        { from: "a", to: "c", type: "DEPENDS_ON" },
+        { from: "b", to: "d", type: "DEPENDS_ON" },
+        { from: "c", to: "d", type: "DEPENDS_ON" },
+      ],
+      "a",
+      "d",
+    ),
+    ["a", "b", "d"],
+  );
   assert.deepEqual(topoSort(["a", "b", "c", "d", "e"], edges), {
     order: ["d", "e"],
     cycleNodes: ["a", "b", "c"],
@@ -667,6 +688,17 @@ test("graph-export exporter writes files, filters, and rejects empty output", { 
     const pmRoot = path.join(ws, ".agents", "pm");
     const outFile = path.join(ws, "export.dot");
 
+    const implicitOptions = (await harness.runExporter({ exporter: "graph-export", pmRoot })) as CmdResult;
+    assert.equal((implicitOptions.result as { ok: boolean }).ok, true);
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(ws);
+      const implicitRoot = (await harness.runExporter({ exporter: "graph-export", options: { format: "json" } })) as CmdResult;
+      assert.ok(implicitRoot.result);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
     const { result } = await captureStdout(async () =>
       harness.runExporter({
         exporter: "graph-export",
@@ -776,6 +808,8 @@ test("cypher, neighbors, query, and explain remaining error surfaces", { skip: !
       harness.runCommand({ command: "pm-graph impact", args: [a, "--include-closed", "--format", "mermaid"], pmRoot }),
     );
     assert.match(stdout, /graph TD/);
+    const limited = (await harness.runCommand({ command: "pm-graph impact", args: [a, "--limit", "1"], pmRoot })) as CmdResult;
+    assert.equal(limited.errorMessage, undefined);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -916,6 +950,7 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
         startNodeElementId: "el-1",
         endNodeElementId: "el-2",
       });
+      const endOnlyRelationship = { type: "RELATES_TO", properties: { source: "end-only" }, endNodeElementId: "el-2" };
       const pathValue = fakePath(node, node, [{ start: node, relationship: rel, end: node }], 1);
       const preservedFunction = () => "preserved";
       const preservedSymbol = Symbol("preserved");
@@ -924,6 +959,7 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
           fakeRecord({
             n: node,
             r: rel,
+            rEnd: endOnlyRelationship,
             p: pathValue,
             i: fakeInteger(9),
             s: "plain",
@@ -954,6 +990,10 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
       const r = row.r as { _type: string; _startNodeElementId: string };
       assert.equal(r._type, "BLOCKED_BY");
       assert.equal(r._startNodeElementId, "el-1");
+      const rEnd = row.rEnd as { _type: string; _startNodeElementId?: string; _endNodeElementId: string };
+      assert.equal(rEnd._type, "RELATES_TO");
+      assert.equal(rEnd._startNodeElementId, undefined);
+      assert.equal(rEnd._endNodeElementId, "el-2");
       const p = row.p as { length: number; segments: unknown[] };
       assert.equal(p.length, 1);
       assert.equal(p.segments.length, 1);
@@ -1032,6 +1072,13 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
         return true;
       },
     );
+    assert.throws(
+      () => resolveItemIdOrThrow(["x-ray"], "zulu", "Item"),
+      (err: CommandError) => {
+        assert.doesNotMatch(err.message, /Did you mean/);
+        return true;
+      },
+    );
   });
 
   test("Neo4j commands map auth, non-Error, generic, and connection failures", async () => {
@@ -1066,10 +1113,21 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
       const genericRes = (await harness.runCommand({ command: "pm-graph status", pmRoot })) as CmdResult;
       assert.match(String(genericRes.errorMessage), /Cypher syntax error/);
 
+      const noMessage = Object.create(Error.prototype) as Error;
+      setFakeNeo4jFail(noMessage);
+      const noMessageRes = (await harness.runCommand({ command: "pm-graph status", pmRoot })) as CmdResult;
+      assert.equal(noMessageRes.handled, false);
+
       const conn = new Error("Failed to connect to server");
       setFakeNeo4jFail(conn);
       const connRes = (await harness.runCommand({ command: "pm-graph sync", pmRoot })) as CmdResult;
       assert.match(String(connRes.errorMessage), /not reachable/);
+
+      process.env.PM_GRAPH_TEST_DROP_URI = "1";
+      setFakeNeo4jFail(new Error("ECONNREFUSED"));
+      const defaultUriRes = (await harness.runCommand({ command: "pm-graph sync", pmRoot })) as CmdResult;
+      assert.match(String(defaultUriRes.errorMessage), /bolt:\/\/localhost:7687/);
+      delete process.env.PM_GRAPH_TEST_DROP_URI;
     } finally {
       restoreEnv(original);
       rmSync(ws, { recursive: true, force: true });

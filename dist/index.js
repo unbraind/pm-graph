@@ -468,7 +468,7 @@ async function runPmGraph(subcommand, id, flags, context) {
             json: true,
             path: context.pm_root || resolveImplicitPmRoot(getWorkspace(context)),
         };
-        return await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions);
+        return await runGraph(subcommand, id, undefined, options, globalOptions);
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -665,13 +665,13 @@ function workspaceFromPmRoot(pmRoot) {
     const normalized = path.resolve(pmRoot);
     const parts = normalized.split(path.sep);
     if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
-        return parts.slice(0, -2).join(path.sep) || path.sep;
+        return path.dirname(path.dirname(normalized));
     }
     // Custom hidden storage dirs (e.g. `<workspace>/.pm` via --pm-path): treat
     // the parent as the logical workspace so projectKey doesn't become ".pm".
     const last = parts[parts.length - 1];
     if (parts.length >= 2 && last.startsWith(".") && last.length > 1) {
-        return parts.slice(0, -1).join(path.sep) || path.sep;
+        return path.dirname(normalized);
     }
     return normalized;
 }
@@ -1561,7 +1561,8 @@ export function criticalConnectors(nodes, edges) {
         disc.set(u, ++time);
         low.set(u, disc.get(u));
         let childCount = 0;
-        for (const v of [...(adjacency.get(u) ?? [])].sort()) {
+        // Every DFS vertex came from `nodeSet`, which initializes adjacency.
+        for (const v of [...adjacency.get(u)].sort()) {
             if (!disc.has(v)) {
                 parent.set(v, u);
                 childCount++;
