@@ -21,9 +21,12 @@ import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from 
 import {
   analyzeGraph,
   explainItem,
+  neo4jFriendlyError,
   parseNeo4jMs,
   renderAnalysisDiagram,
   renderGraphml,
+  resolveItemIdOrThrow,
+  runPmGraph,
   workspaceFromPmRoot,
 } from "../src/index.ts";
 import extension from "../src/index.ts";
@@ -279,6 +282,9 @@ test("export flag errors and --output writing cover the remaining branches", { s
     pm(ws, ["init"]);
     const alpha = createItem(ws, "Alpha", ["--tags", "backend", "--assignee", "ada", "--sprint", "s1", "--release", "r1"]);
     createItem(ws, "Beta", ["--parent", alpha, "--blocked-by", alpha, "--tags", " ,core"]);
+    createItem(ws, "External", ["--dep", "id=external-target,kind=blocks", "--allow-unresolved-deps"]);
+    const alphaFile = path.join(ws, ".agents", "pm", "tasks", `${alpha}.toon`);
+    writeFileSync(alphaFile, `${readFileSync(alphaFile, "utf-8")}\ndeps[1]{foo}:\n  bar\n`);
     const harness = await makeHarness();
     const pmRoot = path.join(ws, ".agents", "pm");
 
@@ -373,7 +379,7 @@ test("export flag errors and --output writing cover the remaining branches", { s
     const outFile = path.join(ws, "shaped.mermaid");
     const written = (await harness.runCommand({
       command: "pm-graph export",
-      args: ["--format=mermaid", "--output", outFile, "--edges", "all", "--filter", "type=task", "--include-closed"],
+      args: ["--format=mermaid", "--output", outFile, "--edges", "all", "--filter=type=task", "--include-closed"],
       pmRoot,
     })) as CmdResult;
     const writtenResult = written.result as { ok: boolean; file: string; format: string };
@@ -390,6 +396,102 @@ test("export flag errors and --output writing cover the remaining branches", { s
     const graph = (jsonGraph.result as { graph: { workspace: string; nodes: Array<{ id: string }> } }).graph;
     assert.ok(graph.nodes.some((n) => n.id === alpha));
     assert.equal(graph.workspace, ws);
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("export and sync wrap unexpected graph-loading errors", { skip: !pmAvailable }, async () => {
+  const ws = freshWorkspace();
+  try {
+    pm(ws, ["init"]);
+    const harness = await makeHarness();
+    const pmRoot = path.join(ws, ".agents", "pm");
+    const exportHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph export");
+    const syncHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph sync");
+    assert.ok(exportHandler);
+    assert.ok(syncHandler);
+    const brokenExportContext = {
+      command: "pm-graph export",
+      args: [],
+      options: {},
+      global: { json: true },
+      get pm_root(): string {
+        throw new Error("graph export boom");
+      },
+    } as unknown as Parameters<typeof exportHandler.run>[0];
+    await assert.rejects(
+      async () => exportHandler.run(brokenExportContext),
+      /Export failed: graph export boom/,
+    );
+    const brokenSyncContext = {
+      command: "pm-graph sync",
+      args: [],
+      options: {},
+      global: { json: true },
+      get pm_root(): string {
+        throw new Error("graph sync boom");
+      },
+    } as unknown as Parameters<typeof syncHandler.run>[0];
+    await assert.rejects(
+      async () => syncHandler.run(brokenSyncContext),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 1);
+        assert.match(err.message, /Failed to load workspace graph: graph sync boom/);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("impact wraps a failure while resolving the canonical graph engine", { skip: !pmAvailable }, async () => {
+  const ws = freshWorkspace();
+  try {
+    pm(ws, ["init"]);
+    const id = createItem(ws, "Alpha");
+    const harness = await makeHarness();
+    const impactHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph impact");
+    assert.ok(impactHandler);
+    const tracker = path.join(ws, ".agents", "pm");
+    let reads = 0;
+    const brokenAfterLoad = {
+      command: "pm-graph impact",
+      args: [id],
+      options: {},
+      global: { json: true },
+      get pm_root(): string {
+        reads++;
+        if (reads > 1) throw new Error("canonical graph boom");
+        return tracker;
+      },
+    } as unknown as Parameters<typeof impactHandler.run>[0];
+    await assert.rejects(
+      async () => impactHandler.run(brokenAfterLoad),
+      (err: CommandError) => {
+        assert.match(`${err.name}:${err.message}:${err.exitCode ?? "missing"}`, /canonical graph boom/);
+        return true;
+      },
+    );
+
+    const directBrokenContext = {
+      command: "pm-graph impact",
+      args: [],
+      options: {},
+      global: { json: true },
+      get pm_root(): string {
+        throw new Error("direct graph boom");
+      },
+    } as unknown as Parameters<typeof runPmGraph>[3];
+    await assert.rejects(
+      () => runPmGraph("impact", "root", {}, directBrokenContext),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 1);
+        assert.match(err.message, /Failed to run pm graph impact: direct graph boom/);
+        return true;
+      },
+    );
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -476,6 +578,15 @@ test("cypher, neighbors, query, and explain remaining error surfaces", { skip: !
 
     const cypher = (await harness.runCommand({ command: "pm-graph cypher", pmRoot })) as CmdResult;
     assert.equal((cypher.result as { ok: boolean }).ok, true);
+
+    await assert.rejects(
+      () => harness.runCommand({ command: "pm-graph path", args: ["pm-zzz", a], pmRoot }),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 3);
+        assert.match(err.message, /Did you mean/);
+        return true;
+      },
+    );
 
     const cypherMissing = (await harness.runCommand({
       command: "pm-graph cypher",
@@ -736,7 +847,35 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
     }
   });
 
-  test("neo4jFriendlyError maps auth, non-Error, and generic failures", async () => {
+  test("id resolution reports case-insensitive ambiguity and capped suggestions", () => {
+    assert.throws(
+      () => resolveItemIdOrThrow(["pm-abc", "PM-ABC"], "Pm-Abc", "Item"),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 3);
+        assert.match(err.message, /ambiguous/);
+        return true;
+      },
+    );
+    const many = ["pm-a1", "pm-a2", "pm-a3", "pm-a4", "pm-a5", "pm-a6"];
+    assert.throws(
+      () => resolveItemIdOrThrow(many, "pm-a", "Item"),
+      (err: CommandError) => {
+        assert.match(err.message, /ambiguous/);
+        assert.match(err.message, /\(\+1 more\)/);
+        return true;
+      },
+    );
+  });
+
+  test("neo4jFriendlyError maps auth, non-Error, generic, and default-URI failures", async () => {
+    const originalEnv = { ...process.env };
+    delete process.env.NEO4J_URI;
+    const defaultUri = neo4jFriendlyError(new Error("ECONNREFUSED"));
+    assert.match(defaultUri.message, /bolt:\/\/localhost:7687/);
+    const missingMessage = Object.create(Error.prototype) as Error;
+    assert.equal(neo4jFriendlyError(missingMessage), missingMessage);
+    restoreEnv(originalEnv);
+
     const ws = freshWorkspace();
     const original = setNeo4jEnv();
     resetFakeNeo4j();
@@ -802,6 +941,77 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
       rmSync(ws, { recursive: true, force: true });
     }
   });
+});
+
+test("root discovery wraps missing trackers and preserves typed tracker errors", { skip: !pmAvailable }, async () => {
+  const ws = freshWorkspace();
+  const originalCwd = process.cwd();
+  try {
+    const harness = await makeHarness();
+    process.chdir(ws);
+    await assert.rejects(
+      () => harness.runCommand({ command: "pm-graph analyze" }),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 2);
+        assert.match(err.message, /No pm tracker/);
+        return true;
+      },
+    );
+
+    mkdirSync(path.join(ws, ".agents", "pm"), { recursive: true });
+    await assert.rejects(
+      () => harness.runCommand({ command: "pm-graph analyze" }),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 2);
+        assert.match(err.message, /not a pm tracker/);
+        return true;
+      },
+    );
+
+    const analyzeHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph analyze");
+    assert.ok(analyzeHandler);
+    const brokenContext = {
+      command: "pm-graph analyze",
+      args: [],
+      options: {},
+      global: { json: true },
+      get workspaceRoot(): string {
+        throw new Error("workspace getter failed");
+      },
+    } as unknown as Parameters<typeof analyzeHandler.run>[0];
+    await assert.rejects(
+      async () => analyzeHandler.run(brokenContext),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 2);
+        assert.match(err.message, /Could not locate a pm tracker: workspace getter failed/);
+        return true;
+      },
+    );
+  } finally {
+    process.chdir(originalCwd);
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("fetching an unreadable tracker reports a wrapped SDK failure", { skip: !pmAvailable }, async () => {
+  const ws = freshWorkspace();
+  try {
+    pm(ws, ["init"]);
+    const tracker = path.join(ws, ".agents", "pm");
+    chmodSync(tracker, 0o111);
+    const harness = await makeHarness();
+    await assert.rejects(
+      () => harness.runCommand({ command: "pm-graph export", args: ["--json"], pmRoot: tracker }),
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 1);
+        assert.match(err.message, /Failed to read pm items|readable|permission/i);
+        return true;
+      },
+    );
+  } finally {
+    chmodSync(path.join(ws, ".agents", "pm"), 0o755);
+    rmSync(ws, { recursive: true, force: true });
+  }
 });
 
 test("status swallows an unusable tracker when counting local items", { skip: !pmAvailable }, async () => {

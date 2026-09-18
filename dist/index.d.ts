@@ -1,4 +1,5 @@
 import { type Exporter } from "@unbrained/pm-cli/sdk";
+import { runGraph, type GraphCommandOptions } from "@unbrained/pm-cli/sdk/graph";
 type CommandContext = {
     command?: string;
     args?: string[];
@@ -57,6 +58,12 @@ type Graph = {
     relationships: GraphRelationship[];
 };
 /**
+ * Produce a user-friendly error message for Neo4j connection failures.
+ * The neo4j-driver throws errors with codes like ServiceUnavailable or
+ * AuthorizationExpired that are not helpful on their own.
+ */
+export declare function neo4jFriendlyError(err: unknown): Error;
+/**
  * Parse an optional non-negative millisecond override from an environment
  * variable, returning `undefined` when the variable is absent or malformed.
  *
@@ -72,6 +79,48 @@ type Graph = {
  * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
  */
 export declare function parseNeo4jMs(envVar: string): number | undefined;
+/**
+ * Canonical `pm graph <subcommand>` flag bundle forwarded to the in-process
+ * engine as {@link GraphCommandOptions}.
+ *
+ * The key set is derived from `GraphCommandOptions` so that renaming or
+ * removing one of these options upstream fails this package's build instead of
+ * silently dropping the flag at runtime. The intersected members then *narrow*
+ * the numeric options: the SDK accepts `string | number` because it also parses
+ * raw CLI argv, whereas this package's flag parser has already produced real
+ * numbers, and re-widening them here would let an unparsed string reach the
+ * engine unchecked.
+ */
+type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" | "limit">> & {
+    maxDepth?: number;
+    limit?: number;
+};
+/**
+ * Invoke the canonical registry-aware graph engine in-process via the SDK's
+ * {@link runGraph}, honouring `--path <pm_root>` through `global.path`.
+ *
+ * This is the same engine that backs `pm graph <subcommand>`; calling it
+ * directly rather than spawning `pm` removes the subprocess, the JSON
+ * re-parse, and the output-size ceiling that a piped `--json` read imposes —
+ * a large workspace could previously exceed the shell-out's buffer and fail
+ * the query rather than answer it. It also drops the requirement that a `pm`
+ * binary be resolvable on `PATH`, which is not guaranteed for a
+ * package-backed extension.
+ *
+ * Availability is a compile-time guarantee: the engine is imported statically
+ * from the declared `@unbrained/pm-cli` peer dependency, so the former
+ * `pm graph --help` probe (and its degraded fallback) is no longer meaningful
+ * and has been removed.
+ *
+ * Since pm-cli 2026.8.3 the engine returns `ProjectedGraphResult` — the union
+ * of every subcommand envelope intersected with the output-projection
+ * declaration. That type is not re-exported from the public `sdk/graph`
+ * surface, so the return type here is taken from {@link runGraph} itself via
+ * `ReturnType` instead of being re-declared locally, where a hand-maintained
+ * copy would drift. Callers narrow the union on the `subcommand` discriminant
+ * carried by every envelope, so no cast appears anywhere on this path.
+ */
+export declare function runPmGraph(subcommand: string, id: string | null, flags: PmGraphFlags, context: CommandContext): Promise<Awaited<ReturnType<typeof runGraph>>>;
 /**
  * Derive the logical workspace directory from a pm_root. pm roots are usually
  * `<workspace>/.agents/pm`; strip that suffix so the derived project key
@@ -356,6 +405,24 @@ export type ExplainReport = {
  * from the item, and cycle participation.
  */
 export declare function explainItem(graph: Graph, id: string): ExplainReport | null;
+type ItemIdResolution = {
+    input: string;
+    resolved: string;
+    strategy: "exact" | "case-insensitive" | "prefix";
+};
+/**
+ * Resolve an operator's item-id input to exactly one workspace id.
+ *
+ * Tries exact match, then a case-insensitive match, then a unique prefix, in
+ * that order; an ambiguous case at either fuzzy tier throws an
+ * {@link ambiguousItemIdError}, and a total miss throws a `NOT_FOUND` error
+ * carrying {@link suggestItemIds} suggestions. The id list is de-duplicated and
+ * sorted first so resolution and ambiguity ordering are deterministic.
+ *
+ * @returns The resolved id and the strategy that matched it.
+ * @throws {CommandError} On ambiguity or no match.
+ */
+export declare function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution;
 /**
  * Compute a comprehensive offline graph-health report from a shaped graph.
  * All analytics operate on structural edges between item nodes only.

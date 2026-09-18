@@ -127,7 +127,7 @@ async function loadNeo4j() {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
-function neo4jFriendlyError(err) {
+export function neo4jFriendlyError(err) {
     if (!(err instanceof Error))
         return new Error(String(err));
     const msg = err.message ?? "";
@@ -420,7 +420,7 @@ function resolvePmRootForContext(context) {
  * copy would drift. Callers narrow the union on the `subcommand` discriminant
  * carried by every envelope, so no cast appears anywhere on this path.
  */
-async function runPmGraph(subcommand, id, flags, context) {
+export async function runPmGraph(subcommand, id, flags, context) {
     const options = {};
     if (flags.direction)
         options.direction = flags.direction;
@@ -1918,7 +1918,7 @@ function ambiguousItemIdError(label, input, matches) {
  * @returns The resolved id and the strategy that matched it.
  * @throws {CommandError} On ambiguity or no match.
  */
-function resolveItemIdOrThrow(itemIds, input, label) {
+export function resolveItemIdOrThrow(itemIds, input, label) {
     const requested = input.trim();
     const ids = [...new Set(itemIds)].sort((a, b) => a.localeCompare(b));
     if (ids.includes(requested)) {

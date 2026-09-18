@@ -229,7 +229,7 @@ async function loadNeo4j(): Promise<Neo4jApi> {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
-function neo4jFriendlyError(err: unknown): Error {
+export function neo4jFriendlyError(err: unknown): Error {
   if (!(err instanceof Error)) return new Error(String(err));
 
   const msg = err.message ?? "";
@@ -572,7 +572,7 @@ type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" |
  * copy would drift. Callers narrow the union on the `subcommand` discriminant
  * carried by every envelope, so no cast appears anywhere on this path.
  */
-async function runPmGraph(
+export async function runPmGraph(
   subcommand: string,
   id: string | null,
   flags: PmGraphFlags,
@@ -2273,7 +2273,7 @@ function ambiguousItemIdError(label: string, input: string, matches: string[]): 
  * @returns The resolved id and the strategy that matched it.
  * @throws {CommandError} On ambiguity or no match.
  */
-function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution {
+export function resolveItemIdOrThrow(itemIds: string[], input: string, label: string): ItemIdResolution {
   const requested = input.trim();
   const ids = [...new Set(itemIds)].sort((a, b) => a.localeCompare(b));
 
