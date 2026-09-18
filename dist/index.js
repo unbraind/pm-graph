@@ -127,6 +127,12 @@ async function loadNeo4j() {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
+/** Close a Neo4j session and driver after a command settles. */
+async function closeNeo4jResources(session, driver) {
+    await session.close();
+    await driver.close();
+}
+/** Map a Neo4j connection failure to an operator-facing error. */
 function neo4jFriendlyError(err) {
     if (!(err instanceof Error))
         return new Error(String(err));
@@ -2060,51 +2066,49 @@ async function syncNeo4j(graph, options) {
     const session = driver.session({ database: process.env.NEO4J_DATABASE });
     const projectKey = graph.projectKey;
     const currentIds = new Set(graph.nodes.map((n) => n.id));
-    try {
-        if (options.fullSync) {
-            // Full resync: wipe all graph nodes for this project first
-            await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n", { projectKey }));
+    return (async () => {
+        try {
+            if (options.fullSync) {
+                // Full resync: wipe all graph nodes for this project first
+                await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n", { projectKey }));
+            }
+            // Upsert nodes with progress-friendly batching
+            for (let i = 0; i < graph.nodes.length; i++) {
+                const node = graph.nodes[i];
+                await session.executeWrite((tx) => tx.run("MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
+                    projectKey,
+                    id: node.id,
+                    labels: node.labels,
+                    properties: { ...node.properties, projectKey },
+                }));
+            }
+            // Upsert relationships
+            for (const relationship of graph.relationships) {
+                await session.executeWrite((tx) => tx.run(`MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`, {
+                    projectKey,
+                    from: relationship.from,
+                    to: relationship.to,
+                    properties: relationship.properties,
+                }));
+            }
+            // Incremental mode: delete stale nodes that were not in this sync
+            let deletedStaleNodes = 0;
+            if (!options.fullSync && currentIds.size > 0) {
+                const deleteResult = await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) WHERE NOT n.id IN $currentIds DETACH DELETE n RETURN count(n) AS deleted", { projectKey, currentIds: [...currentIds] }));
+                deletedStaleNodes = toNumber(deleteResult.records[0]?.get("deleted"));
+            }
+            // Store last sync timestamp
+            await session.executeWrite((tx) => tx.run("MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version", { projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION }));
+            return {
+                syncedNodes: graph.nodes.length,
+                syncedRelationships: graph.relationships.length,
+                deletedStaleNodes,
+            };
         }
-        // Upsert nodes with progress-friendly batching
-        for (let i = 0; i < graph.nodes.length; i++) {
-            const node = graph.nodes[i];
-            await session.executeWrite((tx) => tx.run("MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id", {
-                projectKey,
-                id: node.id,
-                labels: node.labels,
-                properties: { ...node.properties, projectKey },
-            }));
+        catch (err) {
+            throw neo4jFriendlyError(err);
         }
-        // Upsert relationships
-        for (const relationship of graph.relationships) {
-            await session.executeWrite((tx) => tx.run(`MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`, {
-                projectKey,
-                from: relationship.from,
-                to: relationship.to,
-                properties: relationship.properties,
-            }));
-        }
-        // Incremental mode: delete stale nodes that were not in this sync
-        let deletedStaleNodes = 0;
-        if (!options.fullSync && currentIds.size > 0) {
-            const deleteResult = await session.executeWrite((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) WHERE NOT n.id IN $currentIds DETACH DELETE n RETURN count(n) AS deleted", { projectKey, currentIds: [...currentIds] }));
-            deletedStaleNodes = toNumber(deleteResult.records[0]?.get("deleted"));
-        }
-        // Store last sync timestamp
-        await session.executeWrite((tx) => tx.run("MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version", { projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION }));
-        return {
-            syncedNodes: graph.nodes.length,
-            syncedRelationships: graph.relationships.length,
-            deletedStaleNodes,
-        };
-    }
-    catch (err) {
-        throw neo4jFriendlyError(err);
-    }
-    finally {
-        await session.close();
-        await driver.close();
-    }
+    })().finally(() => closeNeo4jResources(session, driver));
 }
 // ---------------------------------------------------------------------------
 // Cypher query sanitisation
@@ -2552,34 +2556,32 @@ export function activate(api) {
             }
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
-            try {
-                const nodeResult = await session.executeRead((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count", { projectKey }));
-                const nodeCount = toNumber(nodeResult.records[0]?.get("count"));
-                const relResult = await session.executeRead((tx) => tx.run("MATCH (:PmGraphNode {projectKey: $projectKey})-[r]->(:PmGraphNode {projectKey: $projectKey}) RETURN count(r) AS count", { projectKey }));
-                const relCount = toNumber(relResult.records[0]?.get("count"));
-                const syncResult = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphSync {projectKey: $projectKey}) RETURN m.lastSyncedAt AS lastSyncedAt, m.syncVersion AS syncVersion", { projectKey }));
-                const lastSyncedAt = syncResult.records[0]?.get("lastSyncedAt") ?? null;
-                const syncVersion = syncResult.records[0]?.get("syncVersion") ?? null;
-                return {
-                    ok: true,
-                    neo4jConfigured: true,
-                    projectKey,
-                    workspace,
-                    localItemCount,
-                    nodeCount,
-                    relationshipCount: relCount,
-                    lastSyncedAt,
-                    syncVersion,
-                    version: EXTENSION_VERSION,
-                };
-            }
-            catch (err) {
-                throw neo4jFriendlyError(err);
-            }
-            finally {
-                await session.close();
-                await driver.close();
-            }
+            return (async () => {
+                try {
+                    const nodeResult = await session.executeRead((tx) => tx.run("MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count", { projectKey }));
+                    const nodeCount = toNumber(nodeResult.records[0]?.get("count"));
+                    const relResult = await session.executeRead((tx) => tx.run("MATCH (:PmGraphNode {projectKey: $projectKey})-[r]->(:PmGraphNode {projectKey: $projectKey}) RETURN count(r) AS count", { projectKey }));
+                    const relCount = toNumber(relResult.records[0]?.get("count"));
+                    const syncResult = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphSync {projectKey: $projectKey}) RETURN m.lastSyncedAt AS lastSyncedAt, m.syncVersion AS syncVersion", { projectKey }));
+                    const lastSyncedAt = syncResult.records[0]?.get("lastSyncedAt") ?? null;
+                    const syncVersion = syncResult.records[0]?.get("syncVersion") ?? null;
+                    return {
+                        ok: true,
+                        neo4jConfigured: true,
+                        projectKey,
+                        workspace,
+                        localItemCount,
+                        nodeCount,
+                        relationshipCount: relCount,
+                        lastSyncedAt,
+                        syncVersion,
+                        version: EXTENSION_VERSION,
+                    };
+                }
+                catch (err) {
+                    throw neo4jFriendlyError(err);
+                }
+            })().finally(() => closeNeo4jResources(session, driver));
         },
     });
     // --- pm-graph query ------------------------------------------------------
@@ -2624,24 +2626,22 @@ export function activate(api) {
             }
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
-            try {
-                const result = await session.executeRead((tx) => tx.run(query));
-                const records = result.records.map((record) => {
-                    const obj = {};
-                    for (const key of record.keys) {
-                        obj[key] = toPlain(record.get(key));
-                    }
-                    return obj;
-                });
-                return { ok: true, count: records.length, records };
-            }
-            catch (err) {
-                throw neo4jFriendlyError(err);
-            }
-            finally {
-                await session.close();
-                await driver.close();
-            }
+            return (async () => {
+                try {
+                    const result = await session.executeRead((tx) => tx.run(query));
+                    const records = result.records.map((record) => {
+                        const obj = {};
+                        for (const key of record.keys) {
+                            obj[key] = toPlain(record.get(key));
+                        }
+                        return obj;
+                    });
+                    return { ok: true, count: records.length, records };
+                }
+                catch (err) {
+                    throw neo4jFriendlyError(err);
+                }
+            })().finally(() => closeNeo4jResources(session, driver));
         },
     });
     // --- pm-graph neighbors --------------------------------------------------
@@ -2676,36 +2676,34 @@ export function activate(api) {
             const projectKey = projectKeyForWorkspace(getWorkspace(context));
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
-            try {
-                const result = await session.executeRead((tx) => tx.run(`MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
+            return (async () => {
+                try {
+                    const result = await session.executeRead((tx) => tx.run(`MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
              RETURN center, r, neighbor, type(r) AS relType,
                     CASE WHEN startNode(r) = center THEN 'outgoing' ELSE 'incoming' END AS direction`, { projectKey, nodeId }));
-                if (result.records.length === 0) {
-                    return {
-                        ok: true,
-                        center: null,
-                        neighbors: [],
-                        message: `No node found with id "${nodeId}" for project "${projectKey}".`,
-                    };
+                    if (result.records.length === 0) {
+                        return {
+                            ok: true,
+                            center: null,
+                            neighbors: [],
+                            message: `No node found with id "${nodeId}" for project "${projectKey}".`,
+                        };
+                    }
+                    const center = toPlain(result.records[0].get("center"));
+                    const neighbors = result.records.map((record) => ({
+                        node: toPlain(record.get("neighbor")),
+                        relationship: {
+                            type: record.get("relType"),
+                            direction: record.get("direction"),
+                            properties: toPlain(record.get("r")),
+                        },
+                    }));
+                    return { ok: true, center, neighbors };
                 }
-                const center = toPlain(result.records[0].get("center"));
-                const neighbors = result.records.map((record) => ({
-                    node: toPlain(record.get("neighbor")),
-                    relationship: {
-                        type: record.get("relType"),
-                        direction: record.get("direction"),
-                        properties: toPlain(record.get("r")),
-                    },
-                }));
-                return { ok: true, center, neighbors };
-            }
-            catch (err) {
-                throw neo4jFriendlyError(err);
-            }
-            finally {
-                await session.close();
-                await driver.close();
-            }
+                catch (err) {
+                    throw neo4jFriendlyError(err);
+                }
+            })().finally(() => closeNeo4jResources(session, driver));
         },
     });
     // --- pm-graph analyze ----------------------------------------------------

@@ -229,6 +229,13 @@ async function loadNeo4j(): Promise<Neo4jApi> {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
+/** Close a Neo4j session and driver after a command settles. */
+async function closeNeo4jResources(session: Neo4jSession, driver: Neo4jDriver): Promise<void> {
+  await session.close();
+  await driver.close();
+}
+
+/** Map a Neo4j connection failure to an operator-facing error. */
 function neo4jFriendlyError(err: unknown): Error {
   if (!(err instanceof Error)) return new Error(String(err));
 
@@ -2496,8 +2503,9 @@ async function syncNeo4j(
   const projectKey = graph.projectKey;
   const currentIds = new Set(graph.nodes.map((n) => n.id));
 
-  try {
-    if (options.fullSync) {
+  return (async () => {
+    try {
+      if (options.fullSync) {
       // Full resync: wipe all graph nodes for this project first
       await session.executeWrite((tx) =>
         tx.run(
@@ -2563,12 +2571,10 @@ async function syncNeo4j(
       syncedRelationships: graph.relationships.length,
       deletedStaleNodes,
     };
-  } catch (err: unknown) {
-    throw neo4jFriendlyError(err);
-  } finally {
-    await session.close();
-    await driver.close();
-  }
+    } catch (err: unknown) {
+      throw neo4jFriendlyError(err);
+    }
+  })().finally(() => closeNeo4jResources(session, driver));
 }
 
 // ---------------------------------------------------------------------------
@@ -3050,8 +3056,9 @@ export function activate(api: ExtensionApi): void {
 
       const driver = await createDriver();
       const session = driver.session({ database: process.env.NEO4J_DATABASE });
-      try {
-        const nodeResult = await session.executeRead((tx) =>
+      return (async () => {
+        try {
+          const nodeResult = await session.executeRead((tx) =>
           tx.run(
             "MATCH (n:PmGraphNode {projectKey: $projectKey}) RETURN count(n) AS count",
             { projectKey },
@@ -3088,12 +3095,10 @@ export function activate(api: ExtensionApi): void {
           syncVersion,
           version: EXTENSION_VERSION,
         };
-      } catch (err: unknown) {
-        throw neo4jFriendlyError(err);
-      } finally {
-        await session.close();
-        await driver.close();
-      }
+        } catch (err: unknown) {
+          throw neo4jFriendlyError(err);
+        }
+      })().finally(() => closeNeo4jResources(session, driver));
     },
   });
 
@@ -3149,8 +3154,9 @@ export function activate(api: ExtensionApi): void {
 
       const driver = await createDriver();
       const session = driver.session({ database: process.env.NEO4J_DATABASE });
-      try {
-        const result = await session.executeRead((tx) => tx.run(query));
+      return (async () => {
+        try {
+          const result = await session.executeRead((tx) => tx.run(query));
 
         const records = result.records.map((record) => {
           const obj: Record<string, unknown> = {};
@@ -3161,12 +3167,10 @@ export function activate(api: ExtensionApi): void {
         });
 
         return { ok: true, count: records.length, records };
-      } catch (err: unknown) {
-        throw neo4jFriendlyError(err);
-      } finally {
-        await session.close();
-        await driver.close();
-      }
+        } catch (err: unknown) {
+          throw neo4jFriendlyError(err);
+        }
+      })().finally(() => closeNeo4jResources(session, driver));
     },
   });
 
@@ -3208,10 +3212,11 @@ export function activate(api: ExtensionApi): void {
       const projectKey = projectKeyForWorkspace(getWorkspace(context));
       const driver = await createDriver();
       const session = driver.session({ database: process.env.NEO4J_DATABASE });
-      try {
-        const result = await session.executeRead((tx) =>
-          tx.run(
-            `MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
+      return (async () => {
+        try {
+          const result = await session.executeRead((tx) =>
+            tx.run(
+              `MATCH (center:PmGraphNode {projectKey: $projectKey, id: $nodeId})-[r]-(neighbor:PmGraphNode {projectKey: $projectKey})
              RETURN center, r, neighbor, type(r) AS relType,
                     CASE WHEN startNode(r) = center THEN 'outgoing' ELSE 'incoming' END AS direction`,
             { projectKey, nodeId },
@@ -3238,12 +3243,10 @@ export function activate(api: ExtensionApi): void {
         }));
 
         return { ok: true, center, neighbors };
-      } catch (err: unknown) {
-        throw neo4jFriendlyError(err);
-      } finally {
-        await session.close();
-        await driver.close();
-      }
+        } catch (err: unknown) {
+          throw neo4jFriendlyError(err);
+        }
+      })().finally(() => closeNeo4jResources(session, driver));
     },
   });
 
