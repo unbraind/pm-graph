@@ -591,6 +591,16 @@ export function requireImpactResult(
   return result;
 }
 
+/**
+ * Invoke the canonical SDK graph engine with the extension's tracker context.
+ *
+ * @param subcommand - Canonical graph operation name.
+ * @param id - Optional operation root item.
+ * @param flags - Parsed graph options.
+ * @param context - Extension command context carrying the tracker root.
+ * @returns The SDK's projected graph result.
+ * @throws {CommandError} When graph execution fails.
+ */
 async function runPmGraph(
   subcommand: string,
   id: string | null,

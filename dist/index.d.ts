@@ -1,5 +1,5 @@
 import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
-import { runGraph, type GraphCommandOptions } from "@unbrained/pm-cli/sdk/graph";
+import { runGraph } from "@unbrained/pm-cli/sdk/graph";
 type CommandContext = {
     command?: string;
     args?: string[];
@@ -58,44 +58,6 @@ type Graph = {
     relationships: GraphRelationship[];
 };
 /**
- * Produce a user-friendly error message for Neo4j connection failures.
- * The neo4j-driver throws errors with codes like ServiceUnavailable or
- * AuthorizationExpired that are not helpful on their own.
- */
-export declare function neo4jFriendlyError(err: unknown): Error;
-/**
- * Parse an optional non-negative millisecond override from an environment
- * variable, returning `undefined` when the variable is absent or malformed.
- *
- * Both knobs exposed by {@link createDriver} (the TCP connect cap and the
- * transaction-retry budget) are optional, so a single guarded parser keeps the
- * production default identical to the driver's own whenever an operator has not
- * opted in. A malformed or negative value is ignored rather than thrown: a bad
- * value here must never stop a workspace whose Neo4j is reachable from
- * connecting, and the malformed input surfaces anyway as the driver's own
- * connection error when the value genuinely matters.
- *
- * @param envVar - Name of the environment variable to read.
- * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
- */
-export declare function parseNeo4jMs(envVar: string): number | undefined;
-/**
- * Canonical `pm graph <subcommand>` flag bundle forwarded to the in-process
- * engine as {@link GraphCommandOptions}.
- *
- * The key set is derived from `GraphCommandOptions` so that renaming or
- * removing one of these options upstream fails this package's build instead of
- * silently dropping the flag at runtime. The intersected members then *narrow*
- * the numeric options: the SDK accepts `string | number` because it also parses
- * raw CLI argv, whereas this package's flag parser has already produced real
- * numbers, and re-widening them here would let an unparsed string reach the
- * engine unchecked.
- */
-type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" | "limit">> & {
-    maxDepth?: number;
-    limit?: number;
-};
-/**
  * Invoke the canonical registry-aware graph engine in-process via the SDK's
  * {@link runGraph}, honouring `--path <pm_root>` through `global.path`.
  *
@@ -130,7 +92,6 @@ type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" |
 export declare function requireImpactResult(result: Awaited<ReturnType<typeof runGraph>>): Extract<Awaited<ReturnType<typeof runGraph>>, {
     subcommand: "impact";
 }>;
-export declare function runPmGraph(subcommand: string, id: string | null, flags: PmGraphFlags, context: CommandContext): Promise<Awaited<ReturnType<typeof runGraph>>>;
 /**
  * Build a workspace graph (nodes + relationships) from pm item metadata.
  *
@@ -149,12 +110,6 @@ export declare function runPmGraph(subcommand: string, id: string | null, flags:
  * @returns The shaped graph with project metadata.
  */
 export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>): Graph;
-/**
- * Derive the logical workspace directory from a pm_root. pm roots are usually
- * `<workspace>/.agents/pm`; strip that suffix so the derived project key
- * matches what the existing `cwd`-based commands produce.
- */
-export declare function workspaceFromPmRoot(pmRoot: string): string;
 type AnalyticsFlags = {
     json: boolean;
     includeClosed: boolean;

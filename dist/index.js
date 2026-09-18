@@ -127,7 +127,7 @@ async function loadNeo4j() {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
-export function neo4jFriendlyError(err) {
+function neo4jFriendlyError(err) {
     if (!(err instanceof Error))
         return new Error(String(err));
     const msg = err.message ?? "";
@@ -162,7 +162,7 @@ export function neo4jFriendlyError(err) {
  * @param envVar - Name of the environment variable to read.
  * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
  */
-export function parseNeo4jMs(envVar) {
+function parseNeo4jMs(envVar) {
     const raw = process.env[envVar];
     if (raw === undefined || raw.trim() === "")
         return undefined;
@@ -170,7 +170,7 @@ export function parseNeo4jMs(envVar) {
     if (!/^\d+(\.\d+)?$/.test(trimmed))
         return undefined;
     const n = Number(trimmed);
-    if (!Number.isFinite(n))
+    if (!Number.isFinite(n) || n < 0)
         return undefined;
     return Math.round(n);
 }
@@ -433,7 +433,17 @@ export function requireImpactResult(result) {
     }
     return result;
 }
-export async function runPmGraph(subcommand, id, flags, context) {
+/**
+ * Invoke the canonical SDK graph engine with the extension's tracker context.
+ *
+ * @param subcommand - Canonical graph operation name.
+ * @param id - Optional operation root item.
+ * @param flags - Parsed graph options.
+ * @param context - Extension command context carrying the tracker root.
+ * @returns The SDK's projected graph result.
+ * @throws {CommandError} When graph execution fails.
+ */
+async function runPmGraph(subcommand, id, flags, context) {
     const options = {};
     if (flags.direction)
         options.direction = flags.direction;
@@ -651,7 +661,7 @@ async function fetchItemsViaSdk(pmRoot) {
  * `<workspace>/.agents/pm`; strip that suffix so the derived project key
  * matches what the existing `cwd`-based commands produce.
  */
-export function workspaceFromPmRoot(pmRoot) {
+function workspaceFromPmRoot(pmRoot) {
     const normalized = path.resolve(pmRoot);
     const parts = normalized.split(path.sep);
     if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
