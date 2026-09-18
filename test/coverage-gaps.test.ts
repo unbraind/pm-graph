@@ -36,6 +36,7 @@ import {
   renderGraphml,
   renderJsonGraph,
   renderMermaid,
+  renderPlantuml,
   resolveItemIdOrThrow,
   runPmGraph,
   suggestItemIds,
@@ -192,7 +193,7 @@ test("graphFromItems handles legacy dependency keys, duplicate edges, facets, an
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
   };
-  const sparse = { ...base, id: "pm-sparse" } as ItemMetadata;
+  const sparse = { id: "pm-sparse" } as unknown as ItemMetadata;
   Object.assign(sparse, {
     title: undefined,
     type: undefined,
@@ -210,6 +211,7 @@ test("graphFromItems handles legacy dependency keys, duplicate edges, facets, an
       { item: "ext-item", relationship: "uses" },
       { item_id: "ext-item-id" },
       { itemId: "ext-itemId" },
+      { id: "ext-default" },
       { foo: "missing-target" },
       { id: "ext-id", type: "blocks" },
     ],
@@ -239,8 +241,8 @@ test("graphFromItems handles legacy dependency keys, duplicate edges, facets, an
     sprint: null,
     release: null,
     deadline: null,
-    created_at: "2026-01-01T00:00:00.000Z",
-    updated_at: "2026-01-01T00:00:00.000Z",
+    created_at: null,
+    updated_at: null,
   });
   assert.ok(sparseNode.labels.includes("Item"));
   assert.ok(graph.nodes.some((node) => node.id === "ext-id" && node.labels.includes("ExternalPmItem")));
@@ -266,6 +268,11 @@ test("pure parser, filter, suggestion, and renderer branches are observable", ()
   assert.deepEqual(suggestItemIds(["pm-alpha", "pm-alpine"], ""), []);
   assert.deepEqual(suggestItemIds(["pm-alpha", "pm-alpine"], "pm-al"), ["pm-alpha", "pm-alpine"]);
 
+  const originalEnv = { ...process.env };
+  process.env.PM_GRAPH_PROJECT_KEY = "override";
+  assert.equal(graphFromItems([], "/tmp/demo", new Map()).projectKey, "override");
+  restoreEnv(originalEnv);
+
   const item = { id: "pm-1", labels: ["PmItem"], properties: { title: 42, status: 7 } };
   const facet = { id: "facet", labels: ["PmFacet"], properties: { title: "Facet" } };
   assert.equal(matchesNodeFilter(item, [{ key: "status", values: ["open"] }]), false);
@@ -279,6 +286,7 @@ test("pure parser, filter, suggestion, and renderer branches are observable", ()
   };
   assert.match(renderMermaid(graph), /pm-1/);
   assert.match(renderJsonGraph(graph), /"label": "pm-1"/);
+  assert.match(renderPlantuml(graph), /pm-1/);
 });
 
 test("offline analytics cover dangling edges, ties, cycles, components, and sparse properties", () => {
@@ -655,6 +663,17 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
         assert.match(err.message, /Failed to run pm graph impact: direct graph boom/);
         return true;
       },
+    );
+    const wsContext = {
+      command: "pm-graph impact",
+      args: [],
+      options: {},
+      global: { json: true },
+      pm_root: tracker,
+    } as unknown as Parameters<typeof runPmGraph>[3];
+    await assert.rejects(
+      () => runPmGraph("unknown-subcommand", "root", {}, wsContext),
+      /Failed to run pm graph unknown-subcommand:/,
     );
   } finally {
     rmSync(ws, { recursive: true, force: true });
@@ -1185,6 +1204,19 @@ test("registered handlers support omitted optional context fields", { skip: !pmA
         [rootField]: ws,
       } as unknown as Parameters<typeof analyzeHandler.run>[0];
       await analyzeHandler.run(context);
+    }
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(ws);
+      const context = {
+        command: "pm-graph analyze",
+        args: [],
+        options: {},
+        global: { json: true },
+      } as unknown as Parameters<typeof analyzeHandler.run>[0];
+      await analyzeHandler.run(context);
+    } finally {
+      process.chdir(originalCwd);
     }
   } finally {
     rmSync(ws, { recursive: true, force: true });
