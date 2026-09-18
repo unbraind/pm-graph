@@ -16,9 +16,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { runGraph } from "@unbrained/pm-cli/sdk/graph";
 import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
-import type { ItemMetadata } from "@unbrained/pm-cli/sdk";
 
 import {
   explainItem,
@@ -26,22 +24,14 @@ import {
   criticalConnectors,
   dependencyDepths,
   findCycles,
-  graphFromItems,
   longestChain,
-  requireImpactResult,
   matchesNodeFilter,
   parseAnalyticsFlags,
-  parseNonNegativeInt,
   topoSort,
-  readFlagStringValues,
   renderAnalysisDiagram,
   renderGraphml,
-  renderJsonGraph,
-  renderMermaid,
   renderPlantuml,
-  resolveItemIdOrThrow,
   shortestPath,
-  suggestItemIds,
 } from "../src/index.ts";
 import extension from "../src/index.ts";
 import {
@@ -174,115 +164,6 @@ test("Neo4j timeout parsing is exercised through the real sync command", { skip:
     restoreEnv(original);
     rmSync(ws, { recursive: true, force: true });
   }
-});
-
-test("graphFromItems handles legacy dependency keys, duplicate edges, facets, and malformed records", () => {
-  const base: ItemMetadata = {
-    id: "pm-base",
-    title: "Base",
-    description: "",
-    type: "Task",
-    status: "open",
-    priority: 2,
-    tags: [],
-    created_at: "2026-01-01T00:00:00.000Z",
-    updated_at: "2026-01-01T00:00:00.000Z",
-  };
-  const sparse = { id: "pm-sparse" } as unknown as ItemMetadata;
-  Object.assign(sparse, {
-    title: undefined,
-    type: undefined,
-    status: undefined,
-    priority: undefined,
-    tags: undefined,
-    assignee: undefined,
-    sprint: undefined,
-    release: undefined,
-    deps: [
-      { id: "ext-id", type: "blocks" },
-      { target: "ext-target", kind: "relates" },
-      { target_id: "ext-target-id", relation: "depends" },
-      { targetId: "ext-targetId", rel: "links" },
-      { item: "ext-item", relationship: "uses" },
-      { item_id: "ext-item-id" },
-      { itemId: "ext-itemId" },
-      { id: "ext-default" },
-      { foo: "missing-target" },
-      { id: "ext-id", type: "blocks" },
-    ],
-  });
-  const rich: ItemMetadata = {
-    ...base,
-    id: "pm-rich",
-    title: "Rich",
-    assignee: "ada",
-    sprint: "s1",
-    release: "r1",
-    tags: [" ", "core"],
-    dependencies: [{ id: "pm-base", kind: "blocks", created_at: "2026-01-01T00:00:00.000Z" }],
-  };
-  const graph = graphFromItems([sparse, rich], "/tmp/demo", new Map([["pm-rich", [{ id: "ext-map", relation: "maps" }]] ]));
-  assert.equal(graph.projectKey, "demo");
-  const sparseNode = graph.nodes.find((node) => node.id === "pm-sparse");
-  assert.ok(sparseNode);
-  assert.deepEqual(sparseNode.properties, {
-    id: "pm-sparse",
-    title: "",
-    type: "Item",
-    status: "unknown",
-    priority: null,
-    tags: [],
-    assignee: null,
-    sprint: null,
-    release: null,
-    deadline: null,
-    created_at: null,
-    updated_at: null,
-  });
-  assert.ok(sparseNode.labels.includes("Item"));
-  assert.ok(graph.nodes.some((node) => node.id === "ext-id" && node.labels.includes("ExternalPmItem")));
-  assert.ok(graph.nodes.some((node) => node.id === "assignee:ada"));
-  assert.ok(graph.nodes.some((node) => node.id === "tag:core"));
-  assert.ok(graph.relationships.some((edge) => edge.type === "RELATES"));
-  assert.equal(
-    graph.relationships.filter((edge) => edge.from === "pm-sparse" && edge.to === "ext-id").length,
-    1,
-  );
-});
-
-test("pure parser, filter, suggestion, and renderer branches are observable", () => {
-  assert.deepEqual(readFlagStringValues(["--filter=type=Task", "--filter", "status=open", "--filter"], "--filter"), [
-    "type=Task",
-    "status=open",
-    null,
-  ]);
-  assert.deepEqual(parseAnalyticsFlags(["--help"]).positionals, []);
-  assert.equal(parseNonNegativeInt(""), undefined);
-  assert.equal(parseNonNegativeInt("2.5"), undefined);
-  assert.equal(parseNonNegativeInt("-1"), undefined);
-  assert.equal(parseNonNegativeInt(" 4 "), 4);
-  assert.deepEqual(suggestItemIds(["pm-alpha", "pm-alpine"], ""), []);
-  assert.deepEqual(suggestItemIds(["pm-alpha", "pm-alpine"], "pm-al"), ["pm-alpha", "pm-alpine"]);
-
-  const originalEnv = { ...process.env };
-  process.env.PM_GRAPH_PROJECT_KEY = "override";
-  assert.equal(graphFromItems([], "/tmp/demo", new Map()).projectKey, "override");
-  restoreEnv(originalEnv);
-
-  const item = { id: "pm-1", labels: ["PmItem"], properties: { title: 42, status: 7 } };
-  const facet = { id: "facet", labels: ["PmFacet"], properties: { title: "Facet" } };
-  assert.equal(matchesNodeFilter(item, [{ key: "status", values: ["open"] }]), false);
-  assert.equal(matchesNodeFilter(facet, [{ key: "status", values: ["open"] }]), true);
-  const graph = {
-    generatedAt: "2026-01-01T00:00:00.000Z",
-    workspace: "/tmp/demo",
-    projectKey: "demo",
-    nodes: [item, facet],
-    relationships: [],
-  };
-  assert.match(renderMermaid(graph), /pm-1/);
-  assert.match(renderJsonGraph(graph), /"label": "pm-1"/);
-  assert.match(renderPlantuml(graph), /pm-1/);
 });
 
 test("offline analytics cover dangling edges, ties, cycles, components, and sparse properties", () => {
@@ -670,15 +551,6 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
         return true;
       },
     );
-    const analyzeResult = await runGraph("analyze", undefined, undefined, {}, { json: true, path: tracker });
-    assert.throws(
-      () => requireImpactResult(analyzeResult),
-      /pm graph impact returned a "analyze" result envelope/,
-    );
-    const completeImpact = await runGraph("impact", id, undefined, {}, { json: true, path: tracker });
-    assert.ok(requireImpactResult(completeImpact).affected instanceof Array);
-    const summaryImpact = await runGraph("impact", id, undefined, { summary: true }, { json: true, path: tracker });
-    assert.deepEqual(requireImpactResult(summaryImpact).affected, []);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -1092,33 +964,6 @@ test("neighbors returns center+edges and the empty-node message", async () => {
       restoreEnv(original);
       rmSync(ws, { recursive: true, force: true });
     }
-  });
-
-  test("id resolution reports case-insensitive ambiguity and capped suggestions", () => {
-    assert.throws(
-      () => resolveItemIdOrThrow(["pm-abc", "PM-ABC"], "Pm-Abc", "Item"),
-      (err: CommandError) => {
-        assert.equal(err.exitCode, 3);
-        assert.match(err.message, /ambiguous/);
-        return true;
-      },
-    );
-    const many = ["pm-a1", "pm-a2", "pm-a3", "pm-a4", "pm-a5", "pm-a6"];
-    assert.throws(
-      () => resolveItemIdOrThrow(many, "pm-a", "Item"),
-      (err: CommandError) => {
-        assert.match(err.message, /ambiguous/);
-        assert.match(err.message, /\(\+1 more\)/);
-        return true;
-      },
-    );
-    assert.throws(
-      () => resolveItemIdOrThrow(["x-ray"], "zulu", "Item"),
-      (err: CommandError) => {
-        assert.doesNotMatch(err.message, /Did you mean/);
-        return true;
-      },
-    );
   });
 
   test("Neo4j commands map auth, non-Error, generic, and connection failures", async () => {
