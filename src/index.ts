@@ -653,7 +653,7 @@ function facetNodeId(kind: string, value: string): string {
  * @param depsByItem - Extra dependency records keyed by item id.
  * @returns The shaped graph with project metadata.
  */
-function graphFromItems(
+export function graphFromItems(
   items: readonly ItemMetadata[],
   workspace: string,
   depsByItem: Map<string, Array<Record<string, unknown>>>,
@@ -1227,7 +1227,7 @@ function mermaidId(id: string): string {
  * directed arrows labelled with their type; a blank line separates nodes from
  * edges only when there are edges, so an edge-free graph stays compact.
  */
-function renderMermaid(graph: Graph): string {
+export function renderMermaid(graph: Graph): string {
   const lines: string[] = ["graph TD"];
   for (const node of graph.nodes) {
     const title = typeof node.properties.title === "string" && node.properties.title
@@ -1280,7 +1280,7 @@ function renderDot(graph: Graph): string {
 }
 
 /** A JSON Graph Format-style document (nodes/edges) for generic graph tooling. */
-function renderJsonGraph(graph: Graph): string {
+export function renderJsonGraph(graph: Graph): string {
   const doc = {
     graph: {
       directed: true,
@@ -2218,7 +2218,7 @@ function sharedPrefixLength(a: string, b: string): number {
  * @param limit - Maximum suggestions to return.
  * @returns Ranked suggestion ids, possibly empty.
  */
-function suggestItemIds(itemIds: string[], input: string, limit: number = 5): string[] {
+export function suggestItemIds(itemIds: string[], input: string, limit: number = 5): string[] {
   const query = input.trim().toLowerCase();
   if (!query) return [];
   return itemIds
@@ -2612,7 +2612,7 @@ function readFlagStringValue(args: string[], longName: string): string | null | 
  * (bare trailing flag, or one followed by another flag) so callers can reject
  * it instead of silently dropping the flag.
  */
-function readFlagStringValues(args: string[], longName: string): (string | null)[] {
+export function readFlagStringValues(args: string[], longName: string): (string | null)[] {
   const equalsForm = `${longName}=`;
   const values: (string | null)[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -2633,7 +2633,7 @@ function readFlagStringValues(args: string[], longName: string): (string | null)
 }
 
 /** Strictly parse a non-negative integer (""/"2abc"/"2.5" are rejected, unlike parseInt). */
-function parseNonNegativeInt(raw: unknown): number | undefined {
+export function parseNonNegativeInt(raw: unknown): number | undefined {
   const text = String(raw).trim();
   if (text.length === 0) return undefined;
   const parsed = Number(text);

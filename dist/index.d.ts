@@ -1,4 +1,4 @@
-import { type Exporter } from "@unbrained/pm-cli/sdk";
+import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
 import { runGraph, type GraphCommandOptions } from "@unbrained/pm-cli/sdk/graph";
 type CommandContext = {
     command?: string;
@@ -122,6 +122,24 @@ type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" |
  */
 export declare function runPmGraph(subcommand: string, id: string | null, flags: PmGraphFlags, context: CommandContext): Promise<Awaited<ReturnType<typeof runGraph>>>;
 /**
+ * Build a workspace graph (nodes + relationships) from pm item metadata.
+ *
+ * Emits one `PmItem` node per item, then derives edges from the item's
+ * structural fields: `CHILD_OF` for a parent, `BLOCKED_BY` for a blocker, and
+ * a normalized relationship per dependency (merging the legacy `deps[]` and
+ * typed `dependencies[]`, de-duplicated by `from->to:type`). Facet fields
+ * (type/status/assignee/sprint/release) and tags become `PmFacet` nodes with
+ * their own edges. A relationship whose target is not among the items — and
+ * not already a node — is materialized as an `ExternalPmItem` so the graph
+ * never dangles a half-edge.
+ *
+ * @param items - pm item metadata to project.
+ * @param workspace - Workspace path, recorded on the returned graph.
+ * @param depsByItem - Extra dependency records keyed by item id.
+ * @returns The shaped graph with project metadata.
+ */
+export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>): Graph;
+/**
  * Derive the logical workspace directory from a pm_root. pm roots are usually
  * `<workspace>/.agents/pm`; strip that suffix so the derived project key
  * matches what the existing `cwd`-based commands produce.
@@ -171,6 +189,18 @@ export declare function parseNodeFilter(raw: string[]): NodeFilter;
  * node's (lowercased) `key` property is one of the entry's values (OR).
  */
 export declare function matchesNodeFilter(node: GraphNode, filter: NodeFilter): boolean;
+/**
+ * Render a graph as a Mermaid `graph TD` document.
+ *
+ * Each node is drawn as a boxed label showing title, id, and status, with the
+ * id sanitized through {@link mermaidId} (Mermaid ids must be alphanumeric) and
+ * the label escaped through {@link mermaidLabel}. Relationships become
+ * directed arrows labelled with their type; a blank line separates nodes from
+ * edges only when there are edges, so an edge-free graph stays compact.
+ */
+export declare function renderMermaid(graph: Graph): string;
+/** A JSON Graph Format-style document (nodes/edges) for generic graph tooling. */
+export declare function renderJsonGraph(graph: Graph): string;
 /**
  * Render a valid GraphML XML document (consumable by yEd / Gephi / NetworkX).
  * Declares string keys for node title/type/status/labels and edge type, then
@@ -405,6 +435,22 @@ export type ExplainReport = {
  * from the item, and cycle participation.
  */
 export declare function explainItem(graph: Graph, id: string): ExplainReport | null;
+/**
+ * Fuzzy-suggest item ids that resemble an operator's input.
+ *
+ * A candidate survives when it contains the (lowercased) query anywhere, OR
+ * shares at least three leading characters with it, so a typo still surfaces
+ * the intended id while a one-character clash does not flood the results.
+ * Survivors are ranked: exact `startsWith` first, then substring includes, then
+ * the longest shared prefix, then alphabetical, and truncated to `limit`.
+ * Returns an empty array for a blank query.
+ *
+ * @param itemIds - Known item ids to search.
+ * @param input - The operator's (possibly misspelled) input.
+ * @param limit - Maximum suggestions to return.
+ * @returns Ranked suggestion ids, possibly empty.
+ */
+export declare function suggestItemIds(itemIds: string[], input: string, limit?: number): string[];
 type ItemIdResolution = {
     input: string;
     resolved: string;
@@ -428,6 +474,15 @@ export declare function resolveItemIdOrThrow(itemIds: string[], input: string, l
  * All analytics operate on structural edges between item nodes only.
  */
 export declare function analyzeGraph(graph: Graph, topN?: number): AnalyzeReport;
+/**
+ * Collect ALL occurrences of a repeatable string flag (`--flag value` /
+ * `--flag=value`). A `null` entry marks an occurrence with a missing value
+ * (bare trailing flag, or one followed by another flag) so callers can reject
+ * it instead of silently dropping the flag.
+ */
+export declare function readFlagStringValues(args: string[], longName: string): (string | null)[];
+/** Strictly parse a non-negative integer (""/"2abc"/"2.5" are rejected, unlike parseInt). */
+export declare function parseNonNegativeInt(raw: unknown): number | undefined;
 /**
  * Extension entry point: register the graph commands and output service.
  *

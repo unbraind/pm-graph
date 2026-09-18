@@ -496,7 +496,7 @@ function facetNodeId(kind, value) {
  * @param depsByItem - Extra dependency records keyed by item id.
  * @returns The shaped graph with project metadata.
  */
-function graphFromItems(items, workspace, depsByItem) {
+export function graphFromItems(items, workspace, depsByItem) {
     const nodesById = new Map();
     const relationships = [];
     const addNode = (node) => {
@@ -1010,7 +1010,7 @@ function mermaidId(id) {
  * directed arrows labelled with their type; a blank line separates nodes from
  * edges only when there are edges, so an edge-free graph stays compact.
  */
-function renderMermaid(graph) {
+export function renderMermaid(graph) {
     const lines = ["graph TD"];
     for (const node of graph.nodes) {
         const title = typeof node.properties.title === "string" && node.properties.title
@@ -1061,7 +1061,7 @@ function renderDot(graph) {
     return lines.join("\n");
 }
 /** A JSON Graph Format-style document (nodes/edges) for generic graph tooling. */
-function renderJsonGraph(graph) {
+export function renderJsonGraph(graph) {
     const doc = {
         graph: {
             directed: true,
@@ -1875,7 +1875,7 @@ function sharedPrefixLength(a, b) {
  * @param limit - Maximum suggestions to return.
  * @returns Ranked suggestion ids, possibly empty.
  */
-function suggestItemIds(itemIds, input, limit = 5) {
+export function suggestItemIds(itemIds, input, limit = 5) {
     const query = input.trim().toLowerCase();
     if (!query)
         return [];
@@ -2186,7 +2186,7 @@ function readFlagStringValue(args, longName) {
  * (bare trailing flag, or one followed by another flag) so callers can reject
  * it instead of silently dropping the flag.
  */
-function readFlagStringValues(args, longName) {
+export function readFlagStringValues(args, longName) {
     const equalsForm = `${longName}=`;
     const values = [];
     for (let i = 0; i < args.length; i++) {
@@ -2208,7 +2208,7 @@ function readFlagStringValues(args, longName) {
     return values;
 }
 /** Strictly parse a non-negative integer (""/"2abc"/"2.5" are rejected, unlike parseInt). */
-function parseNonNegativeInt(raw) {
+export function parseNonNegativeInt(raw) {
     const text = String(raw).trim();
     if (text.length === 0)
         return undefined;

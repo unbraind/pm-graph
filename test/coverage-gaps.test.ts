@@ -17,16 +17,24 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
+import type { ItemMetadata } from "@unbrained/pm-cli/sdk";
 
 import {
   analyzeGraph,
   explainItem,
+  graphFromItems,
+  matchesNodeFilter,
   neo4jFriendlyError,
+  parseNonNegativeInt,
   parseNeo4jMs,
+  readFlagStringValues,
   renderAnalysisDiagram,
   renderGraphml,
+  renderJsonGraph,
+  renderMermaid,
   resolveItemIdOrThrow,
   runPmGraph,
+  suggestItemIds,
   workspaceFromPmRoot,
 } from "../src/index.ts";
 import extension from "../src/index.ts";
@@ -166,6 +174,90 @@ test("workspaceFromPmRoot strips tracker suffixes including custom hidden dirs",
   assert.equal(workspaceFromPmRoot("/tmp/demo/custom-root"), path.resolve("/tmp/demo/custom-root"));
   assert.equal(workspaceFromPmRoot("/.agents/pm"), path.sep);
   assert.equal(workspaceFromPmRoot("/.pm"), path.sep);
+});
+
+test("graphFromItems handles legacy dependency keys, duplicate edges, facets, and malformed records", () => {
+  const base: ItemMetadata = {
+    id: "pm-base",
+    title: "Base",
+    description: "",
+    type: "Task",
+    status: "open",
+    priority: 2,
+    tags: [],
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  };
+  const sparse = { ...base, id: "pm-sparse" } as ItemMetadata;
+  Object.assign(sparse, {
+    title: undefined,
+    type: undefined,
+    status: undefined,
+    priority: undefined,
+    tags: undefined,
+    assignee: undefined,
+    sprint: undefined,
+    release: undefined,
+    deps: [
+      { id: "ext-id", type: "blocks" },
+      { target: "ext-target", kind: "relates" },
+      { target_id: "ext-target-id", relation: "depends" },
+      { targetId: "ext-targetId", rel: "links" },
+      { item: "ext-item", relationship: "uses" },
+      { item_id: "ext-item-id" },
+      { itemId: "ext-itemId" },
+      { foo: "missing-target" },
+      { id: "ext-id", type: "blocks" },
+    ],
+  });
+  const rich: ItemMetadata = {
+    ...base,
+    id: "pm-rich",
+    title: "Rich",
+    assignee: "ada",
+    sprint: "s1",
+    release: "r1",
+    tags: [" ", "core"],
+    dependencies: [{ id: "pm-base", kind: "blocks", created_at: "2026-01-01T00:00:00.000Z" }],
+  };
+  const graph = graphFromItems([sparse, rich], "/tmp/demo", new Map([["pm-rich", [{ id: "ext-map", relation: "maps" }]] ]));
+  assert.equal(graph.projectKey, "demo");
+  assert.ok(graph.nodes.some((node) => node.id === "ext-id" && node.labels.includes("ExternalPmItem")));
+  assert.ok(graph.nodes.some((node) => node.id === "assignee:ada"));
+  assert.ok(graph.nodes.some((node) => node.id === "tag:core"));
+  assert.ok(graph.relationships.some((edge) => edge.type === "RELATES"));
+  assert.equal(
+    graph.relationships.filter((edge) => edge.from === "pm-sparse" && edge.to === "ext-id").length,
+    1,
+  );
+});
+
+test("pure parser, filter, suggestion, and renderer branches are observable", () => {
+  assert.deepEqual(readFlagStringValues(["--filter=type=Task", "--filter", "status=open", "--filter"], "--filter"), [
+    "type=Task",
+    "status=open",
+    null,
+  ]);
+  assert.equal(parseNonNegativeInt(""), undefined);
+  assert.equal(parseNonNegativeInt("2.5"), undefined);
+  assert.equal(parseNonNegativeInt("-1"), undefined);
+  assert.equal(parseNonNegativeInt(" 4 "), 4);
+  assert.deepEqual(suggestItemIds(["pm-alpha", "pm-alpine"], ""), []);
+  assert.deepEqual(suggestItemIds(["pm-alpha", "pm-alpine"], "pm-al"), ["pm-alpha", "pm-alpine"]);
+
+  const item = { id: "pm-1", labels: ["PmItem"], properties: { title: 42, status: 7 } };
+  const facet = { id: "facet", labels: ["PmFacet"], properties: { title: "Facet" } };
+  assert.equal(matchesNodeFilter(item, [{ key: "status", values: ["open"] }]), false);
+  assert.equal(matchesNodeFilter(facet, [{ key: "status", values: ["open"] }]), true);
+  const graph = {
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    workspace: "/tmp/demo",
+    projectKey: "demo",
+    nodes: [item, facet],
+    relationships: [],
+  };
+  assert.match(renderMermaid(graph), /pm-1/);
+  assert.match(renderJsonGraph(graph), /"label": "pm-1"/);
 });
 
 test("explainItem returns null for an unknown id and reports cycle membership", () => {
