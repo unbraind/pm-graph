@@ -29,6 +29,7 @@ import {
   requireImpactResult,
   matchesNodeFilter,
   neo4jFriendlyError,
+  parseAnalyticsFlags,
   parseNonNegativeInt,
   topoSort,
   parseNeo4jMs,
@@ -262,6 +263,7 @@ test("pure parser, filter, suggestion, and renderer branches are observable", ()
     "status=open",
     null,
   ]);
+  assert.deepEqual(parseAnalyticsFlags(["--help"]).positionals, []);
   assert.equal(parseNonNegativeInt(""), undefined);
   assert.equal(parseNonNegativeInt("2.5"), undefined);
   assert.equal(parseNonNegativeInt("-1"), undefined);
