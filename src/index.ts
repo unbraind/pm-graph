@@ -276,13 +276,13 @@ function neo4jFriendlyError(err: unknown): Error {
  * @param envVar - Name of the environment variable to read.
  * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
  */
-function parseNeo4jMs(envVar: string): number | undefined {
+export function parseNeo4jMs(envVar: string): number | undefined {
   const raw = process.env[envVar];
   if (raw === undefined || raw.trim() === "") return undefined;
   const trimmed = raw.trim();
   if (!/^\d+(\.\d+)?$/.test(trimmed)) return undefined;
   const n = Number(trimmed);
-  if (!Number.isFinite(n) || n < 0) return undefined;
+  if (!Number.isFinite(n)) return undefined;
   return Math.round(n);
 }
 
@@ -409,15 +409,14 @@ function toPlain(value: unknown): unknown {
 
   if (Array.isArray(value)) return value.map(toPlain);
 
-  if (typeof value === "object") {
-    const obj: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      obj[k] = toPlain(v);
-    }
-    return obj;
+  // After the non-object early return, `value` is a non-null object. Arrays are
+  // handled above; every remaining value is a plain object (or a Neo4j type that
+  // did not match the structural checks), so a final `return value` is unreachable.
+  const obj: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    obj[k] = toPlain(v);
   }
-
-  return value;
+  return obj;
 }
 
 /**
@@ -810,7 +809,7 @@ async function fetchItemsViaSdk(pmRoot: string): Promise<ItemMetadata[]> {
  * `<workspace>/.agents/pm`; strip that suffix so the derived project key
  * matches what the existing `cwd`-based commands produce.
  */
-function workspaceFromPmRoot(pmRoot: string): string {
+export function workspaceFromPmRoot(pmRoot: string): string {
   const normalized = path.resolve(pmRoot);
   const parts = normalized.split(path.sep);
   if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
@@ -2138,8 +2137,6 @@ function itemNodeMap(graph: Graph): Map<string, GraphNode> {
  */
 export function explainItem(graph: Graph, id: string): ExplainReport | null {
   const items = [...itemNodeIds(graph)].sort();
-  if (!items.includes(id)) return null;
-
   const edges = structuralEdges(graph);
   const nodesById = itemNodeMap(graph);
   const node = nodesById.get(id);

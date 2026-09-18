@@ -56,6 +56,28 @@ type Graph = {
     nodes: GraphNode[];
     relationships: GraphRelationship[];
 };
+/**
+ * Parse an optional non-negative millisecond override from an environment
+ * variable, returning `undefined` when the variable is absent or malformed.
+ *
+ * Both knobs exposed by {@link createDriver} (the TCP connect cap and the
+ * transaction-retry budget) are optional, so a single guarded parser keeps the
+ * production default identical to the driver's own whenever an operator has not
+ * opted in. A malformed or negative value is ignored rather than thrown: a bad
+ * value here must never stop a workspace whose Neo4j is reachable from
+ * connecting, and the malformed input surfaces anyway as the driver's own
+ * connection error when the value genuinely matters.
+ *
+ * @param envVar - Name of the environment variable to read.
+ * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
+ */
+export declare function parseNeo4jMs(envVar: string): number | undefined;
+/**
+ * Derive the logical workspace directory from a pm_root. pm roots are usually
+ * `<workspace>/.agents/pm`; strip that suffix so the derived project key
+ * matches what the existing `cwd`-based commands produce.
+ */
+export declare function workspaceFromPmRoot(pmRoot: string): string;
 type AnalyticsFlags = {
     json: boolean;
     includeClosed: boolean;

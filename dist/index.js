@@ -162,7 +162,7 @@ function neo4jFriendlyError(err) {
  * @param envVar - Name of the environment variable to read.
  * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
  */
-function parseNeo4jMs(envVar) {
+export function parseNeo4jMs(envVar) {
     const raw = process.env[envVar];
     if (raw === undefined || raw.trim() === "")
         return undefined;
@@ -170,7 +170,7 @@ function parseNeo4jMs(envVar) {
     if (!/^\d+(\.\d+)?$/.test(trimmed))
         return undefined;
     const n = Number(trimmed);
-    if (!Number.isFinite(n) || n < 0)
+    if (!Number.isFinite(n))
         return undefined;
     return Math.round(n);
 }
@@ -278,14 +278,14 @@ function toPlain(value) {
     }
     if (Array.isArray(value))
         return value.map(toPlain);
-    if (typeof value === "object") {
-        const obj = {};
-        for (const [k, v] of Object.entries(value)) {
-            obj[k] = toPlain(v);
-        }
-        return obj;
+    // After the non-object early return, `value` is a non-null object. Arrays are
+    // handled above; every remaining value is a plain object (or a Neo4j type that
+    // did not match the structural checks), so a final `return value` is unreachable.
+    const obj = {};
+    for (const [k, v] of Object.entries(value)) {
+        obj[k] = toPlain(v);
     }
-    return value;
+    return obj;
 }
 /**
  * Coerce a property value to a plain number, tolerating Neo4j Integers.
@@ -638,7 +638,7 @@ async function fetchItemsViaSdk(pmRoot) {
  * `<workspace>/.agents/pm`; strip that suffix so the derived project key
  * matches what the existing `cwd`-based commands produce.
  */
-function workspaceFromPmRoot(pmRoot) {
+export function workspaceFromPmRoot(pmRoot) {
     const normalized = path.resolve(pmRoot);
     const parts = normalized.split(path.sep);
     if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
@@ -1799,8 +1799,6 @@ function itemNodeMap(graph) {
  */
 export function explainItem(graph, id) {
     const items = [...itemNodeIds(graph)].sort();
-    if (!items.includes(id))
-        return null;
     const edges = structuralEdges(graph);
     const nodesById = itemNodeMap(graph);
     const node = nodesById.get(id);
