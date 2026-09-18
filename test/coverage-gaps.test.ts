@@ -325,13 +325,21 @@ test("offline analytics cover dangling edges, ties, cycles, components, and spar
 
   const sparseGraph = {
     ...graph,
-    nodes: [{ id: "sparse", labels: ["PmItem"], properties: { id: "sparse" } }],
-    relationships: [],
+    nodes: [
+      { id: "sparse", labels: ["PmItem"], properties: { id: "sparse" } },
+      { id: "neighbor-b", labels: ["PmItem"], properties: { id: "neighbor-b" } },
+      { id: "neighbor-a", labels: ["PmItem"], properties: { id: "neighbor-a" } },
+    ],
+    relationships: [
+      { from: "sparse", to: "neighbor-b", type: "DEPENDS_ON", properties: {} },
+      { from: "sparse", to: "neighbor-a", type: "DEPENDS_ON", properties: {} },
+    ],
   } as Parameters<typeof explainItem>[0];
   const sparseReport = explainItem(sparseGraph, "sparse");
   assert.ok(sparseReport);
   assert.equal(sparseReport.item.title, "sparse");
   assert.equal(sparseReport.item.status, "unknown");
+  assert.deepEqual(sparseReport.blockers.map((neighbor) => neighbor.id), ["neighbor-a", "neighbor-b"]);
 });
 
 test("explainItem returns null for an unknown id and reports cycle membership", () => {
