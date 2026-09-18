@@ -420,6 +420,19 @@ function resolvePmRootForContext(context) {
  * copy would drift. Callers narrow the union on the `subcommand` discriminant
  * carried by every envelope, so no cast appears anywhere on this path.
  */
+/**
+ * Narrow the SDK's projected graph union at the canonical impact call site.
+ *
+ * @param result - The real SDK response returned for a graph command.
+ * @returns The impact projection when the requested subcommand honored its contract.
+ * @throws {CommandError} When the SDK returns a different envelope.
+ */
+export function requireImpactResult(result) {
+    if (result.subcommand !== "impact") {
+        throw new CommandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
+    }
+    return result;
+}
 export async function runPmGraph(subcommand, id, flags, context) {
     const options = {};
     if (flags.direction)
@@ -2972,15 +2985,7 @@ export function activate(api) {
                     pmGraphFlags.maxDepth = flags.depth;
                 if (flags.limit !== undefined)
                     pmGraphFlags.limit = flags.limit;
-                const result = await runPmGraph("impact", resolvedId, pmGraphFlags, context);
-                // runGraph returns the projected union of every subcommand envelope.
-                // This call site only ever asks for "impact", so checking the
-                // subcommand discriminant narrows the union to the impact projection
-                // with no cast at all; any other envelope means the engine drifted
-                // from its contract, which is a generic failure here, not a usage one.
-                if (result.subcommand !== "impact") {
-                    throw new CommandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
-                }
+                const result = requireImpactResult(await runPmGraph("impact", resolvedId, pmGraphFlags, context));
                 // The canonical engine traverses the FULL workspace graph and never
                 // sees pm-graph's presentation flags. Post-filter the returned rows to
                 // the same shaped item-id universe that `--filter` (and the default

@@ -26,6 +26,7 @@ import {
   dependencyDepths,
   graphFromItems,
   longestChain,
+  requireImpactResult,
   matchesNodeFilter,
   neo4jFriendlyError,
   parseNonNegativeInt,
@@ -674,6 +675,11 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
     await assert.rejects(
       () => runPmGraph("unknown-subcommand", "root", {}, wsContext),
       /Failed to run pm graph unknown-subcommand:/,
+    );
+    const analyzeResult = await runPmGraph("analyze", null, {}, wsContext);
+    assert.throws(
+      () => requireImpactResult(analyzeResult),
+      /pm graph impact returned a "analyze" result envelope/,
     );
   } finally {
     rmSync(ws, { recursive: true, force: true });

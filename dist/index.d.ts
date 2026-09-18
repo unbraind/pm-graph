@@ -120,6 +120,16 @@ type PmGraphFlags = Partial<Pick<GraphCommandOptions, "direction" | "maxDepth" |
  * copy would drift. Callers narrow the union on the `subcommand` discriminant
  * carried by every envelope, so no cast appears anywhere on this path.
  */
+/**
+ * Narrow the SDK's projected graph union at the canonical impact call site.
+ *
+ * @param result - The real SDK response returned for a graph command.
+ * @returns The impact projection when the requested subcommand honored its contract.
+ * @throws {CommandError} When the SDK returns a different envelope.
+ */
+export declare function requireImpactResult(result: Awaited<ReturnType<typeof runGraph>>): Extract<Awaited<ReturnType<typeof runGraph>>, {
+    subcommand: "impact";
+}>;
 export declare function runPmGraph(subcommand: string, id: string | null, flags: PmGraphFlags, context: CommandContext): Promise<Awaited<ReturnType<typeof runGraph>>>;
 /**
  * Build a workspace graph (nodes + relationships) from pm item metadata.
