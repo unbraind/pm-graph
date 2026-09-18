@@ -629,14 +629,14 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
       global: { json: true },
       get pm_root(): string {
         reads++;
-        if (reads > 1) throw new Error("canonical graph boom");
-        return tracker;
+        return reads <= 2 ? tracker : path.join(ws, "missing-after-load");
       },
     } as unknown as Parameters<typeof impactHandler.run>[0];
     await assert.rejects(
       async () => impactHandler.run(brokenAfterLoad),
-      (err: Error) => {
-        assert.match(err.message, /canonical graph boom/);
+      (err: CommandError) => {
+        assert.equal(err.exitCode, 1);
+        assert.match(err.message, /Failed to run pm graph impact: Tracker is not initialized/);
         return true;
       },
     );
