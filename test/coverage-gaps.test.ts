@@ -20,12 +20,16 @@ import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from 
 import type { ItemMetadata } from "@unbrained/pm-cli/sdk";
 
 import {
-  analyzeGraph,
   explainItem,
+  analyzeGraph,
+  criticalConnectors,
+  dependencyDepths,
   graphFromItems,
+  longestChain,
   matchesNodeFilter,
   neo4jFriendlyError,
   parseNonNegativeInt,
+  topoSort,
   parseNeo4jMs,
   readFlagStringValues,
   renderAnalysisDiagram,
@@ -222,6 +226,23 @@ test("graphFromItems handles legacy dependency keys, duplicate edges, facets, an
   };
   const graph = graphFromItems([sparse, rich], "/tmp/demo", new Map([["pm-rich", [{ id: "ext-map", relation: "maps" }]] ]));
   assert.equal(graph.projectKey, "demo");
+  const sparseNode = graph.nodes.find((node) => node.id === "pm-sparse");
+  assert.ok(sparseNode);
+  assert.deepEqual(sparseNode.properties, {
+    id: "pm-sparse",
+    title: "",
+    type: "Item",
+    status: "unknown",
+    priority: null,
+    tags: [],
+    assignee: null,
+    sprint: null,
+    release: null,
+    deadline: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  });
+  assert.ok(sparseNode.labels.includes("Item"));
   assert.ok(graph.nodes.some((node) => node.id === "ext-id" && node.labels.includes("ExternalPmItem")));
   assert.ok(graph.nodes.some((node) => node.id === "assignee:ada"));
   assert.ok(graph.nodes.some((node) => node.id === "tag:core"));
@@ -258,6 +279,57 @@ test("pure parser, filter, suggestion, and renderer branches are observable", ()
   };
   assert.match(renderMermaid(graph), /pm-1/);
   assert.match(renderJsonGraph(graph), /"label": "pm-1"/);
+});
+
+test("offline analytics cover dangling edges, ties, cycles, components, and sparse properties", () => {
+  const edges = [
+    { from: "a", to: "b", type: "DEPENDS_ON" },
+    { from: "b", to: "c", type: "DEPENDS_ON" },
+    { from: "c", to: "b", type: "BLOCKED_BY" },
+    { from: "a", to: "e", type: "DEPENDS_ON" },
+    { from: "missing", to: "a", type: "DEPENDS_ON" },
+  ] as Parameters<typeof longestChain>[1];
+  assert.deepEqual(longestChain(["a", "b", "c", "d", "e"], edges), ["a", "b", "c"]);
+  assert.deepEqual(topoSort(["a", "b", "c", "d", "e"], edges), {
+    order: ["d", "e"],
+    cycleNodes: ["a", "b", "c"],
+  });
+  assert.deepEqual(dependencyDepths(["a", "b", "c", "d", "e"], edges).get("d"), 0);
+  const connectors = criticalConnectors(["a", "b", "c", "d", "e"], edges);
+  assert.ok(connectors.articulationPoints.includes("a"));
+  assert.ok(connectors.bridges.length > 0);
+
+  const nodes = ["a", "b", "c", "d", "e"].map((id) => ({
+    id,
+    labels: ["PmItem"],
+    properties: { id, title: id, status: "open" },
+  }));
+  const graph = {
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    workspace: "/tmp/demo",
+    projectKey: "demo",
+    nodes,
+    relationships: [
+      ...edges.filter((edge) => edge.from !== "missing").map((edge) => ({ ...edge, properties: {} })),
+      { ...edges[0], properties: {} },
+      { from: "a", to: "unknown", type: "DEPENDS_ON", properties: {} },
+    ],
+  } as Parameters<typeof analyzeGraph>[0];
+  const report = analyzeGraph(graph);
+  assert.equal(report.orphanCount, 1);
+  assert.ok(report.rootCount >= 1);
+  assert.ok(report.leafCount >= 1);
+  assert.ok(report.cycleCount >= 1);
+
+  const sparseGraph = {
+    ...graph,
+    nodes: [{ id: "sparse", labels: ["PmItem"], properties: { id: "sparse" } }],
+    relationships: [],
+  } as Parameters<typeof explainItem>[0];
+  const sparseReport = explainItem(sparseGraph, "sparse");
+  assert.ok(sparseReport);
+  assert.equal(sparseReport.item.title, "sparse");
+  assert.equal(sparseReport.item.status, "unknown");
 });
 
 test("explainItem returns null for an unknown id and reports cycle membership", () => {
@@ -1081,6 +1153,40 @@ test("root discovery wraps missing trackers and preserves typed tracker errors",
     );
   } finally {
     process.chdir(originalCwd);
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("registered handlers support omitted optional context fields", { skip: !pmAvailable }, async () => {
+  const ws = freshWorkspace();
+  try {
+    pm(ws, ["init"]);
+    createItem(ws, "Alpha");
+    const harness = await makeHarness();
+    const tracker = path.join(ws, ".agents", "pm");
+    for (const entry of harness.activation.commands.handlers) {
+      const context = {
+        command: entry.command,
+        options: {},
+        global: { json: true },
+        pm_root: tracker,
+      } as unknown as Parameters<typeof entry.run>[0];
+      await Promise.resolve(entry.run(context)).catch(() => undefined);
+    }
+
+    const analyzeHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph analyze");
+    assert.ok(analyzeHandler);
+    for (const rootField of ["workspaceRoot", "cwd"] as const) {
+      const context = {
+        command: "pm-graph analyze",
+        args: [],
+        options: {},
+        global: { json: true },
+        [rootField]: ws,
+      } as unknown as Parameters<typeof analyzeHandler.run>[0];
+      await analyzeHandler.run(context);
+    }
+  } finally {
     rmSync(ws, { recursive: true, force: true });
   }
 });

@@ -1768,14 +1768,10 @@ function readNumberProperty(properties, key) {
     return null;
 }
 function itemTitle(node, fallbackId) {
-    if (!node)
-        return fallbackId;
     const title = readStringProperty(node.properties, "title");
-    return title ?? node.id;
+    return title ?? fallbackId;
 }
 function itemStatus(node) {
-    if (!node)
-        return null;
     return readStringProperty(node.properties, "status");
 }
 /**
@@ -1818,6 +1814,9 @@ export function explainItem(graph, id) {
         .sort((a, b) => a[0].localeCompare(b[0]))
         .map(([neighborId, types]) => ({
         id: neighborId,
+        // Structural edges are filtered to itemNodeMap's exact item set, so
+        // every neighbor id is present in this map. Keep the nullable public
+        // graph helpers defensive while using that invariant internally.
         title: itemTitle(nodesById.get(neighborId), neighborId),
         status: itemStatus(nodesById.get(neighborId)),
         relationTypes: [...types].sort(),
@@ -1840,7 +1839,8 @@ export function explainItem(graph, id) {
         blockers: mapNeighbors(blockerTypes),
         dependents: mapNeighbors(dependentTypes),
         transitiveDependents: reverseReachable(edges, id),
-        dependencyDepth: depths.get(id) ?? 0,
+        // dependencyDepths initializes one entry for every id in `items`.
+        dependencyDepth: depths.get(id),
         criticalChainFromItem: longestChain([id], edges),
         inCycle: cycles.length > 0,
         cycleCount: cycles.length,
