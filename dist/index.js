@@ -1956,16 +1956,18 @@ export function analyzeGraph(graph, topN = 10) {
         inDegree.set(id, 0);
         outDegree.set(id, 0);
     }
+    // structuralEdges is restricted to `items`, and both degree maps are
+    // initialized for every item above; these lookups cannot be absent here.
     for (const e of edges) {
-        outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1);
-        inDegree.set(e.to, (inDegree.get(e.to) ?? 0) + 1);
+        outDegree.set(e.from, outDegree.get(e.from) + 1);
+        inDegree.set(e.to, inDegree.get(e.to) + 1);
     }
     // Orphans: no structural edges at all (no in, no out).
-    const orphans = items.filter((id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) === 0);
+    const orphans = items.filter((id) => inDegree.get(id) === 0 && outDegree.get(id) === 0);
     // Roots: have outgoing/incoming structure but no INCOMING dependency edge.
-    const roots = items.filter((id) => (inDegree.get(id) ?? 0) === 0 && (outDegree.get(id) ?? 0) > 0);
+    const roots = items.filter((id) => inDegree.get(id) === 0 && outDegree.get(id) > 0);
     // Leaves: have incoming structure but no outgoing dependency edge.
-    const leaves = items.filter((id) => (outDegree.get(id) ?? 0) === 0 && (inDegree.get(id) ?? 0) > 0);
+    const leaves = items.filter((id) => outDegree.get(id) === 0 && inDegree.get(id) > 0);
     const cycles = findCycles(items, edges);
     const longest = longestChain(items, edges);
     // Connected components over the UNDIRECTED projection of structural edges.
@@ -1986,7 +1988,8 @@ export function analyzeGraph(graph, topN = 10) {
         visited.add(id);
         while (queue.length > 0) {
             const cur = queue.shift();
-            for (const next of undirected.get(cur) ?? []) {
+            // Every queued id came from `items`, which initialized `undirected`.
+            for (const next of undirected.get(cur)) {
                 if (!visited.has(next)) {
                     visited.add(next);
                     queue.push(next);
@@ -1999,9 +2002,9 @@ export function analyzeGraph(graph, topN = 10) {
     const topDegreeCentrality = items
         .map((id) => ({
         id,
-        degree: (inDegree.get(id) ?? 0) + (outDegree.get(id) ?? 0),
-        inDegree: inDegree.get(id) ?? 0,
-        outDegree: outDegree.get(id) ?? 0,
+        degree: inDegree.get(id) + outDegree.get(id),
+        inDegree: inDegree.get(id),
+        outDegree: outDegree.get(id),
     }))
         .filter((d) => d.degree > 0)
         .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
@@ -2010,7 +2013,8 @@ export function analyzeGraph(graph, topN = 10) {
     // item (distance to a leaf). maxDepth is the depth of the critical path.
     const depths = dependencyDepths(items, edges);
     const depthByItem = items
-        .map((id) => ({ id, depth: depths.get(id) ?? 0 }))
+        // dependencyDepths initializes one entry for every item id.
+        .map((id) => ({ id, depth: depths.get(id) }))
         .sort((a, b) => b.depth - a.depth || a.id.localeCompare(b.id));
     const maxDepth = depthByItem.reduce((max, d) => (d.depth > max ? d.depth : max), 0);
     const connectors = criticalConnectors(items, edges);
