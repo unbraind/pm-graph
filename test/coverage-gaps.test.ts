@@ -1105,7 +1105,9 @@ test("registered handlers support omitted optional context fields", { skip: !pmA
         global: { json: true },
         pm_root: tracker,
       } as unknown as Parameters<typeof entry.run>[0];
-      await Promise.resolve(entry.run(context)).catch(() => undefined);
+      await Promise.resolve(entry.run(context)).catch((err: unknown) => {
+        if (!(err instanceof Error) || err.name !== "CommandError") throw err;
+      });
     }
 
     const analyzeHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph analyze");
