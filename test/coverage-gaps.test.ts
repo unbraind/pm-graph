@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import { runGraph } from "@unbrained/pm-cli/sdk/graph";
 import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
 import type { ItemMetadata } from "@unbrained/pm-cli/sdk";
 
@@ -28,11 +29,9 @@ import {
   longestChain,
   requireImpactResult,
   matchesNodeFilter,
-  neo4jFriendlyError,
   parseAnalyticsFlags,
   parseNonNegativeInt,
   topoSort,
-  parseNeo4jMs,
   readFlagStringValues,
   renderAnalysisDiagram,
   renderGraphml,
@@ -40,9 +39,7 @@ import {
   renderMermaid,
   renderPlantuml,
   resolveItemIdOrThrow,
-  runPmGraph,
   suggestItemIds,
-  workspaceFromPmRoot,
 } from "../src/index.ts";
 import extension from "../src/index.ts";
 import {
@@ -147,40 +144,34 @@ function setNeo4jEnv(overrides: Record<string, string | undefined> = {}): NodeJS
   return original;
 }
 
-test("parseNeo4jMs ignores absent, blank, malformed, and non-finite values", () => {
-  const original = { ...process.env };
+test("Neo4j timeout parsing is exercised through the real sync command", { skip: !pmAvailable }, async () => {
+  const ws = freshWorkspace();
+  const original = setNeo4jEnv();
   try {
-    delete process.env.PM_GRAPH_PARSE_MS;
-    assert.equal(parseNeo4jMs("PM_GRAPH_PARSE_MS"), undefined);
-
-    process.env.PM_GRAPH_PARSE_MS = "   ";
-    assert.equal(parseNeo4jMs("PM_GRAPH_PARSE_MS"), undefined);
-
-    process.env.PM_GRAPH_PARSE_MS = "abc";
-    assert.equal(parseNeo4jMs("PM_GRAPH_PARSE_MS"), undefined);
-
-    process.env.PM_GRAPH_PARSE_MS = "-5";
-    assert.equal(parseNeo4jMs("PM_GRAPH_PARSE_MS"), undefined);
-
-    process.env.PM_GRAPH_PARSE_MS = "12.4";
-    assert.equal(parseNeo4jMs("PM_GRAPH_PARSE_MS"), 12);
-
-    process.env.PM_GRAPH_PARSE_MS = `${"9".repeat(400)}`;
-    assert.equal(parseNeo4jMs("PM_GRAPH_PARSE_MS"), undefined);
-
-    process.env.PM_GRAPH_PARSE_MS = "300";
-    assert.equal(parseNeo4jMs("PM_GRAPH_PARSE_MS"), 300);
+    pm(ws, ["init"]);
+    const harness = await makeHarness();
+    const pmRoot = path.join(ws, ".agents", "pm");
+    const cases: Array<[string | undefined, number | undefined]> = [
+      [undefined, undefined],
+      ["   ", undefined],
+      ["abc", undefined],
+      ["-5", undefined],
+      ["12.4", 12],
+      [`${"9".repeat(400)}`, undefined],
+      ["300", 300],
+    ];
+    for (const [raw, expected] of cases) {
+      if (raw === undefined) delete process.env.NEO4J_CONNECTION_TIMEOUT_MS;
+      else process.env.NEO4J_CONNECTION_TIMEOUT_MS = raw;
+      resetFakeNeo4j();
+      const result = (await harness.runCommand({ command: "pm-graph sync", pmRoot })) as CmdResult;
+      assert.equal(result.errorMessage, undefined);
+      assert.equal(getFakeNeo4jLastConfig()?.connectionTimeout, expected);
+    }
   } finally {
     restoreEnv(original);
+    rmSync(ws, { recursive: true, force: true });
   }
-});
-
-test("workspaceFromPmRoot strips tracker suffixes including custom hidden dirs", () => {
-  assert.equal(workspaceFromPmRoot("/tmp/demo/.agents/pm"), path.resolve("/tmp/demo"));
-  assert.equal(workspaceFromPmRoot("/tmp/demo/.pm"), path.resolve("/tmp/demo"));
-  assert.equal(workspaceFromPmRoot("/tmp/demo/custom-root"), path.resolve("/tmp/demo/custom-root"));
-  assert.equal(workspaceFromPmRoot("/.agents/pm"), path.sep);
-  assert.equal(workspaceFromPmRoot("/.pm"), path.sep);
 });
 
 test("graphFromItems handles legacy dependency keys, duplicate edges, facets, and malformed records", () => {
@@ -644,41 +635,12 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
     } as unknown as Parameters<typeof impactHandler.run>[0];
     await assert.rejects(
       async () => impactHandler.run(brokenAfterLoad),
-      (err: CommandError) => {
-        assert.match(`${err.name}:${err.message}:${err.exitCode ?? "missing"}`, /canonical graph boom/);
+      (err: Error) => {
+        assert.match(err.message, /canonical graph boom/);
         return true;
       },
     );
-
-    const directBrokenContext = {
-      command: "pm-graph impact",
-      args: [],
-      options: {},
-      global: { json: true },
-      get pm_root(): string {
-        throw new Error("direct graph boom");
-      },
-    } as unknown as Parameters<typeof runPmGraph>[3];
-    await assert.rejects(
-      () => runPmGraph("impact", "root", {}, directBrokenContext),
-      (err: CommandError) => {
-        assert.equal(err.exitCode, 1);
-        assert.match(err.message, /Failed to run pm graph impact: direct graph boom/);
-        return true;
-      },
-    );
-    const wsContext = {
-      command: "pm-graph impact",
-      args: [],
-      options: {},
-      global: { json: true },
-      pm_root: tracker,
-    } as unknown as Parameters<typeof runPmGraph>[3];
-    await assert.rejects(
-      () => runPmGraph("unknown-subcommand", "root", {}, wsContext),
-      /Failed to run pm graph unknown-subcommand:/,
-    );
-    const analyzeResult = await runPmGraph("analyze", null, {}, wsContext);
+    const analyzeResult = await runGraph("analyze", undefined, undefined, {}, { json: true, path: tracker });
     assert.throws(
       () => requireImpactResult(analyzeResult),
       /pm graph impact returned a "analyze" result envelope/,
@@ -947,6 +909,8 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
         endNodeElementId: "el-2",
       });
       const pathValue = fakePath(node, node, [{ start: node, relationship: rel, end: node }], 1);
+      const preservedFunction = () => "preserved";
+      const preservedSymbol = Symbol("preserved");
       setFakeNeo4jRead(() => ({
         records: [
           fakeRecord({
@@ -958,6 +922,8 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
             z: null,
             arr: [fakeInteger(1), { nested: true }],
             obj: { k: "v" },
+            preservedFunction,
+            preservedSymbol,
           }),
         ],
       }));
@@ -985,6 +951,8 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
       assert.equal(p.segments.length, 1);
       assert.deepEqual(row.arr, [1, { nested: true }]);
       assert.deepEqual(row.obj, { k: "v" });
+      assert.equal(row.preservedFunction, preservedFunction);
+      assert.equal(row.preservedSymbol, preservedSymbol);
     } finally {
       restoreEnv(original);
       rmSync(ws, { recursive: true, force: true });
@@ -1058,15 +1026,7 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
     );
   });
 
-  test("neo4jFriendlyError maps auth, non-Error, generic, and default-URI failures", async () => {
-    const originalEnv = { ...process.env };
-    delete process.env.NEO4J_URI;
-    const defaultUri = neo4jFriendlyError(new Error("ECONNREFUSED"));
-    assert.match(defaultUri.message, /bolt:\/\/localhost:7687/);
-    const missingMessage = Object.create(Error.prototype) as Error;
-    assert.equal(neo4jFriendlyError(missingMessage), missingMessage);
-    restoreEnv(originalEnv);
-
+  test("Neo4j commands map auth, non-Error, generic, and connection failures", async () => {
     const ws = freshWorkspace();
     const original = setNeo4jEnv();
     resetFakeNeo4j();

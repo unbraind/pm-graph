@@ -229,7 +229,7 @@ async function loadNeo4j(): Promise<Neo4jApi> {
  * The neo4j-driver throws errors with codes like ServiceUnavailable or
  * AuthorizationExpired that are not helpful on their own.
  */
-export function neo4jFriendlyError(err: unknown): Error {
+function neo4jFriendlyError(err: unknown): Error {
   if (!(err instanceof Error)) return new Error(String(err));
 
   const msg = err.message ?? "";
@@ -276,13 +276,13 @@ export function neo4jFriendlyError(err: unknown): Error {
  * @param envVar - Name of the environment variable to read.
  * @returns The rounded non-negative integer, or `undefined` when unset/invalid.
  */
-export function parseNeo4jMs(envVar: string): number | undefined {
+function parseNeo4jMs(envVar: string): number | undefined {
   const raw = process.env[envVar];
   if (raw === undefined || raw.trim() === "") return undefined;
   const trimmed = raw.trim();
   if (!/^\d+(\.\d+)?$/.test(trimmed)) return undefined;
   const n = Number(trimmed);
-  if (!Number.isFinite(n)) return undefined;
+  if (!Number.isFinite(n) || n < 0) return undefined;
   return Math.round(n);
 }
 
@@ -591,7 +591,7 @@ export function requireImpactResult(
   return result;
 }
 
-export async function runPmGraph(
+async function runPmGraph(
   subcommand: string,
   id: string | null,
   flags: PmGraphFlags,
@@ -828,7 +828,7 @@ async function fetchItemsViaSdk(pmRoot: string): Promise<ItemMetadata[]> {
  * `<workspace>/.agents/pm`; strip that suffix so the derived project key
  * matches what the existing `cwd`-based commands produce.
  */
-export function workspaceFromPmRoot(pmRoot: string): string {
+function workspaceFromPmRoot(pmRoot: string): string {
   const normalized = path.resolve(pmRoot);
   const parts = normalized.split(path.sep);
   if (parts.length >= 2 && parts[parts.length - 1] === "pm" && parts[parts.length - 2] === ".agents") {
