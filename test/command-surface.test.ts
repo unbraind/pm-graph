@@ -15,114 +15,53 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
-
-import extension from "../src/index.ts";
-
-/** Shape of the result returned by `harness.runCommand`. */
-type CmdResult = {
-  handled: boolean;
-  result: unknown;
-  warnings: string[];
-  errorMessage?: string;
-};
-
-/**
- * Shape of a {@link CommandError} propagated (thrown) by the dispatch engine
- * when a handler throws an error carrying a numeric `exitCode`. The pm-graph
- * extension mirrors the SDK EXIT_CODE contract: 1 = GENERIC_FAILURE,
- * 2 = USAGE, 3 = NOT_FOUND.
- */
-type CommandError = Error & { exitCode: number };
-
-let pmAvailable = true;
-try {
-  execFileSync("pm", ["--version"], { encoding: "utf-8" });
-} catch {
-  pmAvailable = false;
-}
-
-/** Capture console.log output produced while running `fn`. */
-async function captureStdout(fn: () => Promise<unknown>): Promise<{ result: unknown; stdout: string }> {
-  const original = console.log;
-  let buffer = "";
-  console.log = (...parts: unknown[]) => {
-    buffer += parts.map(String).join(" ") + "\n";
-  };
-  try {
-    const result = await fn();
-    return { result, stdout: buffer };
-  } finally {
-    console.log = original;
-  }
-}
-
-/** Create a fresh pm workspace and return its path. */
-function freshWorkspace(): string {
-  return mkdtempSync(path.join(tmpdir(), "pmg-cmd-"));
-}
-
-/** Run `pm` in a workspace and return stdout. */
-function pm(cwd: string, args: string[]): string {
-  return execFileSync("pm", args, { cwd, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
-}
-
-/** Create a task item and return its id. */
-function createItem(cwd: string, title: string, blockedBy?: string): string {
-  const args = ["create", "Task", title, "--json"];
-  if (blockedBy) args.push("--blocked-by", blockedBy);
-  const out = pm(cwd, args);
-  const created = JSON.parse(out) as { id?: string; item?: { id: string } };
-  return (created.item?.id ?? created.id) as string;
-}
-
-/** Create the SDK test harness bound to the pm-graph extension. */
-async function makeHarness(pmRoot: string) {
-  return createExtensionTestHarness(extension, {
-    name: "pm-graph",
-    capabilities: ["commands", "importers", "services"],
-  });
-}
+import {
+  type CmdResult,
+  type CommandError,
+  NEO4J_FAIL_ENV,
+  applyEnv,
+  captureStdout,
+  createChain,
+  createItem,
+  expectCommandError,
+  expectCommandErrorMulti,
+  expectExporterReject,
+  freshWorkspace,
+  makeHarness,
+  pm,
+  pmAvailable,
+  restoreEnv,
+  runExportRaw,
+  withCommandWorkspace,
+} from "./helpers.ts";
 
 // ---------------------------------------------------------------------------
 // ping command
 // ---------------------------------------------------------------------------
 
 test("ping returns extension version and Neo4j status (not configured)", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({ command: "pm-graph ping", pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
+    const res = await harness.runCommand({ command: "pm-graph ping", pmRoot }) as CmdResult;
     assert.equal(res.handled, true);
     const result = res.result as { ok: boolean; version: string; neo4jConfigured: boolean; source: string };
     assert.equal(result.ok, true);
     assert.equal(result.source, "pm-graph");
     assert.equal(result.neo4jConfigured, false, "Neo4j not configured by default");
     assert.ok(typeof result.version === "string", "version present");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("ping --help returns usage text", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({ command: "pm-graph ping", args: ["--help"], pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
+    const res = await harness.runCommand({ command: "pm-graph ping", args: ["--help"], pmRoot }) as CmdResult;
     assert.equal(res.handled, true);
     const result = res.result as { usage: string; description: string };
     assert.ok(typeof result.usage === "string");
     assert.ok(result.usage.includes("pm-graph ping"));
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // The status help `output` map documents what each response field means, so every
@@ -136,11 +75,8 @@ test("ping --help returns usage text", { skip: !pmAvailable }, async () => {
 // is deliberate: pinning the string would fail on any harmless copy edit, while
 // this catches precisely the regression that automation can reintroduce.
 test("status --help documents its output fields as descriptions, not values", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({ command: "pm-graph status", args: ["--help"], pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
+    const res = await harness.runCommand({ command: "pm-graph status", args: ["--help"], pmRoot }) as CmdResult;
     assert.equal(res.handled, true);
     const result = res.result as { output: Record<string, string> };
     assert.ok(result.output, "status help exposes an output map");
@@ -160,9 +96,7 @@ test("status --help documents its output fields as descriptions, not values", { 
       );
     }
     assert.match(result.output.version, /version/i, "the version field describes itself");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // Guards the other half of the same defect. The help text above is only stable if
@@ -238,106 +172,57 @@ test("the release version rewrite cannot match anything in this package's source
 // ---------------------------------------------------------------------------
 
 test("export --format cypher emits parameterized Cypher statements", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({
-      command: "pm-graph export",
-      args: ["--format", "cypher"],
-      pmRoot: path.join(ws, ".agents", "pm"),
-    }) as CmdResult;
-    // The export command wraps the rendered payload in __pmGraphRawOutput for the
-    // host's output-format override to unwrap; the test harness returns that
-    // wrapper verbatim, so the real Cypher text lives here rather than on stdout.
-    const r = res.result as { __pmGraphRawOutput: string; format: string; nodes: number };
-    const raw = r.__pmGraphRawOutput;
+    const raw = await runExportRaw(harness, pmRoot, "cypher");
     assert.ok(raw.includes("MERGE (n:PmGraphNode {projectKey: $projectKey"), "real parameterized MERGE clause");
     assert.ok(raw.includes("$projectKey"), "projectKey bound as a Cypher parameter");
     assert.ok(raw.includes("DETACH DELETE"), "per-project cleanup statement present");
-    assert.equal(r.format, "cypher");
-    assert.ok(r.nodes > 0, "at least one node exported");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("export --format plantuml emits a @startuml block", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({
-      command: "pm-graph export",
-      args: ["--format", "plantuml"],
-      pmRoot: path.join(ws, ".agents", "pm"),
-    }) as CmdResult;
-    const raw = (res.result as { __pmGraphRawOutput: string }).__pmGraphRawOutput;
+    const raw = await runExportRaw(harness, pmRoot, "plantuml");
     assert.ok(raw.startsWith("@startuml"), "PlantUML block starts with @startuml");
     assert.ok(raw.includes("left to right direction"), "PlantUML direction directive");
     assert.ok(raw.includes("object \""), "real PlantUML object declaration");
     assert.ok(raw.trim().endsWith("@enduml"), "PlantUML block ends with @enduml");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("export --format dot emits a Graphviz digraph", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({
-      command: "pm-graph export",
-      args: ["--format", "dot"],
-      pmRoot: path.join(ws, ".agents", "pm"),
-    }) as CmdResult;
-    const raw = (res.result as { __pmGraphRawOutput: string }).__pmGraphRawOutput;
+    const raw = await runExportRaw(harness, pmRoot, "dot");
     assert.ok(raw.startsWith("digraph pm_graph {"), "real Graphviz digraph header");
     assert.ok(raw.includes("rankdir=LR;"), "rankdir directive present");
     assert.ok(raw.includes('[shape=box, style=rounded];'), "node style declaration present");
     assert.ok(raw.trim().endsWith("}"), "digraph closes with a brace");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("export --format graphml emits valid GraphML XML", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({
-      command: "pm-graph export",
-      args: ["--format", "graphml"],
-      pmRoot: path.join(ws, ".agents", "pm"),
-    }) as CmdResult;
-    const raw = (res.result as { __pmGraphRawOutput: string }).__pmGraphRawOutput;
+    const raw = await runExportRaw(harness, pmRoot, "graphml");
     assert.ok(raw.startsWith('<?xml version="1.0"'), "XML prolog present");
     assert.ok(raw.includes("<graphml"), "graphml root element present");
     assert.ok(raw.includes('edgedefault="directed"'), "directed graph attribute present");
     assert.ok(raw.includes('<data key="title">'), "node title data element present");
     assert.ok(raw.includes("</graphml>"), "graphml root closes");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("export --output writes the rendered format to a file", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
     const outFile = path.join(ws, "graph.json");
     const res = await harness.runCommand({
       command: "pm-graph export",
       args: ["--format", "json", "--output", outFile],
-      pmRoot: path.join(ws, ".agents", "pm"),
+      pmRoot,
     }) as CmdResult;
     assert.equal(res.handled, true);
     const result = res.result as { ok: boolean; file: string; format: string };
@@ -347,48 +232,38 @@ test("export --output writes the rendered format to a file", { skip: !pmAvailabl
     const written = readFileSync(outFile, "utf-8");
     const parsed = JSON.parse(written) as { graph: { nodes: unknown[] } };
     assert.ok(Array.isArray(parsed.graph?.nodes), "written file is valid JSON graph");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("export --edges tags keeps only TAGGED_WITH edges", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const a = createItem(ws, "Alpha");
     createItem(ws, "Beta", a);
     // Add a tag to Alpha so a TAGGED_WITH edge exists alongside the structural
     // BLOCKED_BY edge (Beta -> Alpha) and the facet edges (HAS_TYPE/HAS_STATUS).
     pm(ws, ["update", a, "--tags", "backend"]);
-    const harness = await makeHarness(ws);
     const res = await harness.runCommand({
       command: "pm-graph export",
       args: ["--format", "mermaid", "--edges", "tags"],
-      pmRoot: path.join(ws, ".agents", "pm"),
+      pmRoot,
     }) as CmdResult;
     const raw = (res.result as { __pmGraphRawOutput: string }).__pmGraphRawOutput;
     assert.ok(raw.includes("TAGGED_WITH"), "tag edge kept by --edges tags");
     // deps (BLOCKED_BY) and facets (HAS_TYPE/HAS_STATUS) are dropped by the
     // tags filter, so none of their relationship labels survive in the output.
     assert.doesNotMatch(raw, /BLOCKED_BY|HAS_TYPE|HAS_STATUS/, "structural and facet edges dropped");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("export --root restricts to the neighborhood of a node", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const a = createItem(ws, "Alpha");
     const b = createItem(ws, "Beta", a);
     const gamma = createItem(ws, "Gamma"); // disconnected from Alpha/Beta
-    const harness = await makeHarness(ws);
     const res = await harness.runCommand({
       command: "pm-graph export",
       args: ["--json", "--root", a],
-      pmRoot: path.join(ws, ".agents", "pm"),
+      pmRoot,
     }) as CmdResult;
     const result = res.result as { ok: boolean; graph: { nodes: Array<{ id: string }> } };
     const ids = result.graph.nodes.filter((n) => n.id.startsWith("pm-")).map((n) => n.id);
@@ -408,7 +283,7 @@ test("export --root restricts to the neighborhood of a node", { skip: !pmAvailab
     const depsOnly = await harness.runCommand({
       command: "pm-graph export",
       args: ["--json", "--root", a, "--edges", "deps"],
-      pmRoot: path.join(ws, ".agents", "pm"),
+      pmRoot,
     }) as CmdResult;
     const depsIds = (depsOnly.result as { graph: { nodes: Array<{ id: string }> } })
       .graph.nodes.filter((n) => n.id.startsWith("pm-")).map((n) => n.id);
@@ -417,9 +292,7 @@ test("export --root restricts to the neighborhood of a node", { skip: !pmAvailab
       [a, b].sort(),
       "with --edges deps the neighborhood is exactly the root and its dependency neighbor",
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -427,22 +300,17 @@ test("export --root restricts to the neighborhood of a node", { skip: !pmAvailab
 // ---------------------------------------------------------------------------
 
 test("cypher command returns statement count matching node+relationship count", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const a = createItem(ws, "Alpha");
     createItem(ws, "Beta", a);
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({ command: "pm-graph cypher", pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+    const res = await harness.runCommand({ command: "pm-graph cypher", pmRoot }) as CmdResult;
     assert.equal(res.handled, true);
     const result = res.result as { ok: boolean; graph: { nodes: number; relationships: number }; statements: unknown[] };
     assert.equal(result.ok, true);
     assert.ok(result.graph.nodes > 0, "node count reported");
     // 1 DELETE + N node MERGEs + R relationship MERGEs
     assert.strictEqual(result.statements.length, 1 + result.graph.nodes + result.graph.relationships);
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -450,39 +318,30 @@ test("cypher command returns statement count matching node+relationship count", 
 // ---------------------------------------------------------------------------
 
 test("topo-sort returns a valid order on an acyclic workspace", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const a = createItem(ws, "Alpha");
-    const b = createItem(ws, "Beta", a);
-    createItem(ws, "Gamma", b);
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({ command: "pm-graph topo-sort", pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
-    assert.equal(res.handled, true);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
+    const { a, b, c } = createChain(ws);
+    const res = await harness.runCommand({ command: "pm-graph topo-sort", pmRoot }) as CmdResult;
+    assert.ok(res.handled);
     const result = res.result as { ok: boolean; order: string[]; cyclic: boolean; count: number };
     assert.equal(result.ok, true);
     assert.equal(result.cyclic, false);
     assert.strictEqual(result.count, result.order.length);
     // Alpha (the blocker) must come before Beta, which must come before Gamma.
     assert.ok(result.order.indexOf(a) < result.order.indexOf(b), "blocker before dependent");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+    assert.ok(result.order.indexOf(b) < result.order.indexOf(c), "dependent before its own dependent");
+  });
 });
 
 test("topo-sort exits non-zero on a dependency cycle", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const x = createItem(ws, "X");
     const y = createItem(ws, "Y", x);
     pm(ws, ["update", x, "--blocked-by", y]); // X <-> Y cycle
-    const harness = await makeHarness(ws);
     // A handler that throws a numeric-exitCode CommandError propagates the throw
     // through the dispatch engine (matching runtime non-zero-exit semantics), so
     // assert on the real thrown error's shape rather than a returned field.
     await assert.rejects(
-      () => harness.runCommand({ command: "pm-graph topo-sort", pmRoot: path.join(ws, ".agents", "pm") }),
+      () => harness.runCommand({ command: "pm-graph topo-sort", pmRoot }),
       (err: CommandError) => {
         assert.ok(err instanceof Error, "a real error is thrown");
         assert.strictEqual(err.exitCode, 1, "cyclic graph exits with code 1 (GENERIC_FAILURE)");
@@ -490,9 +349,7 @@ test("topo-sort exits non-zero on a dependency cycle", { skip: !pmAvailable }, a
         return true;
       },
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -500,60 +357,37 @@ test("topo-sort exits non-zero on a dependency cycle", { skip: !pmAvailable }, a
 // ---------------------------------------------------------------------------
 
 test("path with missing positionals returns a USAGE error", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
     await assert.rejects(
-      () => harness.runCommand({ command: "pm-graph path", args: ["only-one"], pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Usage: pm pm-graph path/);
-        return true;
-      },
+      () => harness.runCommand({ command: "pm-graph path", args: ["only-one"], pmRoot }),
+      expectCommandError(2, /Usage: pm pm-graph path/),
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("path with no positionals returns a USAGE error", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
     await assert.rejects(
-      () => harness.runCommand({ command: "pm-graph path", pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Usage: pm pm-graph path/);
-        return true;
-      },
+      () => harness.runCommand({ command: "pm-graph path", pmRoot }),
+      expectCommandError(2, /Usage: pm pm-graph path/),
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("path reports found:false when no directed path exists", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const a = createItem(ws, "Alpha");
-    const b = createItem(ws, "Beta", a); // B blocked by A, so edge B->A
-    const harness = await makeHarness(ws);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
+    const from = createItem(ws, "Alpha");
+    const to = createItem(ws, "Beta", from); // B blocked by A, so edge B->A
     const res = await harness.runCommand({
       command: "pm-graph path",
-      args: [a, b], // from A to B: no directed path (A is the blocker, not B)
-      pmRoot: path.join(ws, ".agents", "pm"),
+      args: [from, to], // from A to B: no directed path (A is the blocker, not B)
+      pmRoot,
     }) as CmdResult;
     const result = res.result as { ok: boolean; found: boolean; path: string[] | null; length: number | null };
     assert.equal(result.found, false, "no directed path from blocker to dependent");
     assert.strictEqual(result.path, null);
     assert.strictEqual(result.length, null);
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -561,35 +395,23 @@ test("path reports found:false when no directed path exists", { skip: !pmAvailab
 // ---------------------------------------------------------------------------
 
 test("explain with missing id returns a USAGE error", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
     await assert.rejects(
-      () => harness.runCommand({ command: "pm-graph explain", pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Usage: pm pm-graph explain/);
-        return true;
-      },
+      () => harness.runCommand({ command: "pm-graph explain", pmRoot }),
+      expectCommandError(2, /Usage: pm pm-graph explain/),
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("explain with unknown id returns a NOT_FOUND error with suggestions", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const alpha = createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
     // A non-prefix substring of a real item id fails every resolution path
     // (exact, case-insensitive, prefix) but still matches the suggestion scorer
     // (the id contains the probe), so the error genuinely carries a hint.
     const probe = alpha.slice(1);
     await assert.rejects(
-      () => harness.runCommand({ command: "pm-graph explain", args: [probe], pmRoot: path.join(ws, ".agents", "pm") }),
+      () => harness.runCommand({ command: "pm-graph explain", args: [probe], pmRoot }),
       (err: CommandError) => {
         assert.strictEqual(err.exitCode, 3, "NOT_FOUND exit code");
         assert.match(err.message, /was not found in the workspace graph/);
@@ -597,9 +419,7 @@ test("explain with unknown id returns a NOT_FOUND error with suggestions", { ski
         return true;
       },
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -607,26 +427,20 @@ test("explain with unknown id returns a NOT_FOUND error with suggestions", { ski
 // ---------------------------------------------------------------------------
 
 test("analyze --root restricts the report to the root neighborhood", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const a = createItem(ws, "Alpha");
-    const b = createItem(ws, "Beta", a);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
+    const root = createItem(ws, "Alpha");
+    createItem(ws, "Beta", root);
     createItem(ws, "Solo"); // disconnected
-    const harness = await makeHarness(ws);
     const res = await harness.runCommand({
       command: "pm-graph analyze",
-      args: ["--root", a, "--json"],
-      pmRoot: path.join(ws, ".agents", "pm"),
+      args: ["--root", root, "--json"],
+      pmRoot,
     }) as CmdResult;
     const result = res.result as { ok: boolean; itemCount: number };
     assert.equal(result.ok, true);
-    // Neighborhood of A includes A and B (1 hop) but not Solo.
-    assert.ok(result.itemCount <= 2, "Solo excluded from the neighborhood");
-    assert.ok(result.itemCount >= 1, "at least the root is present");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+    // Neighborhood of Alpha is exactly Alpha and Beta (1 hop); Solo is excluded.
+    assert.strictEqual(result.itemCount, 2, "root plus its one-hop dependent, without Solo");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -634,20 +448,15 @@ test("analyze --root restricts the report to the root neighborhood", { skip: !pm
 // ---------------------------------------------------------------------------
 
 test("cycles on an acyclic workspace returns cycleCount 0 and exits 0", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({ command: "pm-graph cycles", pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+    const res = await harness.runCommand({ command: "pm-graph cycles", pmRoot }) as CmdResult;
     assert.equal(res.handled, true);
     const result = res.result as { ok: boolean; cycleCount: number; cycles: unknown[] };
     assert.equal(result.ok, true);
     assert.equal(result.cycleCount, 0);
     assert.deepStrictEqual(result.cycles, []);
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -655,22 +464,17 @@ test("cycles on an acyclic workspace returns cycleCount 0 and exits 0", { skip: 
 // ---------------------------------------------------------------------------
 
 test("status with Neo4j not configured returns the local item count", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
     createItem(ws, "Beta");
-    const harness = await makeHarness(ws);
-    const res = await harness.runCommand({ command: "pm-graph status", pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+    const res = await harness.runCommand({ command: "pm-graph status", pmRoot }) as CmdResult;
     assert.equal(res.handled, true);
     const result = res.result as { ok: boolean; neo4jConfigured: boolean; localItemCount: number; projectKey: string; version: string };
     assert.equal(result.ok, true);
     assert.equal(result.neo4jConfigured, false);
     assert.equal(result.localItemCount, 2, "two items counted locally");
     assert.ok(typeof result.version === "string");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -679,29 +483,17 @@ test("status with Neo4j not configured returns the local item count", { skip: !p
 // ---------------------------------------------------------------------------
 
 test("query with Neo4j env vars set reaches the connection-error path", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
     // Point the driver at a closed local port and cap its connect/retry budgets
     // so the connection attempt fails in well under a second instead of waiting
     // out the driver's 30s transaction-retry default against an absent host.
-    const env = {
-      ...process.env,
-      NEO4J_URI: "bolt://127.0.0.1:9",
-      NEO4J_USER: "test",
-      NEO4J_PASSWORD: "test",
-      NEO4J_CONNECTION_TIMEOUT_MS: "300",
-      NEO4J_MAX_RETRY_MS: "0",
-    };
-    const originalEnv = { ...process.env };
-    Object.assign(process.env, env);
+    const originalEnv = applyEnv(NEO4J_FAIL_ENV);
     try {
       const start = Date.now();
       const res = await harness.runCommand({
         command: "pm-graph query",
         args: ["MATCH (n) RETURN n LIMIT 1"],
-        pmRoot: path.join(ws, ".agents", "pm"),
+        pmRoot,
       }) as CmdResult;
       const elapsed = Date.now() - start;
       assert.ok(elapsed < 5000, `connection error reached quickly (took ${elapsed}ms)`);
@@ -714,96 +506,60 @@ test("query with Neo4j env vars set reaches the connection-error path", { skip: 
         );
       }
     } finally {
-      // Restore env
-      for (const k of Object.keys(process.env)) {
-        if (!(k in originalEnv)) delete process.env[k];
-      }
-      Object.assign(process.env, originalEnv);
+      restoreEnv(originalEnv);
     }
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("sync with Neo4j env vars set reaches the connection-error path", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
-    const env = { ...process.env, NEO4J_URI: "bolt://127.0.0.1:9", NEO4J_USER: "test", NEO4J_PASSWORD: "test", NEO4J_CONNECTION_TIMEOUT_MS: "300", NEO4J_MAX_RETRY_MS: "0" };
-    const originalEnv = { ...process.env };
-    Object.assign(process.env, env);
+    const originalEnv = applyEnv(NEO4J_FAIL_ENV);
     try {
-      const res = await harness.runCommand({ command: "pm-graph sync", pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
+      const res = await harness.runCommand({ command: "pm-graph sync", pmRoot }) as CmdResult;
       assert.ok(res.errorMessage || !res.handled, "sync connection failure surfaces an error");
       if (res.errorMessage) {
         assert.ok(/not reachable|connection/i.test(res.errorMessage), `friendly error: ${res.errorMessage}`);
       }
     } finally {
-      for (const k of Object.keys(process.env)) {
-        if (!(k in originalEnv)) delete process.env[k];
-      }
-      Object.assign(process.env, originalEnv);
+      restoreEnv(originalEnv);
     }
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("neighbors with Neo4j env vars set reaches the connection-error path", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    const env = { ...process.env, NEO4J_URI: "bolt://127.0.0.1:9", NEO4J_USER: "test", NEO4J_PASSWORD: "test", NEO4J_CONNECTION_TIMEOUT_MS: "300", NEO4J_MAX_RETRY_MS: "0" };
-    const originalEnv = { ...process.env };
-    Object.assign(process.env, env);
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
+    const originalEnv = applyEnv(NEO4J_FAIL_ENV);
     try {
       const res = await harness.runCommand({
         command: "pm-graph neighbors",
         args: ["TASK-1"],
-        pmRoot: path.join(ws, ".agents", "pm"),
+        pmRoot,
       }) as CmdResult;
       assert.ok(res.errorMessage || !res.handled, "neighbors connection failure surfaces an error");
       if (res.errorMessage) {
         assert.ok(/not reachable|connection/i.test(res.errorMessage), `friendly error: ${res.errorMessage}`);
       }
     } finally {
-      for (const k of Object.keys(process.env)) {
-        if (!(k in originalEnv)) delete process.env[k];
-      }
-      Object.assign(process.env, originalEnv);
+      restoreEnv(originalEnv);
     }
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("status with Neo4j env vars set reaches the connection-error path", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
-    const env = { ...process.env, NEO4J_URI: "bolt://127.0.0.1:9", NEO4J_USER: "test", NEO4J_PASSWORD: "test", NEO4J_CONNECTION_TIMEOUT_MS: "300", NEO4J_MAX_RETRY_MS: "0" };
-    const originalEnv = { ...process.env };
-    Object.assign(process.env, env);
+    const originalEnv = applyEnv(NEO4J_FAIL_ENV);
     try {
-      const res = await harness.runCommand({ command: "pm-graph status", pmRoot: path.join(ws, ".agents", "pm") }) as CmdResult;
-      assert.ok(res.errorMessage || !res.handled, "status connection failure surfaces an error");
-      if (res.errorMessage) {
-        assert.ok(/not reachable|connection/i.test(res.errorMessage), `friendly error: ${res.errorMessage}`);
+      const outcome = await harness.runCommand({ command: "pm-graph status", pmRoot }) as CmdResult;
+      assert.ok(!outcome.handled || outcome.errorMessage, "status connection failure surfaces an error");
+      if (outcome.errorMessage) {
+        assert.ok(/not reachable|connection/i.test(outcome.errorMessage), `friendly error: ${outcome.errorMessage}`);
       }
     } finally {
-      for (const k of Object.keys(process.env)) {
-        if (!(k in originalEnv)) delete process.env[k];
-      }
-      Object.assign(process.env, originalEnv);
+      restoreEnv(originalEnv);
     }
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -811,107 +567,53 @@ test("status with Neo4j env vars set reaches the connection-error path", { skip:
 // ---------------------------------------------------------------------------
 
 test("graph-export exporter renders JSON graph format via the SDK dispatch", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
     const { stdout } = await captureStdout(async () =>
       harness.runExporter({
         exporter: "graph-export",
         options: { format: "json" },
-        pmRoot: path.join(ws, ".agents", "pm"),
+        pmRoot,
       }),
     );
     const parsed = JSON.parse(stdout) as { graph: { nodes: unknown[] } };
     assert.ok(Array.isArray(parsed.graph?.nodes), "exporter emits valid JSON graph");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("graph-export exporter rejects an invalid --format", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    await assert.rejects(
-      () => harness.runExporter({ exporter: "graph-export", options: { format: "svg" }, pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Unknown --format "svg"/);
-        assert.match(err.message, /cypher \| mermaid \| dot \| json \| graphml \| plantuml/, "valid formats listed");
-        return true;
-      },
-    );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  await expectExporterReject({ format: "svg" }, 2, /Unknown --format "svg"/, [/cypher \| mermaid \| dot \| json \| graphml \| plantuml/, "valid formats listed"]);
 });
 
 test("graph-export exporter rejects an invalid --edges value", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    await assert.rejects(
-      () => harness.runExporter({ exporter: "graph-export", options: { format: "json", edges: "bogus" }, pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Unknown --edges "bogus"/);
-        assert.match(err.message, /deps \| tags \| all/, "valid edges listed");
-        return true;
-      },
-    );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  await expectExporterReject({ format: "json", edges: "bogus" }, 2, /Unknown --edges "bogus"/, [/deps \| tags \| all/, "valid edges listed"]);
 });
 // ---------------------------------------------------------------------------
 // query destructive-keyword guard — rejects before any Neo4j connection
 // ---------------------------------------------------------------------------
 
 test("query rejects a destructive Cypher keyword with a USAGE error", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
     // No Neo4j env required: the destructive-keyword guard runs before the
     // driver is created, so this is fast and exercises a real safety feature.
     await assert.rejects(
       () => harness.runCommand({
         command: "pm-graph query",
         args: ["CREATE (n {x: 1})"],
-        pmRoot: path.join(ws, ".agents", "pm"),
+        pmRoot,
       }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Blocked destructive Cypher keyword "CREATE"/);
-        assert.match(err.message, /Only read-only queries/, "read-only guidance present");
-        return true;
-      },
+      expectCommandErrorMulti(2, /Blocked destructive Cypher keyword "CREATE"/, [/Only read-only queries/, "read-only guidance present"]),
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("query rejects an empty query with a USAGE error", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
+  await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
     await assert.rejects(
-      () => harness.runCommand({ command: "pm-graph query", args: ["--json"], pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Usage: pm pm-graph query/);
-        return true;
-      },
+      () => harness.runCommand({ command: "pm-graph query", args: ["--json"], pmRoot }),
+      expectCommandError(2, /Usage: pm pm-graph query/),
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -919,97 +621,46 @@ test("query rejects an empty query with a USAGE error", { skip: !pmAvailable }, 
 // ---------------------------------------------------------------------------
 
 test("graph-export exporter rejects --depth without --root", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    await assert.rejects(
-      () => harness.runExporter({ exporter: "graph-export", options: { format: "json", depth: 2 }, pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /--depth requires --root/);
-        return true;
-      },
-    );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  await expectExporterReject({ format: "json", depth: 2 }, 2, /--depth requires --root/);
 });
 
 test("graph-export exporter rejects a non-integer --depth", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const root = createItem(ws, "Root");
-    const harness = await makeHarness(ws);
     await assert.rejects(
-      () => harness.runExporter({ exporter: "graph-export", options: { format: "json", root, depth: "abc" }, pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /Invalid --depth "abc"/);
-        return true;
-      },
+      () => harness.runExporter({ exporter: "graph-export", options: { format: "json", root, depth: "abc" }, pmRoot }),
+      expectCommandError(2, /Invalid --depth "abc"/),
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("graph-export exporter rejects an unknown --root node", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     createItem(ws, "Alpha");
-    const harness = await makeHarness(ws);
     await assert.rejects(
-      () => harness.runExporter({ exporter: "graph-export", options: { format: "json", root: "does-not-exist" }, pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 3, "NOT_FOUND exit code");
-        assert.match(err.message, /--root node "does-not-exist" was not found/);
-        return true;
-      },
+      () => harness.runExporter({ exporter: "graph-export", options: { format: "json", root: "does-not-exist" }, pmRoot }),
+      expectCommandError(3, /--root node "does-not-exist" was not found/),
     );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("graph-export exporter rejects an empty --output path", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
-    const harness = await makeHarness(ws);
-    await assert.rejects(
-      () => harness.runExporter({ exporter: "graph-export", options: { format: "json", output: "   " }, pmRoot: path.join(ws, ".agents", "pm") }),
-      (err: CommandError) => {
-        assert.strictEqual(err.exitCode, 2, "USAGE exit code");
-        assert.match(err.message, /--output requires a file path/);
-        return true;
-      },
-    );
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  await expectExporterReject({ format: "json", output: "   " }, 2, /--output requires a file path/);
 });
 
 test("graph-export exporter applies a valid --root and --depth neighborhood", { skip: !pmAvailable }, async () => {
-  const ws = freshWorkspace();
-  try {
-    pm(ws, ["init"]);
+  await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const a = createItem(ws, "Alpha");
     createItem(ws, "Beta", a); // neighbour of Alpha
     createItem(ws, "Solo"); // disconnected
-    const harness = await makeHarness(ws);
     const { stdout } = await captureStdout(async () =>
-      harness.runExporter({ exporter: "graph-export", options: { format: "json", root: a, depth: 1 }, pmRoot: path.join(ws, ".agents", "pm") }),
+      harness.runExporter({ exporter: "graph-export", options: { format: "json", root: a, depth: 1 }, pmRoot }),
     );
     const parsed = JSON.parse(stdout) as { graph: { nodes: Array<{ id: string }> } };
     const itemIds = parsed.graph.nodes.filter((n) => n.id.startsWith("pm-")).map((n) => n.id);
     assert.ok(itemIds.includes(a), "root retained");
     assert.ok(!itemIds.includes("Solo"), "disconnected node excluded by neighborhood depth");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  });
 });
 
 test("an invalid explicit tracker root fails with a USAGE exit rather than an empty graph", { skip: !pmAvailable }, async () => {
@@ -1019,9 +670,9 @@ test("an invalid explicit tracker root fails with a USAGE exit rather than an em
   // report a confident empty graph and exit 0, where the removed `pm list-all`
   // shell-out exited non-zero. An empty answer for a bad input is worse than a
   // failure, because nothing downstream can detect it.
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-cmd-");
   try {
-    const harness = await makeHarness(ws);
+    const harness = await makeHarness();
     const notATracker = path.join(ws, "tracker-is-a-file");
     writeFileSync(notATracker, "not a tracker\n");
 

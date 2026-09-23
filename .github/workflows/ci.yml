@@ -75,10 +75,16 @@ jobs:
           #
           # `--strict-exit` is load-bearing: non-strict health may report findings while
           # still exiting successfully.
-          timeout --signal=TERM --kill-after=10s 120s ./node_modules/.bin/pm health --strict-exit
+          timeout --signal=TERM --kill-after=10s 120s ./node_modules/.bin/pm health --strict-exit --require-merge-drivers
 
       - name: Type check
         run: npm run typecheck
+
+      - name: Lint with the canonical fleet policy
+        run: npm run lint
+
+      - name: Duplication gate
+        run: npm run duplication
 
       - name: Build and verify committed output is current
         shell: bash
@@ -157,10 +163,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      # npm ci runs the production prepare lifecycle through cmd.exe before the
-      # adversarial fixture below exercises spaces and percent-delimited paths.
+      # npm ci runs the production prepare lifecycle (the thin launcher over
+      # pm-ops/merge-driver) through cmd.exe, and the health check below fails
+      # unless that run registered the drivers .gitattributes declares.
       - name: Install dependencies and merge drivers
         run: npm ci
+
+      - name: Verify the prepare lifecycle registered the merge drivers
+        run: npx pm health --strict-exit --require-merge-drivers
 
       - name: Exercise the real Windows command parser
         run: node --test test/windows-prepare.integration.ts

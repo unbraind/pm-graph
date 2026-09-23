@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import extension from "../src/index.ts";
+import extension, { type ExtensionApi } from "../src/index.ts";
 
 test("extension has required shape", () => {
   assert.ok(extension, "module should export a default value");
@@ -23,7 +23,7 @@ test("extension registers at least one capability", () => {
     registerPreflight: () => { registered.push("preflight"); },
     registerService: () => { registered.push("service"); },
   };
-  extension.activate(api as any);
+  extension.activate(api as ExtensionApi);
   assert.ok(registered.length > 0, `extension should register at least one capability, got: ${JSON.stringify(registered)}`);
   assert.ok(registered.includes("exporter"), "extension should register the graph exporter");
 });

@@ -5,18 +5,19 @@
  * below so handlers run without a Bolt server.
  */
 
-import { register } from "node:module";
+import { registerHooks } from "node:module";
 
-register("./fixtures/neo4j-fake-loader.ts", import.meta.url);
+import { resolve as resolveNeo4j } from "./fixtures/neo4j-fake-loader.ts";
+
+registerHooks({ resolve: resolveNeo4j });
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
+import { runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
 
 import {
   explainItem,
@@ -30,7 +31,15 @@ import {
   renderGraphml,
   shortestPath,
 } from "../src/index.ts";
-import extension from "../src/index.ts";
+import {
+  type CmdResult,
+  type CommandError,
+  captureStdout,
+  makeHarness,
+  pm,
+  pmAvailable,
+  restoreEnv,
+} from "./helpers.ts";
 import {
   fakeInteger,
   fakeNode,
@@ -47,62 +56,16 @@ import {
   wasFakeNeo4jClosed,
 } from "./fixtures/neo4j-fake.ts";
 
-type CmdResult = {
-  handled: boolean;
-  result: unknown;
-  warnings: string[];
-  errorMessage?: string;
-};
-
-type CommandError = Error & { exitCode: number };
-
-let pmAvailable = true;
-try {
-  execFileSync("pm", ["--version"], { encoding: "utf-8" });
-} catch {
-  pmAvailable = false;
-}
-
-async function captureStdout(fn: () => Promise<unknown>): Promise<{ result: unknown; stdout: string }> {
-  const original = console.log;
-  let buffer = "";
-  console.log = (...parts: unknown[]) => {
-    buffer += parts.map(String).join(" ") + "\n";
-  };
-  try {
-    const result = await fn();
-    return { result, stdout: buffer };
-  } finally {
-    console.log = original;
-  }
-}
-
-function freshWorkspace(): string {
-  return mkdtempSync(path.join(tmpdir(), "pm-graph-"));
-}
-
-function pm(cwd: string, args: string[]): string {
-  return execFileSync("pm", args, { cwd, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
-}
-
-function createItem(cwd: string, title: string, extra: string[] = []): string {
+/** Create a task item with extra CLI args and return its id. */
+function createItemWithExtra(cwd: string, title: string, extra: string[] = []): string {
   const out = pm(cwd, ["create", "Task", title, "--json", ...extra]);
   const created = JSON.parse(out) as { id?: string; item?: { id: string } };
   return (created.item?.id ?? created.id) as string;
 }
 
-async function makeHarness() {
-  return createExtensionTestHarness(extension, {
-    name: "pm-graph",
-    capabilities: ["commands", "importers", "services"],
-  });
-}
-
-function restoreEnv(original: NodeJS.ProcessEnv): void {
-  for (const key of Object.keys(process.env)) {
-    if (!(key in original)) delete process.env[key];
-  }
-  Object.assign(process.env, original);
+/** Create a fresh workspace with the pm-graph- prefix. */
+function freshWorkspace(): string {
+  return mkdtempSync(path.join(tmpdir(), "pm-graph-"));
 }
 
 function setNeo4jEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
@@ -353,9 +316,9 @@ test("export flag errors and --output writing cover the remaining branches", { s
   const ws = freshWorkspace();
   try {
     pm(ws, ["init"]);
-    const alpha = createItem(ws, "Alpha", ["--tags", "backend", "--assignee", "ada", "--sprint", "s1", "--release", "r1"]);
-    createItem(ws, "Beta", ["--parent", alpha, "--blocked-by", alpha, "--tags", " ,core"]);
-    createItem(ws, "External", ["--dep", "id=external-target,kind=blocks", "--allow-unresolved-deps"]);
+    const alpha = createItemWithExtra(ws, "Alpha", ["--tags", "backend", "--assignee", "ada", "--sprint", "s1", "--release", "r1"]);
+    createItemWithExtra(ws, "Beta", ["--parent", alpha, "--blocked-by", alpha, "--tags", " ,core"]);
+    createItemWithExtra(ws, "External", ["--dep", "id=external-target,kind=blocks", "--allow-unresolved-deps"]);
     const alphaFile = path.join(ws, ".agents", "pm", "tasks", `${alpha}.toon`);
     writeFileSync(alphaFile, `${readFileSync(alphaFile, "utf-8")}\ndeps[1]{foo}:\n  bar\n`);
     const harness = await makeHarness();
@@ -522,7 +485,7 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
   const ws = freshWorkspace();
   try {
     pm(ws, ["init"]);
-    const id = createItem(ws, "Alpha");
+    const id = createItemWithExtra(ws, "Alpha");
     const harness = await makeHarness();
     const impactHandler = harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph impact");
     assert.ok(impactHandler);
@@ -555,7 +518,7 @@ test("graph-export exporter writes files, filters, and rejects empty output", { 
   const ws = freshWorkspace();
   try {
     pm(ws, ["init"]);
-    const alpha = createItem(ws, "Alpha");
+    const alpha = createItemWithExtra(ws, "Alpha");
     const harness = await makeHarness();
     const pmRoot = path.join(ws, ".agents", "pm");
     const outFile = path.join(ws, "export.dot");
@@ -618,7 +581,7 @@ test("custom .pm tracker root still exports and names the parent workspace", { s
   const ws = freshWorkspace();
   try {
     pm(ws, ["init"]);
-    createItem(ws, "Alpha");
+    createItemWithExtra(ws, "Alpha");
     const hidden = path.join(ws, ".pm");
     mkdirSync(hidden, { recursive: true });
     writeFileSync(path.join(hidden, "settings.json"), readFileSync(path.join(ws, ".agents", "pm", "settings.json"), "utf-8"));
@@ -640,8 +603,8 @@ test("cypher, neighbors, query, and explain remaining error surfaces", { skip: !
   const ws = freshWorkspace();
   try {
     pm(ws, ["init"]);
-    const a = createItem(ws, "Alpha");
-    const b = createItem(ws, "Beta", ["--blocked-by", a]);
+    const a = createItemWithExtra(ws, "Alpha");
+    const b = createItemWithExtra(ws, "Beta", ["--blocked-by", a]);
     pm(ws, ["update", a, "--blocked-by", b]);
     const harness = await makeHarness();
     const pmRoot = path.join(ws, ".agents", "pm");
@@ -723,7 +686,7 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
     resetFakeNeo4j();
     try {
       pm(ws, ["init"]);
-      createItem(ws, "Alpha");
+      createItemWithExtra(ws, "Alpha");
       const harness = await makeHarness();
       const pmRoot = path.join(ws, ".agents", "pm");
 
@@ -777,7 +740,7 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
     resetFakeNeo4j();
     try {
       pm(ws, ["init"]);
-      createItem(ws, "Alpha");
+      createItemWithExtra(ws, "Alpha");
       const harness = await makeHarness();
       const pmRoot = path.join(ws, ".agents", "pm");
 
@@ -891,7 +854,7 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
     const original = setNeo4jEnv();
     try {
       pm(ws, ["init"]);
-      createItem(ws, "Alpha");
+      createItemWithExtra(ws, "Alpha");
       const harness = await makeHarness();
       const pmRoot = path.join(ws, ".agents", "pm");
       for (const closeMode of ["session", "driver"] as const) {
@@ -967,7 +930,7 @@ test("neighbors returns center+edges and the empty-node message", async () => {
     resetFakeNeo4j();
     try {
       pm(ws, ["init"]);
-      createItem(ws, "Alpha");
+      createItemWithExtra(ws, "Alpha");
       const harness = await makeHarness();
       const pmRoot = path.join(ws, ".agents", "pm");
 
@@ -1095,7 +1058,7 @@ test("registered handlers support omitted optional context fields", { skip: !pmA
   const ws = freshWorkspace();
   try {
     pm(ws, ["init"]);
-    createItem(ws, "Alpha");
+    createItemWithExtra(ws, "Alpha");
     const harness = await makeHarness();
     const tracker = path.join(ws, ".agents", "pm");
     for (const entry of harness.activation.commands.handlers) {

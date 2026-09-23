@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createExtensionTestHarness, runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
+import { runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
 
-import extension from "../src/index.ts";
+import { activateWithRecording, freshWorkspace, makeHarness } from "./helpers.ts";
 
 // Resolve this file's directory without relying on the CommonJS `__dirname`,
 // which is undefined in ES modules (referencing it throws on Node versions
@@ -36,10 +35,7 @@ function pm(cwd: string, args: string[]): { status: number; stdout: string; stde
 const pmProbe = spawnSync("pm", ["--version"], { encoding: "utf-8" });
 const pmAvailable = !pmProbe.error && pmProbe.status === 0;
 
-function freshWorkspace(): string {
-  return mkdtempSync(path.join(tmpdir(), "pmg-contract-"));
-}
-
+/** Initialise a workspace and install the locally-built pm-graph extension. */
 function ensureExtension(ws: string): void {
   // Initialise the tracker then install the locally-built pm-graph from this
   // repo into the throwaway workspace.
@@ -53,29 +49,35 @@ function ensureExtension(ws: string): void {
   assert.equal(install.status, 0, `pm install failed: ${install.stdout}\n${install.stderr}`);
 }
 
+/** Run a pm-graph command against a fresh workspace with the extension installed. */
+function runContractCommand(args: string[]): { status: number; stdout: string; stderr: string } {
+  const ws = freshWorkspace("pmg-contract-");
+  try {
+    ensureExtension(ws);
+    return pm(ws, args);
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+}
+
+/** Assert a command result reaches Neo4j-not-configured, not a contract rejection. */
+function assertNeo4jNotConfigured(res: { status: number; stdout: string; stderr: string }): void {
+  assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
+  const combined = res.stdout + res.stderr;
+  assert.match(combined, /Neo4j is not configured/, "reaches the Neo4j error");
+  assert.doesNotMatch(combined, /Too many arguments/, "NOT a contract/usage rejection");
+}
+
 // Smoke-check the module still registers the expected handlers + the service
 // override (so the test harness catches a regression in activate() wiring).
 test("activate registers the export handler and the output_format service override", () => {
-  const commands = new Map<string, unknown>();
-  const services: string[] = [];
-  const api = {
-    registerCommand: (cmd: { name: string }) => commands.set(cmd.name, cmd),
-    registerExporter: () => {},
-    registerImporter: () => {},
-    registerHook: () => {},
-    registerSchema: () => {},
-    registerRenderer: () => {},
-    registerSearchProvider: () => {},
-    registerPreflight: () => {},
-    registerService: (service: string) => services.push(service),
-  };
-  extension.activate(api as any);
+  const { commands, services } = activateWithRecording();
   assert.ok(commands.has("pm-graph export"), "export command registered");
   assert.ok(services.includes("output_format"), "output_format service override registered");
 });
 
 test("export --format json writes valid JSON to stdout (G2)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "export", "--format", "json"]);
@@ -92,7 +94,7 @@ test("export --format json writes valid JSON to stdout (G2)", { skip: !pmAvailab
 });
 
 test("export default (no --format) is unchanged: TOON ok:true summary (G2 regression guard)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "export"]);
@@ -104,7 +106,7 @@ test("export default (no --format) is unchanged: TOON ok:true summary (G2 regres
 });
 
 test("export --json is unchanged: JSON {ok, graph} envelope (G2 regression guard)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "export", "--json"]);
@@ -118,7 +120,7 @@ test("export --json is unchanged: JSON {ok, graph} envelope (G2 regression guard
 });
 
 test("export --format mermaid writes a raw mermaid diagram to stdout (G2 bonus)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "export", "--format", "mermaid"]);
@@ -131,7 +133,7 @@ test("export --format mermaid writes a raw mermaid diagram to stdout (G2 bonus)"
 });
 
 test("export --format <invalid> exits non-zero with a USAGE error (G2)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "export", "--format", "svg"]);
@@ -144,44 +146,18 @@ test("export --format <invalid> exits non-zero with a USAGE error (G2)", { skip:
 });
 
 test("neighbors <node-id> reaches Neo4j-not-configured, not a contract rejection (G1)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
-  try {
-    ensureExtension(ws);
-    const res = pm(ws, ["pm-graph", "neighbors", "TASK-42"]);
-    assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
-    const combined = res.stdout + res.stderr;
-    assert.match(combined, /Neo4j is not configured/, "reaches the clear Neo4j error");
-    assert.doesNotMatch(combined, /Too many arguments/, "NOT a contract/usage rejection");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  assertNeo4jNotConfigured(runContractCommand(["pm-graph", "neighbors", "TASK-42"]));
 });
 
 test("sync classifies missing Neo4j configuration as expected usage", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
-  try {
-    ensureExtension(ws);
-    const res = pm(ws, ["pm-graph", "sync"]);
-    assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
-    const combined = res.stdout + res.stderr;
-    assert.match(combined, /Neo4j is not configured/, "reaches the shared Neo4j configuration guard");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  const res = runContractCommand(["pm-graph", "sync"]);
+  assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
+  const combined = res.stdout + res.stderr;
+  assert.match(combined, /Neo4j is not configured/, "reaches the shared Neo4j configuration guard");
 });
 
 test('query "<cypher>" reaches Neo4j-not-configured, not a contract rejection (G1)', { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
-  try {
-    ensureExtension(ws);
-    const res = pm(ws, ["pm-graph", "query", "MATCH (n) RETURN n LIMIT 5"]);
-    assert.equal(res.status, 2, "uses the expected configuration/usage exit code");
-    const combined = res.stdout + res.stderr;
-    assert.match(combined, /Neo4j is not configured/, "reaches the clear Neo4j error");
-    assert.doesNotMatch(combined, /Too many arguments/, "NOT a contract/usage rejection");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  assertNeo4jNotConfigured(runContractCommand(["pm-graph", "query", "MATCH (n) RETURN n LIMIT 5"]));
 });
 
 test('query with Cypher dash tokens (quoted, single arg) is not dropped or misread as a flag', { skip: !pmAvailable }, () => {
@@ -189,48 +165,30 @@ test('query with Cypher dash tokens (quoted, single arg) is not dropped or misre
   // applies. Guards that a query containing dash tokens that resemble flags
   // (`-h` unary minus, `--` undirected relationship) reaches Neo4j rather than
   // being treated as --help or having tokens dropped.
-  const ws = freshWorkspace();
-  try {
-    ensureExtension(ws);
-    const res = pm(ws, ["pm-graph", "query", "MATCH (a) -- (b) WITH 1 AS h RETURN -h"]);
-    assert.equal(res.status, 2, "uses the expected configuration/usage exit code (no Neo4j configured)");
-    const combined = res.stdout + res.stderr;
-    assert.match(combined, /Neo4j is not configured/, "reaches Neo4j rather than a help screen");
-    assert.doesNotMatch(combined, /Usage: pm pm-graph query/, "was not misread as --help");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  const res = runContractCommand(["pm-graph", "query", "MATCH (a) -- (b) WITH 1 AS h RETURN -h"]);
+  assert.equal(res.status, 2, "uses the expected configuration/usage exit code (no Neo4j configured)");
+  const combined = res.stdout + res.stderr;
+  assert.match(combined, /Neo4j is not configured/, "reaches Neo4j rather than a help screen");
+  assert.doesNotMatch(combined, /Usage: pm pm-graph query/, "was not misread as --help");
 });
 
 test("neighbors with no arg is rejected by the contract layer (G1 regression guard)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
-  try {
-    ensureExtension(ws);
-    const res = pm(ws, ["pm-graph", "neighbors"]);
-    assert.notEqual(res.status, 0, "exits non-zero");
-    const combined = res.stdout + res.stderr;
-    assert.match(combined, /Missing required argument node-id/, "contract enforces the required positional");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  const res = runContractCommand(["pm-graph", "neighbors"]);
+  assert.notEqual(res.status, 0, "exits non-zero");
+  const combined = res.stdout + res.stderr;
+  assert.match(combined, /Missing required argument node-id/, "contract enforces the required positional");
 });
 
 test("query with a destructive cypher surfaces the blocked-keyword error (G1 regression guard)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
-  try {
-    ensureExtension(ws);
-    const res = pm(ws, ["pm-graph", "query", "CREATE (n) RETURN n"]);
-    assert.notEqual(res.status, 0, "exits non-zero");
-    const combined = res.stdout + res.stderr;
-    assert.match(combined, /Blocked destructive Cypher keyword "CREATE"/, "destructive keyword blocked cleanly");
-    assert.doesNotMatch(combined, /Too many arguments/, "not a contract rejection");
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-  }
+  const res = runContractCommand(["pm-graph", "query", "CREATE (n) RETURN n"]);
+  assert.notEqual(res.status, 0, "exits non-zero");
+  const combined = res.stdout + res.stderr;
+  assert.match(combined, /Blocked destructive Cypher keyword "CREATE"/, "destructive keyword blocked cleanly");
+  assert.doesNotMatch(combined, /Too many arguments/, "not a contract rejection");
 });
 
 test("path/impact still accept positionals through the contract layer (G1 sibling guard)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const pathRes = pm(ws, ["pm-graph", "path", "pm-1", "pm-2"]);
@@ -254,25 +212,13 @@ test("path/impact still accept positionals through the contract layer (G1 siblin
 // ---------------------------------------------------------------------------
 
 test("exporter adapter is registered as graph-export (core `pm graph` collision guard)", () => {
-  const exporters: string[] = [];
-  const api = {
-    registerCommand: () => {},
-    registerExporter: (name: string) => exporters.push(name),
-    registerImporter: () => {},
-    registerHook: () => {},
-    registerSchema: () => {},
-    registerRenderer: () => {},
-    registerSearchProvider: () => {},
-    registerPreflight: () => {},
-    registerService: () => {},
-  };
-  extension.activate(api as any);
+  const { exporters } = activateWithRecording();
   assert.ok(exporters.includes("graph-export"), "graph-export adapter registered");
   assert.ok(!exporters.includes("graph"), 'legacy "graph" adapter no longer registered (pm-cli 2026.7.18 owns `pm graph`)');
 });
 
 test("export shaping: --edges deps drops facet edges on the canonical command", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const a = pm(ws, ["create", "task", "alpha", "--json"]);
@@ -301,7 +247,7 @@ test("export shaping: --edges deps drops facet edges on the canonical command", 
 });
 
 test("export shaping: invalid --edges and --output without --format are USAGE errors", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     ensureExtension(ws);
     const badEdges = pm(ws, ["pm-graph", "export", "--edges", "everything"]);
@@ -336,7 +282,7 @@ test("export shaping: invalid --edges and --output without --format are USAGE er
 });
 
 test("analytics honour a custom tracker path via pm_root (--pm-path fix)", { skip: !pmAvailable }, () => {
-  const ws = freshWorkspace();
+  const ws = freshWorkspace("pmg-contract-");
   try {
     const init = pm(ws, ["init", "--pm-path", ".pmx"]);
     assert.equal(init.status, 0, `pm init --pm-path failed: ${init.stdout}\n${init.stderr}`);
@@ -374,10 +320,7 @@ test("analytics honour a custom tracker path via pm_root (--pm-path fix)", { ski
 // ---------------------------------------------------------------------------
 
 test("output_format override declines payloads without the pm-graph raw marker", async () => {
-  const harness = await createExtensionTestHarness(extension, {
-    name: "pm-graph",
-    capabilities: ["commands", "importers", "services"],
-  });
+  const harness = await makeHarness();
   assert.deepEqual(harness.activation.failed, [], "activation must not fail");
   harness.assertServiceOverride({ name: "output_format" });
 
@@ -394,10 +337,7 @@ test("output_format override declines payloads without the pm-graph raw marker",
 });
 
 test("output_format override claims a pm-graph raw-output payload verbatim", async () => {
-  const harness = await createExtensionTestHarness(extension, {
-    name: "pm-graph",
-    capabilities: ["commands", "importers", "services"],
-  });
+  const harness = await makeHarness();
   const raw = '{"nodes":[],"edges":[]}';
   const outcome = await runRegisteredServiceOverrideForTest(harness.activation.services, {
     service: "output_format",

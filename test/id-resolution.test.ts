@@ -1,42 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import extension from "../src/index.ts";
-
-type Handler = (ctx: { cwd?: string; args?: string[] }) => Promise<unknown>;
-
-function collectHandlers(): Map<string, Handler> {
-  const handlers = new Map<string, Handler>();
-  const api = {
-    registerCommand: (cmd: { name: string; run: Handler }) => handlers.set(cmd.name, cmd.run),
-    registerExporter: () => {},
-    registerImporter: () => {},
-    registerHook: () => {},
-    registerSchema: () => {},
-    registerRenderer: () => {},
-    registerSearchProvider: () => {},
-    registerPreflight: () => {},
-    registerService: () => {},
-  };
-  extension.activate(api as any);
-  return handlers;
-}
-
-function pm(cwd: string, args: string[]): string {
-  return execFileSync("pm", args, { cwd, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 });
-}
-
-function createItem(cwd: string, title: string, blockedBy?: string): string {
-  const args = ["create", "Task", title, "--json"];
-  if (blockedBy) args.push("--blocked-by", blockedBy);
-  const out = pm(cwd, args);
-  const created = JSON.parse(out) as { id?: string; item?: { id: string } };
-  return (created.item?.id ?? created.id) as string;
-}
+import { collectHandlers, createItem, pm, pmAvailable } from "./helpers.ts";
 
 function uniqueNonExactPrefix(id: string, allIds: string[]): string | null {
   for (let len = 1; len < id.length; len++) {
@@ -47,13 +15,6 @@ function uniqueNonExactPrefix(id: string, allIds: string[]): string | null {
     if (matches.length === 1) return prefix;
   }
   return null;
-}
-
-let pmAvailable = true;
-try {
-  execFileSync("pm", ["--version"], { encoding: "utf-8" });
-} catch {
-  pmAvailable = false;
 }
 
 /**

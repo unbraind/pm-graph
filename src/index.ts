@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -42,6 +43,17 @@ class CommandError extends Error {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 
+/**
+ * Re-throw a `CommandError` as-is, or wrap any other error in a
+ * `CommandError` with the given prefix and exit code. Prevents losing the
+ * original typed exit code when a handler already threw a `CommandError`.
+ */
+function wrapCommandError(err: unknown, prefix: string, exitCode: number = EXIT_CODE.GENERIC_FAILURE): CommandError {
+  if (err instanceof CommandError) return err;
+  const msg = err instanceof Error ? err.message : String(err);
+  return new CommandError(`${prefix}: ${msg}`, exitCode);
+}
+
 // Exact flag tokens the `pm-graph query`/`neighbors` handlers strip from their
 // variadic positional args (these commands read `--json` manually, so the host
 // leaves it in `context.args`). Matched exactly — never by dash-prefix — so all
@@ -73,7 +85,14 @@ type Neo4jDriver = {
 
 let neo4jApi: Neo4jApi | null = null;
 
-type CommandContext = {
+// Lazy CommonJS-style resolution of `neo4j-driver` from this module's own
+// location. `require` keeps the resolution at call time (a top-level import
+// would make the whole extension unresolvable when a git-URL install shipped
+// without the driver) while satisfying the fleet's no-dynamic-imports policy.
+const requireNeo4j = createRequire(import.meta.url);
+
+/** Context passed to extension command handlers by the pm CLI host. */
+export type CommandContext = {
   command?: string;
   args?: string[];
   cwd?: string;
@@ -84,14 +103,16 @@ type CommandContext = {
   global?: Record<string, unknown>;
 };
 
-type ExtensionCommandArgumentDefinition = {
+/** Definition of a positional argument accepted by an extension command. */
+export type ExtensionCommandArgumentDefinition = {
   name: string;
   required?: boolean;
   variadic?: boolean;
   description?: string;
 };
 
-type RegisterCommand = {
+/** Shape of a command registered by an extension via `registerCommand`. */
+export type RegisterCommand = {
   name: string;
   description: string;
   run: (context: CommandContext) => Promise<unknown>;
@@ -101,7 +122,8 @@ type RegisterCommand = {
   failure_hints?: string[];
 };
 
-type ServiceOverrideContext = {
+/** Context passed to a service-override callback by the pm CLI host. */
+export type ServiceOverrideContext = {
   service: string;
   command?: string;
   args?: string[];
@@ -111,27 +133,31 @@ type ServiceOverrideContext = {
   payload?: unknown;
 };
 
-type ExtensionApi = {
+/** API surface the pm CLI host exposes to extensions for registration. */
+export type ExtensionApi = {
   registerCommand(command: RegisterCommand): void;
   registerExporter(name: string, exporter: Exporter): void;
   registerService(service: "output_format" | "error_format" | "help_format" | "lock_acquire" | "lock_release" | "history_append" | "item_store_write" | "item_store_delete" | "context_relevance", override: (context: ServiceOverrideContext) => unknown): void;
 };
 
 
-type GraphNode = {
+/** A node in the workspace dependency graph (an item or a facet). */
+export type GraphNode = {
   id: string;
   labels: string[];
   properties: Record<string, unknown>;
 };
 
-type GraphRelationship = {
+/** A directed relationship between two graph nodes. */
+export type GraphRelationship = {
   from: string;
   to: string;
   type: string;
   properties: Record<string, unknown>;
 };
 
-type Graph = {
+/** The full workspace dependency graph: nodes, relationships, and metadata. */
+export type Graph = {
   generatedAt: string;
   workspace: string;
   projectKey: string;
@@ -186,24 +212,29 @@ function neo4jMissingMessage(): string {
 }
 
 /**
- * Lazily load the `neo4j-driver` module, installing it on demand.
+ * Lazily resolve the `neo4j-driver` module, installing it on demand.
  *
- * Returns the cached module (`neo4jApi`) once resolved, so repeated commands
- * pay the import cost once. A first import that fails is treated as a missing
- * optional dependency rather than a hard failure: `npm install --omit=dev` is
- * run in {@link packageRoot} and the import retried, so a git-URL install that
+ * Resolution happens at call time through `requireNeo4j`, so repeated commands
+ * pay the resolution cost once (the resolved API is cached in `neo4jApi`). A
+ * first resolution that fails is treated as a missing optional dependency
+ * rather than a hard failure: `npm install --omit=dev` is run in
+ * {@link packageRoot} and the resolution retried, so a git-URL install that
  * shipped without the driver can still self-repair. A failed install throws an
- * error that carries both the install exit code and the original import error.
+ * error that carries both the install exit code and the original resolution
+ * error.
+ *
+ * The result is assigned to `neo4jApi` exactly once, after every failure path
+ * has been ruled out, so no intermediate await can observe or clobber a stale
+ * cache value.
  *
  * @returns The resolved neo4j-driver module API.
- * @throws {Error} When the driver cannot be imported and cannot be installed.
+ * @throws {Error} When the driver cannot be resolved and cannot be installed.
  */
 async function loadNeo4j(): Promise<Neo4jApi> {
   if (neo4jApi) return neo4jApi;
+  let resolved: Neo4jApi;
   try {
-    const mod = await import("neo4j-driver");
-    neo4jApi = ((mod as { default?: Neo4jApi }).default ?? mod) as Neo4jApi;
-    return neo4jApi;
+    resolved = resolveNeo4jModule();
   } catch (err: unknown) {
     console.error("Installing pm-graph Neo4j runtime dependency...");
     const install = spawnSync("npm", ["install", "--omit=dev"], {
@@ -218,10 +249,27 @@ async function loadNeo4j(): Promise<Neo4jApi> {
         `Neo4j driver is not installed and npm install --omit=dev failed with exit code ${install.status ?? "unknown"}. (${msg})`,
       );
     }
-    const mod = await import("neo4j-driver");
-    neo4jApi = ((mod as { default?: Neo4jApi }).default ?? mod) as Neo4jApi;
-    return neo4jApi;
+    resolved = resolveNeo4jModule();
   }
+  neo4jApi = resolved;
+  return resolved;
+}
+
+/**
+ * Resolve the `neo4j-driver` module and normalize its export shape.
+ *
+ * `require` of the CommonJS build returns the `module.exports` API object
+ * directly, while `require` of an ECMAScript module (the shape the test
+ * fixtures and any future ESM-only driver build serve) returns the module
+ * namespace, where the API sits behind `default`. Accepting both keeps the
+ * interop contract identical to the previous dynamic-import behaviour.
+ *
+ * @returns The neo4j-driver module API.
+ * @throws Whatever module resolution throws when the driver is absent.
+ */
+function resolveNeo4jModule(): Neo4jApi {
+  const mod: unknown = requireNeo4j("neo4j-driver");
+  return ((mod as { readonly default?: Neo4jApi }).default ?? mod) as Neo4jApi;
 }
 
 /**
@@ -429,12 +477,20 @@ function toPlain(value: unknown): unknown {
  * or count never have to special-case a missing value, at the cost of a bogus
  * zero for genuinely malformed input.
  */
-function toNumber(value: unknown): number {
+/**
+ * Unwrap a Neo4j Integer (object exposing `toNumber`) to a native number,
+ * or return a native number as-is. Returns `null` for anything else.
+ */
+function unwrapNeo4jInteger(value: unknown): number | null {
   if (typeof value === "number") return value;
   if (value && typeof value === "object" && "toNumber" in value && typeof (value as { toNumber?: unknown }).toNumber === "function") {
     return (value as { toNumber: () => number }).toNumber();
   }
-  return 0;
+  return null;
+}
+
+function toNumber(value: unknown): number {
+  return unwrapNeo4jInteger(value) ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1220,6 +1276,31 @@ function mermaidId(id: string): string {
 }
 
 /**
+ * Read a node's display title, falling back to its id when the property is
+ * absent or not a non-empty string.
+ */
+function nodeTitle(node: GraphNode): string {
+  return typeof node.properties.title === "string" && node.properties.title
+    ? String(node.properties.title)
+    : node.id;
+}
+
+/** Read a node's status as a string, or `""` when absent or non-string. */
+function nodeStatus(node: GraphNode): string {
+  return typeof node.properties.status === "string" ? node.properties.status : "";
+}
+
+/**
+ * Build the single-line `title [id] (status)` label the diagram renderers
+ * share. The status suffix is omitted entirely for status-less nodes.
+ */
+function diagramLabel(node: GraphNode): string {
+  const title = nodeTitle(node);
+  const status = nodeStatus(node);
+  return status ? `${title} [${node.id}] (${status})` : `${title} [${node.id}]`;
+}
+
+/**
  * Render a graph as a Mermaid `graph TD` document.
  *
  * Each node is drawn as a boxed label showing title, id, and status, with the
@@ -1231,12 +1312,7 @@ function mermaidId(id: string): string {
 function renderMermaid(graph: Graph): string {
   const lines: string[] = ["graph TD"];
   for (const node of graph.nodes) {
-    const title = typeof node.properties.title === "string" && node.properties.title
-      ? String(node.properties.title)
-      : node.id;
-    const status = typeof node.properties.status === "string" ? node.properties.status : "";
-    const label = status ? `${title} [${node.id}] (${status})` : `${title} [${node.id}]`;
-    lines.push(`  ${mermaidId(node.id)}["${mermaidLabel(label)}"]`);
+    lines.push(`  ${mermaidId(node.id)}["${mermaidLabel(diagramLabel(node))}"]`);
   }
   if (graph.relationships.length > 0) lines.push("");
   for (const rel of graph.relationships) {
@@ -1260,13 +1336,20 @@ function dotEscape(s: string): string {
  * id and label is run through {@link dotEscape} so a quote or backslash in an
  * item title cannot break out of the attribute.
  */
+/** Extract the title and status strings from a graph node's properties. */
+function nodeLabelParts(node: GraphNode): { title: string; status: string } {
+  const title = typeof node.properties.title === "string" && node.properties.title
+    ? String(node.properties.title)
+    : node.id;
+  const status = typeof node.properties.status === "string" ? node.properties.status : "";
+  return { title, status };
+}
+
+/** Render a graph as a Graphviz DOT digraph with left-to-right ranking. */
 function renderDot(graph: Graph): string {
   const lines: string[] = ["digraph pm_graph {", "  rankdir=LR;", '  node [shape=box, style=rounded];'];
   for (const node of graph.nodes) {
-    const title = typeof node.properties.title === "string" && node.properties.title
-      ? String(node.properties.title)
-      : node.id;
-    const status = typeof node.properties.status === "string" ? node.properties.status : "";
+    const { title, status } = nodeLabelParts(node);
     // Build the second line first, then join with the DOT line-break directive
     // "\n" AFTER escaping so dotEscape does not double-escape the backslash.
     const second = status ? `[${node.id}] ${status}` : `[${node.id}]`;
@@ -1378,10 +1461,7 @@ function plantumlLabel(s: string): string {
 export function renderPlantuml(graph: Graph): string {
   const lines: string[] = ["@startuml", "left to right direction"];
   for (const node of graph.nodes) {
-    const title = typeof node.properties.title === "string" && node.properties.title
-      ? String(node.properties.title)
-      : node.id;
-    const status = typeof node.properties.status === "string" ? node.properties.status : "";
+    const { title, status } = nodeLabelParts(node);
     const label = status ? `${title} [${node.id}] (${status})` : `${title} [${node.id}]`;
     lines.push(`object "${plantumlLabel(label)}" as ${plantumlAlias(node.id)}`);
   }
@@ -1931,40 +2011,67 @@ export function mapImpactDirection(logical: string): "incoming" | "outgoing" | "
  * (which differs between `incoming`/`outgoing`) never fabricates edges. The
  * root is always the first node so diagrams anchor on it.
  */
+/**
+ * Build an ordered, de-duplicated node list anchored at `rootId`, followed
+ * by `rest` in order. Returns the ordered list and a `Set` for membership
+ * checks. Used by both impact subgraph builders.
+ */
+function orderedNodeSet(rootId: string, rest: string[] = []): { order: string[]; set: Set<string> } {
+  const order: string[] = [];
+  const seen = new Set<string>();
+  const add = (id: string): void => {
+    if (!seen.has(id)) {
+      seen.add(id);
+      order.push(id);
+    }
+  };
+  add(rootId);
+  for (const id of rest) add(id);
+  return { order, set: seen };
+}
+
+/**
+ * Collect de-duplicated bidirectional edge keys from a list of node-id paths.
+ * Each consecutive pair in a path contributes both `u->v` and `v->u` keys.
+ */
+function collectBidirectionalEdges(paths: string[][]): string[] {
+  const edgeKeys: string[] = [];
+  const seen = new Set<string>();
+  for (const path of paths) {
+    for (let i = 0; i < path.length - 1; i++) {
+      for (const key of [`${path[i]}->${path[i + 1]}`, `${path[i + 1]}->${path[i]}`]) {
+        if (!seen.has(key)) {
+          seen.add(key);
+          edgeKeys.push(key);
+        }
+      }
+    }
+  }
+  return edgeKeys;
+}
+
+/**
+ * Build the impact subgraph from canonical traversal paths: the root plus
+ * all path nodes, with bidirectional edges between consecutive path nodes
+ * that exist in the source graph. The root always anchors the diagram.
+ */
 export function impactSubgraph(
   graph: Graph,
   rootId: string,
   affected: Array<{ id: string; distance?: number; path?: string[] }>,
 ): Graph {
-  const nodeOrder: string[] = [];
-  const seenNode = new Set<string>();
-  const addNode = (id: string): void => {
-    if (!seenNode.has(id)) {
-      seenNode.add(id);
-      nodeOrder.push(id);
-    }
-  };
-  addNode(rootId);
-  const edgeKeys: string[] = [];
-  const seenEdge = new Set<string>();
-  const addEdge = (u: string, v: string): void => {
-    const key = `${u}->${v}`;
-    if (!seenEdge.has(key)) {
-      seenEdge.add(key);
-      edgeKeys.push(key);
-    }
-  };
+  const paths: string[][] = [];
+  const allNodeIds: string[] = [];
   for (const row of affected) {
     const rawPath = Array.isArray(row.path) && row.path.length > 0 ? row.path : [rootId, row.id];
     // Defensive: ensure the path starts at the root so the root anchors the
     // diagram even when the engine omits it.
     const path = rawPath[0] === rootId ? rawPath : [rootId, ...rawPath];
-    for (const id of path) addNode(id);
-    for (let i = 0; i < path.length - 1; i++) {
-      addEdge(path[i], path[i + 1]);
-      addEdge(path[i + 1], path[i]);
-    }
+    paths.push(path);
+    allNodeIds.push(...path);
   }
+  const { order: nodeOrder } = orderedNodeSet(rootId, allNodeIds);
+  const edgeKeys = collectBidirectionalEdges(paths);
   return projectSubgraph(graph, nodeOrder, edgeKeys);
 }
 
@@ -1980,17 +2087,7 @@ export function impactSubgraphFromNodeSet(
   rootId: string,
   nodeIds: string[],
 ): Graph {
-  const nodeOrder: string[] = [];
-  const seenNode = new Set<string>();
-  const addNode = (id: string): void => {
-    if (!seenNode.has(id)) {
-      seenNode.add(id);
-      nodeOrder.push(id);
-    }
-  };
-  addNode(rootId);
-  for (const id of nodeIds) if (id !== rootId) addNode(id);
-  const set = new Set(nodeOrder);
+  const { order: nodeOrder, set } = orderedNodeSet(rootId, nodeIds.filter((id) => id !== rootId));
   const edgeKeys: string[] = [];
   for (const e of structuralEdges(graph)) {
     if (set.has(e.from) && set.has(e.to)) edgeKeys.push(`${e.from}->${e.to}`);
@@ -2093,17 +2190,7 @@ function readNumberProperty(
   properties: Record<string, unknown>,
   key: string,
 ): number | null {
-  const value = properties[key];
-  if (typeof value === "number") return value;
-  if (
-    value &&
-    typeof value === "object" &&
-    "toNumber" in value &&
-    typeof (value as { toNumber?: unknown }).toNumber === "function"
-  ) {
-    return (value as { toNumber: () => number }).toNumber();
-  }
-  return null;
+  return unwrapNeo4jInteger(properties[key]);
 }
 
 function itemTitle(node: GraphNode | undefined, fallbackId: string): string {
@@ -2662,6 +2749,29 @@ function argsHaveFlag(args: string[], longName: string): boolean {
  * for every other command so default rendering is untouched. Then registers
  * each pm-graph command (ping, export, …) against the host API.
  */
+/**
+ * Load and shape the analytics graph for a command context, returning the
+ * parsed flags, graph, structural edges, and sorted item ids. Shared by the
+ * cycles, critical-path, and topo-sort handlers to avoid repeating the
+ * four-line load sequence.
+ */
+async function loadShapedAnalytics(context: CommandContext): Promise<{
+  flags: AnalyticsFlags;
+  graph: Graph;
+  edges: StructuralEdge[];
+  items: string[];
+}> {
+  const flags = parseAnalyticsFlags(context.args ?? []);
+  const graph = await shapedAnalyticsGraph(context, flags);
+  const edges = structuralEdges(graph);
+  const items = [...itemNodeIds(graph)].sort();
+  return { flags, graph, edges, items };
+}
+
+/**
+ * Register every pm-graph command, exporter, and service override with the
+ * pm CLI host. Called once at extension load time.
+ */
 export function activate(api: ExtensionApi): void {
   // The `pm-graph export --format <fmt>` handler renders the graph into a
   // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
@@ -2818,10 +2928,7 @@ export function activate(api: ExtensionApi): void {
             graph: await buildGraph(),
           };
         } catch (err: unknown) {
-          // Preserve an already-typed CommandError (and its exit code) instead of flattening.
-          if (err instanceof CommandError) throw err;
-          const msg = err instanceof Error ? err.message : String(err);
-          throw new CommandError(`Export failed: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+          throw wrapCommandError(err, "Export failed", EXIT_CODE.GENERIC_FAILURE);
         }
       }
 
@@ -2864,10 +2971,7 @@ export function activate(api: ExtensionApi): void {
           relationships: graph.relationships.length,
         };
       } catch (err: unknown) {
-        // Preserve an already-typed CommandError (and its exit code) instead of flattening.
-        if (err instanceof CommandError) throw err;
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new CommandError(`Export failed: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+        throw wrapCommandError(err, "Export failed", EXIT_CODE.GENERIC_FAILURE);
       }
     },
   });
@@ -3277,10 +3381,7 @@ export function activate(api: ExtensionApi): void {
           },
         };
       }
-      const flags = parseAnalyticsFlags(context.args ?? []);
-      const graph = await shapedAnalyticsGraph(context, flags);
-      const edges = structuralEdges(graph);
-      const items = [...itemNodeIds(graph)].sort();
+      const { flags, graph, edges, items } = await loadShapedAnalytics(context);
       const cycles = findCycles(items, edges);
       if (cycles.length > 0) {
         if (flags.format !== "text") {
@@ -3376,10 +3477,7 @@ export function activate(api: ExtensionApi): void {
           },
         };
       }
-      const flags = parseAnalyticsFlags(context.args ?? []);
-      const graph = await shapedAnalyticsGraph(context, flags);
-      const edges = structuralEdges(graph);
-      const items = [...itemNodeIds(graph)].sort();
+      const { flags, graph, edges, items } = await loadShapedAnalytics(context);
       const chain = longestChain(items, edges);
       if (flags.format !== "text") {
         const diagram = renderAnalysisDiagram(flags.format, criticalPathSubgraph(graph, chain));
@@ -3415,10 +3513,7 @@ export function activate(api: ExtensionApi): void {
           },
         };
       }
-      const flags = parseAnalyticsFlags(context.args ?? []);
-      const graph = await shapedAnalyticsGraph(context, flags);
-      const edges = structuralEdges(graph);
-      const items = [...itemNodeIds(graph)].sort();
+      const { edges, items } = await loadShapedAnalytics(context);
       const { order, cycleNodes } = topoSort(items, edges);
       if (cycleNodes.length > 0) {
         // Surface the actual cycle path(s) among the unresolved nodes for context.
