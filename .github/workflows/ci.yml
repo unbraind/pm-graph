@@ -150,3 +150,27 @@ jobs:
 
       - name: Verify Bun can install the package graph
         run: bun install --no-save
+
+  windows-prepare-lifecycle:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # npm ci runs the production prepare lifecycle (the thin launcher over
+      # pm-ops/merge-driver) through cmd.exe, and the health check below fails
+      # unless that run registered the drivers .gitattributes declares.
+      - name: Install dependencies and merge drivers
+        run: npm ci
+
+      - name: Verify the prepare lifecycle registered the merge drivers
+        run: npx pm health --strict-exit --require-merge-drivers
+
+      - name: Exercise the real Windows command parser
+        run: node --test test/windows-prepare.integration.ts
