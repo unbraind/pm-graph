@@ -16,7 +16,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -329,6 +328,7 @@ test("topo-sort returns a valid order on an acyclic workspace", { skip: !pmAvail
     assert.strictEqual(result.count, result.order.length);
     // Alpha (the blocker) must come before Beta, which must come before Gamma.
     assert.ok(result.order.indexOf(a) < result.order.indexOf(b), "blocker before dependent");
+    assert.ok(result.order.indexOf(b) < result.order.indexOf(c), "dependent before its own dependent");
   });
 });
 
@@ -429,7 +429,7 @@ test("explain with unknown id returns a NOT_FOUND error with suggestions", { ski
 test("analyze --root restricts the report to the root neighborhood", { skip: !pmAvailable }, async () => {
   await withCommandWorkspace("pmg-cmd-", async ({ ws, harness, pmRoot }) => {
     const root = createItem(ws, "Alpha");
-    const dependent = createItem(ws, "Beta", root);
+    createItem(ws, "Beta", root);
     createItem(ws, "Solo"); // disconnected
     const res = await harness.runCommand({
       command: "pm-graph analyze",
@@ -438,9 +438,8 @@ test("analyze --root restricts the report to the root neighborhood", { skip: !pm
     }) as CmdResult;
     const result = res.result as { ok: boolean; itemCount: number };
     assert.equal(result.ok, true);
-    // Neighborhood of A includes A and B (1 hop) but not Solo.
-    assert.ok(result.itemCount <= 2, "Solo excluded from the neighborhood");
-    assert.ok(result.itemCount >= 1, "at least the root is present");
+    // Neighborhood of Alpha is exactly Alpha and Beta (1 hop); Solo is excluded.
+    assert.strictEqual(result.itemCount, 2, "root plus its one-hop dependent, without Solo");
   });
 });
 

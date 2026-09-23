@@ -2971,7 +2971,7 @@ export function activate(api) {
                     },
                 };
             }
-            const { flags, graph, edges, items } = await loadShapedAnalytics(context);
+            const { edges, items } = await loadShapedAnalytics(context);
             const { order, cycleNodes } = topoSort(items, edges);
             if (cycleNodes.length > 0) {
                 // Surface the actual cycle path(s) among the unresolved nodes for context.

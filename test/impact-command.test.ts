@@ -70,7 +70,7 @@ test("impact returns downstream dependents with affected distance/path rows (can
 });
 
 test("impact back-compat shape is preserved for --format json --direction downstream", { skip: !pmAvailable }, async () => {
-  const { ws, a, b, run } = setupChainWorkspace("pmg-impact-bc-", "pm-graph impact");
+  const { ws, a, run } = setupChainWorkspace("pmg-impact-bc-", "pm-graph impact");
   try {
     const result = (await run({ cwd: ws, args: [a, "--direction", "downstream", "--format", "json"] })) as ImpactResult;
     // Core back-compat fields keep their shape and meaning.

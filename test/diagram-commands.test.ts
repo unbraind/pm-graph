@@ -119,7 +119,7 @@ test("analyze --filter type=... scopes the report to matching item types", { ski
   try {
     pm(ws, ["init"]);
     const t1 = createItem(ws, "Task One");
-    const t2 = createItem(ws, "Task Two", t1);
+    createItem(ws, "Task Two", t1);
     pm(ws, ["create", "Epic", "Epic One", "--json"]); // an Epic, not a Task
     const handlers = collectHandlers();
     const run = handlers.get("pm-graph analyze")!;
