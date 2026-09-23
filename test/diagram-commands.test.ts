@@ -8,20 +8,14 @@ import { captureStdout, captureStdoutThrow, collectHandlers, createItem, pm, pmA
 
 /** Run a cycles --format command, assert it throws and returns captured stdout. */
 async function assertCycleFormatThrows(run: Handler, ws: string, format: string): Promise<string> {
-  let threw = false;
-  let captured = "";
-  try {
-    const outcome = await captureStdoutThrow(() => run({ cwd: ws, args: ["--format", format] }));
-    threw = outcome.error !== undefined;
-    captured = outcome.stdout;
-    if (threw) {
-      assert.match(String(outcome.error instanceof Error ? outcome.error.message : outcome.error), /dependency cycle/i, "still reports the cycle");
-    }
-  } catch {
-    threw = true;
-  }
-  assert.ok(threw, "cycles still exits non-zero (CI-gating preserved)");
-  return captured;
+  const outcome = await captureStdoutThrow(() => run({ cwd: ws, args: ["--format", format] }));
+  assert.notStrictEqual(outcome.error, undefined, "cycles still exits non-zero (CI-gating preserved)");
+  assert.match(
+    String(outcome.error instanceof Error ? outcome.error.message : outcome.error),
+    /dependency cycle/i,
+    "still reports the cycle",
+  );
+  return outcome.stdout;
 }
 
 // Integration tests that drive the REAL registered command handlers
