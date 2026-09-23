@@ -1,5 +1,6 @@
 import { type Exporter } from "@unbrained/pm-cli/sdk";
-type CommandContext = {
+/** Context passed to extension command handlers by the pm CLI host. */
+export type CommandContext = {
     command?: string;
     args?: string[];
     cwd?: string;
@@ -9,13 +10,15 @@ type CommandContext = {
     options?: Record<string, unknown>;
     global?: Record<string, unknown>;
 };
-type ExtensionCommandArgumentDefinition = {
+/** Definition of a positional argument accepted by an extension command. */
+export type ExtensionCommandArgumentDefinition = {
     name: string;
     required?: boolean;
     variadic?: boolean;
     description?: string;
 };
-type RegisterCommand = {
+/** Shape of a command registered by an extension via `registerCommand`. */
+export type RegisterCommand = {
     name: string;
     description: string;
     run: (context: CommandContext) => Promise<unknown>;
@@ -24,7 +27,8 @@ type RegisterCommand = {
     examples?: string[];
     failure_hints?: string[];
 };
-type ServiceOverrideContext = {
+/** Context passed to a service-override callback by the pm CLI host. */
+export type ServiceOverrideContext = {
     service: string;
     command?: string;
     args?: string[];
@@ -33,23 +37,27 @@ type ServiceOverrideContext = {
     pm_root?: string;
     payload?: unknown;
 };
-type ExtensionApi = {
+/** API surface the pm CLI host exposes to extensions for registration. */
+export type ExtensionApi = {
     registerCommand(command: RegisterCommand): void;
     registerExporter(name: string, exporter: Exporter): void;
     registerService(service: "output_format" | "error_format" | "help_format" | "lock_acquire" | "lock_release" | "history_append" | "item_store_write" | "item_store_delete" | "context_relevance", override: (context: ServiceOverrideContext) => unknown): void;
 };
-type GraphNode = {
+/** A node in the workspace dependency graph (an item or a facet). */
+export type GraphNode = {
     id: string;
     labels: string[];
     properties: Record<string, unknown>;
 };
-type GraphRelationship = {
+/** A directed relationship between two graph nodes. */
+export type GraphRelationship = {
     from: string;
     to: string;
     type: string;
     properties: Record<string, unknown>;
 };
-type Graph = {
+/** The full workspace dependency graph: nodes, relationships, and metadata. */
+export type Graph = {
     generatedAt: string;
     workspace: string;
     projectKey: string;
@@ -228,14 +236,9 @@ export declare function cyclesSubgraph(graph: Graph, cycles: string[][]): Graph;
  */
 export declare function mapImpactDirection(logical: string): "incoming" | "outgoing" | "both";
 /**
- * Build the impact subgraph for the canonical `pm graph impact` result: the
- * root node plus every node on every returned `path` (affected items and their
- * intermediate hops) and the structural edges along those paths. Each
- * consecutive path pair contributes both `u->v` and `v->u` candidate edge
- * keys; `projectSubgraph` keeps only the keys that match a real structural
- * relationship in the source graph, so the traversal direction of the path
- * (which differs between `incoming`/`outgoing`) never fabricates edges. The
- * root is always the first node so diagrams anchor on it.
+ * Build the impact subgraph from canonical traversal paths: the root plus
+ * all path nodes, with bidirectional edges between consecutive path nodes
+ * that exist in the source graph. The root always anchors the diagram.
  */
 export declare function impactSubgraph(graph: Graph, rootId: string, affected: Array<{
     id: string;
@@ -340,13 +343,8 @@ export declare function explainItem(graph: Graph, id: string): ExplainReport | n
  */
 export declare function analyzeGraph(graph: Graph, topN?: number): AnalyzeReport;
 /**
- * Extension entry point: register the graph commands and output service.
- *
- * Registers an `output_format` service override that unwraps the raw-string
- * marker a `pm-graph export` result carries, so the host renders the document
- * verbatim instead of re-encoding it; the override defers (`{ handled: false }`)
- * for every other command so default rendering is untouched. Then registers
- * each pm-graph command (ping, export, …) against the host API.
+ * Register every pm-graph command, exporter, and service override with the
+ * pm CLI host. Called once at extension load time.
  */
 export declare function activate(api: ExtensionApi): void;
 declare const _default: {

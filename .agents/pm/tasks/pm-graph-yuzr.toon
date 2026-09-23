@@ -1,0 +1,23 @@
+id: pm-graph-yuzr
+title: "Certify pm CLI 2026.9.21 and move onto the canonical pm-ops merge-driver, lint and duplication gates"
+description: "Adopt pm CLI 2026.9.21, pin @unbrained/pm-cli 2026.9.21 / pm-changelog / pm-ops exactly, absorb open Dependabot PRs, replace the vendored merge-driver prepare hook with the thin pm-ops/merge-driver launcher, add the canonical lint (pm-ops/eslint) and duplication (pm-ops/jscpd) gates with zero findings, fix the ~81 'any' type sites against real neo4j-driver types, and wire CI to require merge drivers. Companion epic pm-cli-website-5s6z."
+type: Task
+status: in_progress
+priority: 1
+tags[4]: certify,multi-agent,pm-cli-2026.9.21,quality
+created_at: "2026-09-22T05:08:23.357Z"
+updated_at: "2026-09-23T00:03:44.244Z"
+assignee: pi-agent
+claim_principal: pi-agent
+author: pi-agent
+acceptance_criteria: "All three devDependency pins exact and verified in package.json + package-lock.json; npm run lint and npm run duplication exit 0 with 0 findings; pm health --strict-exit --require-merge-drivers exits 0; npm run release:check exits 0"
+comments[2]{created_at,author,text}:
+  "2026-09-22T05:09:44.627Z",pi-agent,"Baseline measured with canonical pm-ops 2026.9.18 gates run directly (launchers not yet created): lint 86 errors (83 no-restricted-syntax explicit-any, 1 no-duplicate-imports in test/impact-command.test.ts:16 area, 2 require-atomic-updates in src/index.ts); duplication 6.22% duplicated lines (789/12675), 44 sources, 80 clone pairs, threshold 0. Findings concentrated in test/*.test.ts and src/index.ts. Pins verified: @unbrained/pm-cli 2026.9.21, pm-changelog 2026.9.18, pm-ops 2026.9.18 in package.json + package-lock.json; @types/node lockfile 26.6.1 (Dependabot #107 landed exactly, range ^26.2.0 restored); codeql-action SHAs bumped per #111."
+  "2026-09-23T00:03:36.230Z",pi-glm-pm-graph,"Duplication gate reduced from 5.6% to 0% (74 to 0 clone pairs) by extracting shared helpers into test/helpers.ts (withNeo4jQueryTest, withCommandWorkspace, setupChainWorkspace, setupCycleWorkspace, setupBareWorkspace, activateWithRecording, captureStdoutThrow, expectCommandError, expectCommandErrorMulti, expectExporterReject, runExportRaw, createChain, synthNode/synthRel/synthGraph, NEO4J_FAIL_ENV, setNeo4jTestEnv, applyEnv, CmdResult/CommandError types). src/index.ts: extracted unwrapNeo4jInteger (toNumber+readNumberProperty), nodeLabelParts (renderDot+renderPlantuml), orderedNodeSet+collectBidirectionalEdges (impactSubgraph+impactSubgraphFromNodeSet), loadShapedAnalytics (cycles+critical-path+topo-sort), wrapCommandError (export catch blocks). Added docstrings to 8 type aliases and 3 functions. Lint exit 0, duplication 0%, release:check exit 0 (287 tests, coverage 100/100/100), pm health --strict-exit exit 0."
+files[3]{path,scope}:
+  src/index.ts,project
+  test/command-surface.test.ts,project
+  test/helpers.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  "npm run release:check",project,pi-glm-pm-graph,"2026-09-23T00:03:44.219Z",local_mutation,pm-cli-2026-9-21-canonical-pm-ops-gates
+body: ""

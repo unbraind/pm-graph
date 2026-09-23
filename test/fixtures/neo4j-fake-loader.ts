@@ -1,9 +1,11 @@
 /**
- * ESM resolve hook that redirects `neo4j-driver` to the in-process fake.
+ * Sync resolve hook that redirects `neo4j-driver` to the in-process fake.
  *
  * Registered from coverage tests that need the Neo4j success and error-mapping
  * paths without opening a Bolt socket.
  */
+
+import type { ResolveHookSync } from "node:module";
 
 const fakeUrl = new URL("./neo4j-fake-named.ts", import.meta.url).href;
 
@@ -11,17 +13,13 @@ const fakeUrl = new URL("./neo4j-fake-named.ts", import.meta.url).href;
  * Resolve `neo4j-driver` to {@link fakeUrl}; pass every other specifier through.
  *
  * @param specifier - Module specifier being resolved.
- * @param context - Resolver context from Node's ESM loader.
+ * @param context - Resolver context from Node's module hooks.
  * @param nextResolve - Next hook in the chain.
  * @returns The resolved module URL, short-circuited for the fake.
  */
-export async function resolve(
-  specifier: string,
-  context: Record<string, unknown>,
-  nextResolve: (specifier: string, context: Record<string, unknown>) => Promise<{ url: string }>,
-): Promise<{ url: string; shortCircuit?: boolean }> {
+export const resolve: ResolveHookSync = (specifier, context, nextResolve) => {
   if (specifier === "neo4j-driver") {
     return { url: fakeUrl, shortCircuit: true };
   }
   return nextResolve(specifier, context);
-}
+};

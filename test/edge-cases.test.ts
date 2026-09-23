@@ -32,25 +32,9 @@ import {
   cyclesSubgraph,
   criticalPathSubgraph,
 } from "../src/index.ts";
+import { synthNode as node, synthGraph as graph, synthRel as rel } from "./helpers.ts";
 
 type Edge = { from: string; to: string; type: string };
-
-// Reusable node/relationship builders for synthetic graphs.
-function node(id: string, extra: Record<string, unknown> = {}) {
-  return { id, labels: ["PmItem"], properties: { id, title: id, type: "Task", status: "open", ...extra } };
-}
-function rel(from: string, to: string, type: string) {
-  return { from, to, type, properties: {} };
-}
-function graph(nodes: ReturnType<typeof node>[], rels: ReturnType<typeof rel>[]) {
-  return {
-    generatedAt: "2026-01-01T00:00:00.000Z",
-    workspace: "/tmp/ws",
-    projectKey: "ws",
-    nodes,
-    relationships: rels,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Empty and single-node graphs

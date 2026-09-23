@@ -23,7 +23,10 @@ import {
   mapImpactDirection,
   impactSubgraph,
   impactSubgraphFromNodeSet,
+  type Graph,
+  type GraphNode,
 } from "../src/index.ts";
+import { synthNode as node, synthGraph, synthRel as rel } from "./helpers.ts";
 
 // The renderers and analytics helpers are exported from the compiled module.
 // We import the renderExport-backed formats indirectly by exercising the
@@ -104,24 +107,17 @@ test("longestChain is cycle-safe (terminates, no infinite loop)", () => {
 
 // --- analyzeGraph integration over a synthetic Graph ----------------------
 
-function node(id: string, extra: Record<string, unknown> = {}) {
-  return { id, labels: ["PmItem"], properties: { id, title: id, type: "Task", status: "open", ...extra } };
-}
-function rel(from: string, to: string, type: string) {
-  return { from, to, type, properties: {} };
-}
+/** Timestamp shared by the synthetic graphs in this file. */
+const GRAPH_TS = "2026-06-02T00:00:00.000Z";
 
-const syntheticGraph = {
-  generatedAt: "2026-06-02T00:00:00.000Z",
-  workspace: "/tmp/ws",
-  projectKey: "ws",
-  nodes: [
+const syntheticGraph: Graph = synthGraph(
+  [
     node("A"), node("B"), node("C"), node("D"),
     node("E"), node("F"), node("O"),
     // facet node should be ignored by analytics
     { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
   ],
-  relationships: [
+  [
     rel("B", "A", "BLOCKED_BY"),
     rel("C", "B", "BLOCKED_BY"),
     rel("D", "C", "BLOCKED_BY"),
@@ -131,10 +127,11 @@ const syntheticGraph = {
     rel("A", "status:open", "HAS_STATUS"),
     rel("B", "tag:backend", "TAGGED_WITH"),
   ],
-};
+  GRAPH_TS,
+);
 
 test("analyzeGraph computes the expected health metrics", () => {
-  const report = analyzeGraph(syntheticGraph as any);
+  const report = analyzeGraph(syntheticGraph);
   assert.strictEqual(report.itemCount, 7, "7 PmItem nodes (facet excluded)");
   assert.strictEqual(report.structuralEdgeCount, 5, "5 structural edges (facet/tag excluded)");
   assert.strictEqual(report.cycleCount, 1, "one cycle E<->F");
@@ -154,7 +151,7 @@ test("analyzeGraph computes the expected health metrics", () => {
 });
 
 test("analyzeGraph ignores facet/tag edges entirely", () => {
-  const report = analyzeGraph(syntheticGraph as any);
+  const report = analyzeGraph(syntheticGraph);
   // If facet edges leaked in, A would gain an outgoing edge (to status:open)
   // and structuralEdgeCount would be 7 instead of 5.
   assert.strictEqual(report.structuralEdgeCount, 5);
@@ -162,7 +159,7 @@ test("analyzeGraph ignores facet/tag edges entirely", () => {
 });
 
 test("explainItem reports blockers/dependents/impact for an acyclic item", () => {
-  const report = explainItem(syntheticGraph as any, "B");
+  const report = explainItem(syntheticGraph, "B");
   assert.ok(report, "item should be explainable");
   assert.strictEqual(report!.id, "B");
   assert.deepStrictEqual(report!.blockers.map((n) => n.id), ["A"]);
@@ -175,7 +172,7 @@ test("explainItem reports blockers/dependents/impact for an acyclic item", () =>
 });
 
 test("explainItem reports cycle participation for a cyclic item", () => {
-  const report = explainItem(syntheticGraph as any, "E");
+  const report = explainItem(syntheticGraph, "E");
   assert.ok(report, "item should be explainable");
   assert.strictEqual(report!.inCycle, true);
   assert.strictEqual(report!.cycleCount, 1);
@@ -185,12 +182,12 @@ test("explainItem reports cycle participation for a cyclic item", () => {
 });
 
 test("explainItem returns null for unknown item ids", () => {
-  assert.strictEqual(explainItem(syntheticGraph as any, "missing-id"), null);
+  assert.strictEqual(explainItem(syntheticGraph, "missing-id"), null);
 });
 
 // --- renderers ------------------------------------------------------------
 
-const renderGraph = {
+const renderGraph: Graph = {
   generatedAt: "2026-06-02T00:00:00.000Z",
   workspace: "/tmp/ws",
   projectKey: "ws",
@@ -202,7 +199,7 @@ const renderGraph = {
 };
 
 test("renderGraphml emits valid, escaped GraphML", () => {
-  const xml = renderGraphml(renderGraph as any);
+  const xml = renderGraphml(renderGraph);
   assert.ok(xml.startsWith('<?xml version="1.0"'), "has XML prolog");
   assert.ok(xml.includes("<graphml"), "has graphml root");
   assert.ok(xml.includes('edgedefault="directed"'), "directed graph");
@@ -213,7 +210,7 @@ test("renderGraphml emits valid, escaped GraphML", () => {
 });
 
 test("renderPlantuml emits a valid @startuml block", () => {
-  const uml = renderPlantuml(renderGraph as any);
+  const uml = renderPlantuml(renderGraph);
   assert.ok(uml.startsWith("@startuml"), "starts with @startuml");
   assert.ok(uml.trim().endsWith("@enduml"), "ends with @enduml");
   assert.ok(uml.includes("object "), "declares objects");
@@ -291,7 +288,7 @@ test("dependencyDepths is cycle-safe", () => {
 });
 
 test("analyzeGraph exposes maxDepth and depthByItem", () => {
-  const report = analyzeGraph(syntheticGraph as any);
+  const report = analyzeGraph(syntheticGraph);
   // chain D->C->B->A gives maxDepth 3 (D), and depthByItem sorted deepest-first.
   assert.strictEqual(report.maxDepth, 3, "D sits 3 edges from leaf A");
   assert.strictEqual(report.depthByItem[0].id, "D");
@@ -324,16 +321,13 @@ test("criticalConnectors finds articulation points and bridge edges in the undir
 
 // A graph with a 4-node dependency chain D->C->B->A, a separate E<->F cycle,
 // an orphan O, and facet/tag noise that must never leak into the subgraphs.
-const diagramGraph = {
-  generatedAt: "2026-06-02T00:00:00.000Z",
-  workspace: "/tmp/ws",
-  projectKey: "ws",
-  nodes: [
+const diagramGraph: Graph = synthGraph(
+  [
     node("A"), node("B"), node("C"), node("D"),
     node("E"), node("F"), node("O"),
     { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
   ],
-  relationships: [
+  [
     rel("D", "C", "BLOCKED_BY"),
     rel("C", "B", "BLOCKED_BY"),
     rel("B", "A", "BLOCKED_BY"),
@@ -342,25 +336,26 @@ const diagramGraph = {
     rel("A", "status:open", "HAS_STATUS"),
     rel("B", "tag:backend", "TAGGED_WITH"),
   ],
-};
+  GRAPH_TS,
+);
 
 test("criticalPathSubgraph contains exactly the chain nodes and connecting edges", () => {
   const chain = longestChain(["A", "B", "C", "D"], chainEdges); // D,C,B,A
-  const sub = criticalPathSubgraph(diagramGraph as any, chain);
-  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["D", "C", "B", "A"]);
+  const sub = criticalPathSubgraph(diagramGraph, chain);
+  assert.deepStrictEqual(sub.nodes.map((n) => n.id), ["D", "C", "B", "A"]);
   assert.strictEqual(sub.relationships.length, 3, "three consecutive chain edges");
   for (const r of sub.relationships) {
     assert.strictEqual(r.type, "BLOCKED_BY");
   }
   // No cycle node, orphan, or facet node may appear.
   for (const id of ["E", "F", "O", "status:open"]) {
-    assert.ok(!sub.nodes.some((n: any) => n.id === id), `${id} excluded`);
+    assert.ok(!sub.nodes.some((n) => n.id === id), `${id} excluded`);
   }
 });
 
 test("critical-path --format mermaid emits a mermaid graph with exactly the chain nodes", () => {
   const chain = longestChain(["A", "B", "C", "D"], chainEdges);
-  const out = renderAnalysisDiagram("mermaid", criticalPathSubgraph(diagramGraph as any, chain));
+  const out = renderAnalysisDiagram("mermaid", criticalPathSubgraph(diagramGraph, chain));
   assert.ok(out.startsWith("graph TD"), "is a mermaid graph");
   for (const id of ["A", "B", "C", "D"]) {
     assert.ok(out.includes(`n_${id}[`), `chain node ${id} present`);
@@ -380,18 +375,18 @@ test("critical-path --format mermaid emits a mermaid graph with exactly the chai
 test("cyclesSubgraph contains only cycle-participating nodes and edges", () => {
   const edges = [...chainEdges, ...cycleEdges];
   const cycles = findCycles(["A", "B", "C", "D", "E", "F"], edges);
-  const sub = cyclesSubgraph(diagramGraph as any, cycles);
-  assert.deepStrictEqual([...sub.nodes.map((n: any) => n.id)].sort(), ["E", "F"]);
+  const sub = cyclesSubgraph(diagramGraph, cycles);
+  assert.deepStrictEqual([...sub.nodes.map((n) => n.id)].sort(), ["E", "F"]);
   assert.strictEqual(sub.relationships.length, 2, "the two edges around the E<->F cycle");
   for (const id of ["A", "B", "C", "D", "O", "status:open"]) {
-    assert.ok(!sub.nodes.some((n: any) => n.id === id), `${id} excluded`);
+    assert.ok(!sub.nodes.some((n) => n.id === id), `${id} excluded`);
   }
 });
 
 test("cycles --format graphml emits only the cycle-participating nodes/edges", () => {
   const edges = [...chainEdges, ...cycleEdges];
   const cycles = findCycles(["A", "B", "C", "D", "E", "F"], edges);
-  const xml = renderAnalysisDiagram("graphml", cyclesSubgraph(diagramGraph as any, cycles));
+  const xml = renderAnalysisDiagram("graphml", cyclesSubgraph(diagramGraph, cycles));
   assert.ok(xml.startsWith('<?xml version="1.0"'), "is GraphML");
   assert.ok(xml.includes('<node id="E">') && xml.includes('<node id="F">'), "both cycle nodes present");
   for (const id of ["A", "B", "C", "D", "O"]) {
@@ -405,22 +400,22 @@ test("cycles --format graphml emits only the cycle-participating nodes/edges", (
 
 test("projectSubgraph never invents edges absent from the source graph", () => {
   // Ask for an edge key (A->D) that does not exist among structural edges.
-  const sub = projectSubgraph(diagramGraph as any, ["A", "D"], ["A->D"]);
-  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "D"]);
+  const sub = projectSubgraph(diagramGraph, ["A", "D"], ["A->D"]);
+  assert.deepStrictEqual(sub.nodes.map((n) => n.id), ["A", "D"]);
   assert.strictEqual(sub.relationships.length, 0, "no fabricated edge");
 });
 
 test("renderAnalysisDiagram on the chain subgraph equals renderGraphml of the same subgraph (renderer reuse)", () => {
   const chain = longestChain(["A", "B", "C", "D"], chainEdges);
-  const sub = criticalPathSubgraph(diagramGraph as any, chain);
-  assert.strictEqual(renderAnalysisDiagram("graphml", sub), renderGraphml(sub as any));
+  const sub = criticalPathSubgraph(diagramGraph, chain);
+  assert.strictEqual(renderAnalysisDiagram("graphml", sub), renderGraphml(sub));
 });
 
 // --- --format dot (Graphviz) for analysis diagrams -------------------------
 
 test("critical-path --format dot emits a Graphviz digraph with exactly the chain nodes", () => {
   const chain = longestChain(["A", "B", "C", "D"], chainEdges);
-  const out = renderAnalysisDiagram("dot", criticalPathSubgraph(diagramGraph as any, chain));
+  const out = renderAnalysisDiagram("dot", criticalPathSubgraph(diagramGraph, chain));
   assert.ok(out.startsWith("digraph pm_graph {"), "is a Graphviz digraph");
   assert.ok(out.trim().endsWith("}"), "closes the digraph");
   for (const id of ["A", "B", "C", "D"]) {
@@ -441,7 +436,7 @@ test("critical-path --format dot emits a Graphviz digraph with exactly the chain
 test("cycles --format dot emits only the cycle-participating nodes/edges as a digraph", () => {
   const edges = [...chainEdges, ...cycleEdges];
   const cycles = findCycles(["A", "B", "C", "D", "E", "F"], edges);
-  const out = renderAnalysisDiagram("dot", cyclesSubgraph(diagramGraph as any, cycles));
+  const out = renderAnalysisDiagram("dot", cyclesSubgraph(diagramGraph, cycles));
   assert.ok(out.startsWith("digraph pm_graph {"), "is a Graphviz digraph");
   assert.ok(out.includes('"E" [label=') && out.includes('"F" [label='), "both cycle nodes present");
   for (const id of ["A", "B", "C", "D", "O"]) {
@@ -456,7 +451,7 @@ test("cycles --format dot emits only the cycle-participating nodes/edges as a di
 
 test("renderAnalysisDiagram dot output is structurally distinct from mermaid and graphml", () => {
   const chain = longestChain(["A", "B", "C", "D"], chainEdges);
-  const sub = criticalPathSubgraph(diagramGraph as any, chain);
+  const sub = criticalPathSubgraph(diagramGraph, chain);
   const dot = renderAnalysisDiagram("dot", sub);
   const mermaid = renderAnalysisDiagram("mermaid", sub);
   const graphml = renderAnalysisDiagram("graphml", sub);
@@ -516,39 +511,39 @@ test("parseNodeFilter rejects malformed terms and unsupported keys", () => {
 });
 
 test("matchesNodeFilter keeps non-PmItem nodes and respects AND/OR semantics", () => {
-  const item = (id: string, extra: Record<string, unknown> = {}) => ({
+  const item = (id: string, extra: Record<string, unknown> = {}): GraphNode => ({
     id,
     labels: ["PmItem"],
     properties: { id, title: id, type: "Task", status: "open", ...extra },
   });
-  const facet = { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } };
+  const facet: GraphNode = { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } };
 
   // Empty filter: everything survives.
-  assert.strictEqual(matchesNodeFilter(item("A") as any, []), true);
-  assert.strictEqual(matchesNodeFilter(facet as any, []), true);
+  assert.strictEqual(matchesNodeFilter(item("A"), []), true);
+  assert.strictEqual(matchesNodeFilter(facet, []), true);
 
   // Single entry: PmItem matching type survives, non-matching drops.
-  assert.strictEqual(matchesNodeFilter(item("A") as any, parseNodeFilter(["type=Task"])), true);
-  assert.strictEqual(matchesNodeFilter(item("A", { type: "Epic" }) as any, parseNodeFilter(["type=Task"])), false);
+  assert.strictEqual(matchesNodeFilter(item("A"), parseNodeFilter(["type=Task"])), true);
+  assert.strictEqual(matchesNodeFilter(item("A", { type: "Epic" }), parseNodeFilter(["type=Task"])), false);
 
   // Comma-list is OR within a key.
-  assert.strictEqual(matchesNodeFilter(item("A", { type: "Epic" }) as any, parseNodeFilter(["type=Task,Epic"])), true);
+  assert.strictEqual(matchesNodeFilter(item("A", { type: "Epic" }), parseNodeFilter(["type=Task,Epic"])), true);
 
   // Multiple entries are AND across keys.
   assert.strictEqual(
-    matchesNodeFilter(item("A") as any, parseNodeFilter(["type=Task", "status=open"])),
+    matchesNodeFilter(item("A"), parseNodeFilter(["type=Task", "status=open"])),
     true,
   );
   assert.strictEqual(
-    matchesNodeFilter(item("A", { status: "done" }) as any, parseNodeFilter(["type=Task", "status=open"])),
+    matchesNodeFilter(item("A", { status: "done" }), parseNodeFilter(["type=Task", "status=open"])),
     false,
   );
 
   // Non-PmItem nodes always survive the filter.
-  assert.strictEqual(matchesNodeFilter(facet as any, parseNodeFilter(["type=Task"])), true);
+  assert.strictEqual(matchesNodeFilter(facet, parseNodeFilter(["type=Task"])), true);
 
   // Matching is case-insensitive on the property value.
-  assert.strictEqual(matchesNodeFilter(item("A", { status: "Open" }) as any, parseNodeFilter(["status=open"])), true);
+  assert.strictEqual(matchesNodeFilter(item("A", { status: "Open" }), parseNodeFilter(["status=open"])), true);
 });
 
 // --- mapImpactDirection (downstream -> incoming canonical mapping) -------
@@ -599,20 +594,18 @@ test("parseAnalyticsFlags treats --format json as the text default (no diagram)"
 
 // A graph with a 3-node chain C -> B -> A (C blocked_by B, B blocked_by A) so
 // the downstream dependents of A are B and C, plus a disconnected orphan O.
-const impactGraph = {
-  generatedAt: "2026-06-02T00:00:00.000Z",
-  workspace: "/tmp/ws",
-  projectKey: "ws",
-  nodes: [
+const impactGraph: Graph = synthGraph(
+  [
     node("A"), node("B"), node("C"), node("O"),
     { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
   ],
-  relationships: [
+  [
     rel("B", "A", "BLOCKED_BY"),
     rel("C", "B", "BLOCKED_BY"),
     rel("A", "status:open", "HAS_STATUS"),
   ],
-};
+  GRAPH_TS,
+);
 
 test("impactSubgraph includes the root, all path nodes, and the connecting structural edges", () => {
   // Canonical incoming (downstream) traversal of A: affected B (path [A,B]) and
@@ -621,36 +614,34 @@ test("impactSubgraph includes the root, all path nodes, and the connecting struc
     { id: "B", distance: 1, path: ["A", "B"] },
     { id: "C", distance: 2, path: ["A", "B", "C"] },
   ];
-  const sub = impactSubgraph(impactGraph as any, "A", affected);
+  const sub = impactSubgraph(impactGraph, "A", affected);
   // Root first, then affected/path nodes in first-seen order; no orphan/facet.
-  assert.deepStrictEqual([...sub.nodes.map((n: any) => n.id)], ["A", "B", "C"]);
+  assert.deepStrictEqual([...sub.nodes.map((n) => n.id)], ["A", "B", "C"]);
   assert.strictEqual(sub.relationships.length, 2, "exactly the two chain edges in their real direction");
   assert.deepStrictEqual(
-    sub.relationships.map((r: any) => `${r.from}->${r.to}`),
+    sub.relationships.map((r) => `${r.from}->${r.to}`),
     ["B->A", "C->B"],
     "edges retain the real structural direction (item -> blocker)",
   );
 });
 
 test("impactSubgraph anchors the root even when the engine omits it from a path", () => {
-  const sub = impactSubgraph(impactGraph as any, "A", [{ id: "B", distance: 1, path: ["B"] }]);
-  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "B"]);
-  assert.strictEqual(sub.relationships.length, 1);
-  assert.strictEqual(sub.relationships[0].from, "B");
-  assert.strictEqual(sub.relationships[0].to, "A");
+  const sub = impactSubgraph(impactGraph, "A", [{ id: "B", distance: 1, path: ["B"] }]);
+  assert.deepStrictEqual(sub.nodes.map((n) => n.id), ["A", "B"]);
+  assert.deepStrictEqual(sub.relationships.map((r) => `${r.from}->${r.to}`), ["B->A"]);
 });
 
 test("impactSubgraph never invents edges absent from the source graph", () => {
   // Path claims an A->C edge that does not exist structurally; only the real
   // B->A edge survives because both directions are offered and filtered.
-  const sub = impactSubgraph(impactGraph as any, "A", [{ id: "C", distance: 2, path: ["A", "C"] }]);
-  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "C"]);
+  const sub = impactSubgraph(impactGraph, "A", [{ id: "C", distance: 2, path: ["A", "C"] }]);
+  assert.deepStrictEqual(sub.nodes.map((n) => n.id), ["A", "C"]);
   assert.strictEqual(sub.relationships.length, 0, "no fabricated A->C edge");
 });
 
 test("impactSubgraph with an empty affected set yields just the root node", () => {
-  const sub = impactSubgraph(impactGraph as any, "A", []);
-  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A"]);
+  const sub = impactSubgraph(impactGraph, "A", []);
+  assert.deepStrictEqual(sub.nodes.map((n) => n.id), ["A"]);
   assert.strictEqual(sub.relationships.length, 0);
 });
 
@@ -659,18 +650,18 @@ test("impactSubgraph with an empty affected set yields just the root node", () =
 test("impactSubgraphFromNodeSet keeps all structural edges among the impact node set", () => {
   // Fallback for downstream impact of A: impacted = [B, C]; node set {A,B,C};
   // both structural edges (B->A, C->B) lie inside the set, the facet edge does not.
-  const sub = impactSubgraphFromNodeSet(impactGraph as any, "A", ["B", "C"]);
-  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "B", "C"]);
+  const sub = impactSubgraphFromNodeSet(impactGraph, "A", ["B", "C"]);
+  assert.deepStrictEqual(sub.nodes.map((n) => n.id), ["A", "B", "C"]);
   assert.deepStrictEqual(
-    sub.relationships.map((r: any) => `${r.from}->${r.to}`),
+    sub.relationships.map((r) => `${r.from}->${r.to}`),
     ["B->A", "C->B"],
   );
 });
 
 test("impactSubgraphFromNodeSet excludes edges with an endpoint outside the set", () => {
   // Only B is impacted; C->B has an endpoint (C) outside {A,B}, so it is dropped.
-  const sub = impactSubgraphFromNodeSet(impactGraph as any, "A", ["B"]);
-  assert.deepStrictEqual(sub.nodes.map((n: any) => n.id), ["A", "B"]);
+  const sub = impactSubgraphFromNodeSet(impactGraph, "A", ["B"]);
+  assert.deepStrictEqual(sub.nodes.map((n) => n.id), ["A", "B"]);
   assert.strictEqual(sub.relationships.length, 1);
   assert.strictEqual(`${sub.relationships[0].from}->${sub.relationships[0].to}`, "B->A");
 });
@@ -682,7 +673,7 @@ test("impactSubgraph rendered as mermaid contains the root and affected node ids
     { id: "B", distance: 1, path: ["A", "B"] },
     { id: "C", distance: 2, path: ["A", "B", "C"] },
   ];
-  const out = renderAnalysisDiagram("mermaid", impactSubgraph(impactGraph as any, "A", affected));
+  const out = renderAnalysisDiagram("mermaid", impactSubgraph(impactGraph, "A", affected));
   assert.ok(out.startsWith("graph TD"), "is a mermaid graph");
   for (const id of ["A", "B", "C"]) {
     assert.ok(out.includes(`n_${id}[`), `impact node ${id} present`);

@@ -75,10 +75,16 @@ jobs:
           #
           # `--strict-exit` is load-bearing: non-strict health may report findings while
           # still exiting successfully.
-          timeout --signal=TERM --kill-after=10s 120s ./node_modules/.bin/pm health --strict-exit
+          timeout --signal=TERM --kill-after=10s 120s ./node_modules/.bin/pm health --strict-exit --require-merge-drivers
 
       - name: Type check
         run: npm run typecheck
+
+      - name: Lint with the canonical fleet policy
+        run: npm run lint
+
+      - name: Duplication gate
+        run: npm run duplication
 
       - name: Build and verify committed output is current
         shell: bash
@@ -144,23 +150,3 @@ jobs:
 
       - name: Verify Bun can install the package graph
         run: bun install --no-save
-
-  windows-prepare-lifecycle:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-
-      # npm ci runs the production prepare lifecycle through cmd.exe before the
-      # adversarial fixture below exercises spaces and percent-delimited paths.
-      - name: Install dependencies and merge drivers
-        run: npm ci
-
-      - name: Exercise the real Windows command parser
-        run: node --test test/windows-prepare.integration.ts
