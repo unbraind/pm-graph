@@ -110,6 +110,7 @@
   "coverageGate": {
     "sources": [
       "src",
+      "scripts/prepare-merge-driver.ts",
       "scripts/docstring-gate.ts"
     ],
     "tests": [

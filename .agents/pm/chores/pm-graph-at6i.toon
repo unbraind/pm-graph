@@ -6,7 +6,7 @@ status: closed
 priority: 1
 tags[4]: certify,merge-driver,multi-agent,pm-cli-2026.9.23
 created_at: "2026-09-25T08:15:39.057Z"
-updated_at: "2026-09-25T09:36:24.160Z"
+updated_at: "2026-09-25T09:51:35.809Z"
 closed_at: "2026-09-25T09:36:22.305Z"
 completed_at: "2026-09-25T09:36:22.305Z"
 author: fleet-wave-script
@@ -14,6 +14,8 @@ acceptance_criteria: "package.json and package-lock.json pin pm-cli 2026.9.23 an
 resolution: Pinned the toolchain to 2026.9.23 and adopted the guarded pm-ops launcher
 expected_result: "release:check and the CI health gate pass on 2026.9.23 with the launcher byte-identical to the template"
 actual_result: "release:check exits 0; the launcher test and the CI health block pass"
+comments[1]{created_at,author,text}:
+  "2026-09-25T09:51:35.809Z",fleet-wave-script,"Review round 1 (Greptile, pm-graph#114): the launcher is back in coverageGate.sources where it was on main; npm run coverage reports it at 100/100/100 through the fixture suite's child processes."
 files[5]{path,scope}:
   package-lock.json,project
   package.json,project
