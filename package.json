@@ -34,12 +34,12 @@
     "@babel/eslint-parser": "^8.0.5",
     "@babel/plugin-syntax-typescript": "^8.0.3",
     "@types/node": "^26.2.0",
-    "@unbrained/pm-cli": "2026.9.21",
+    "@unbrained/pm-cli": "2026.9.23",
     "eslint": "^10.10.0",
     "fast-glob": "^3.3.3",
     "jscpd": "^4.3.0",
-    "pm-changelog": "2026.9.18",
-    "pm-ops": "2026.9.18",
+    "pm-changelog": "2026.9.23",
+    "pm-ops": "2026.9.23",
     "typescript": "^7.0.2"
   },
   "files": [
@@ -110,7 +110,6 @@
   "coverageGate": {
     "sources": [
       "src",
-      "scripts/prepare-merge-driver.ts",
       "scripts/docstring-gate.ts"
     ],
     "tests": [

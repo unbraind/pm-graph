@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A publish that npm accepts late is reported as failed and the GitHub Release is skipped on bun mirror lag ([pm-graph-1k7d](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1k7d.toon))
+
+### Other
+
+- Certify pm CLI 2026.9.23 and adopt the guarded pm-ops merge-driver launcher ([pm-graph-at6i](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-at6i.toon))
+
 ## 2026.9.18 - 2026-09-18
 
 ### Other
