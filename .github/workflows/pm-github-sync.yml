@@ -15,6 +15,8 @@ concurrency:
 
 jobs:
   sync:
+    # Imported issue bodies need a fail-closed pre-push privacy gate first.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

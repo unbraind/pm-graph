@@ -6,7 +6,7 @@ status: in_progress
 priority: 1
 tags: []
 created_at: "2026-09-27T07:07:21.121Z"
-updated_at: "2026-09-27T07:41:37.622Z"
+updated_at: "2026-09-27T08:26:18.675Z"
 assignee: codex
 claim_principal: codex
 author: codex
@@ -16,12 +16,14 @@ environment: pm-graph canonical checkout with host pm CLI 2026.9.26
 repro_steps: Run pm health --strict-exit --json in fleet/pm-graph; inspect extension_host_pm_cli_version_skew and .agents/pm/extensions/pm-github/package.json.
 expected_result: Managed pm-github resolves against host PM CLI 2026.9.26; strict tracker health exits zero.
 actual_result: Managed pm-github copy is 2026.8.18; strict health exits one.
-notes[5]{created_at,author,text}:
+notes[7]{created_at,author,text}:
   "2026-09-27T07:15:27.801Z",codex,"First full release:check ran 292 tests and failed exactly one assertion: the prepare launcher was not the unmodified published pm-ops template. Copied the installed pm-ops 2026.9.26 template byte for byte; will rerun the full gate. This is the published local broken-install guard, not the unmerged hoisted guard from pm-ops #124."
   "2026-09-27T07:21:59.571Z",codex,"The npm registry published @unbrained/pm-cli 2026.9.27 while pm-github latest remains 2026.9.26. A real local CLI 2026.9.27 probe failed strict health with extension_host_pm_cli_version_skew:2026.9.27:2026.9.26:pm-github. Reverted the development CLI pin to the newest compatible published pair (2026.9.26) and retained the verified green release gate. Fleet certification must revisit this after pm-github 2026.9.27 is published; do not call this latest-CLI certification."
   "2026-09-27T07:28:56.699Z",codex,"Greptile exact-head PR #116 found two valid gaps. Both workflows installed unversioned pm-github despite pinned managed metadata, and the launcher lacked a consumer-level test for incomplete directories and dangling links. Pinned both workflow installs to npm:pm-github@2026.9.26, removed the obsolete npm 10 and legacy manifest rewrites, added package-version readback, and added real child-checkout regression cases. Targeted 7/7 launcher tests and typecheck pass; the complete gate is being repeated."
   "2026-09-27T07:35:25.509Z",codex,"Correction to prior release-order note: the 2026.9.27 health failure was caused by the project extension installer creating a pm-cli symlink to the global 2026.9.26 CLI. The latest published pm-github 2026.9.26 is compatible when installed through the project-local CLI 2026.9.27. Reinstalled it with that local CLI, verified the extension now resolves node_modules/@unbrained/pm-cli 2026.9.27, and strict health passes. The package pin now targets latest CLI/SDK 2026.9.27. This correction is append-only; the earlier inference was wrong."
   "2026-09-27T07:41:37.622Z",codex,"Final local candidate after Greptile fixes: @unbrained/pm-cli 2026.9.27, pm-github 2026.9.26, pm-ops 2026.9.26, pm-changelog 2026.9.25. The canonical project-local pm package install succeeded with activation ok and extension SDK resolving to local CLI 2026.9.27. Strict health exits zero with two stale-item advisories. npm run release:check passed 293/293 tests, zero skips, 99.65% lines, 94.06% branches, 100% functions, statement coverage unmeasured, zero production audit findings, and changelog current. GitHub workflow remains disabled_manually. The four-way 100% mandate remains open in pm-graph-6zil."
+  "2026-09-27T08:17:04.361Z",codex,"2026-09-27: Applied defense in depth to the still-disabled GitHub issue-sync pilot after a valid CodeRabbit finding on sibling pm-jira PR #119: the checked-in sync job has if: false, so schedule/manual triggers cannot run the write-capable import even if workflow state is re-enabled accidentally. The required fail-closed pre-push privacy gate remains separate and unimplemented; this is not authorization to enable sync. The package release gate and exact-head review must rerun after this change."
+  "2026-09-27T08:26:18.652Z",codex,"2026-09-27 final local rerun after checked-in sync job if: false: npm run release:check exits 0, including the existing 293/293 source tests, honest 99.65% line / 94.06% branch / 100% function coverage, packed npm/Bun acceptance, changelog and release attestation gates. GitHub workflow remains disabled_manually; no fail-closed pre-push privacy gate exists yet. This candidate must stay unmerged until exact-head CI and bot review are complete, and cannot be certified at requested 100/100/100/100 coverage."
 files[7]{path,scope,note}:
   .agents/pm/extensions/.managed-extensions.json,project,Exact project-scoped pm-github source
   .github/workflows/ci.yml,project,Exact extension install in CI
