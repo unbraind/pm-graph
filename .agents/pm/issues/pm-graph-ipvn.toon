@@ -1,16 +1,16 @@
 id: pm-graph-ipvn
 title: Refresh managed pm-github extension for PM CLI 2026.9.26
-description: "The tracker began with a managed pm-github 2026.8.18 copy and package tools at 2026.9.23. Refresh the project-scoped extension to 2026.9.26, pin current PM CLI/SDK 2026.9.27 with published pm-ops 2026.9.26 and pm-changelog 2026.9.25, and copy the published canonical merge-driver launcher. Install the extension through the project-local CLI so its SDK link resolves to that same host version. Preserve the disabled scheduled sync workflow."
+description: "The tracker began with a managed pm-github 2026.8.18 copy and package tools at 2026.9.23. Refresh the project-scoped extension to 2026.9.26, pin current PM CLI/SDK 2026.9.27 with published pm-ops 2026.9.28 and pm-changelog 2026.9.25, and copy the published canonical merge-driver launcher. Install the extension through the project-local CLI so its SDK link resolves to that same host version. Preserve the disabled scheduled sync workflow."
 type: Issue
 status: in_progress
 priority: 1
 tags: []
 created_at: "2026-09-27T07:07:21.121Z"
-updated_at: "2026-09-28T06:01:57.284Z"
-assignee: codex
-claim_principal: codex
+updated_at: "2026-09-28T06:31:15.468Z"
+assignee: claude-hub
+claim_principal: claude-hub
 author: codex
-acceptance_criteria: "Install published pm-github 2026.9.26 in project scope and verify its exact managed source, activation, strict health, release gate, and privacy diff.; Keep scheduled GitHub sync disabled until its pre-push privacy gate exists.; The package manifest and lockfile resolve CLI 2026.9.27, pm-ops 2026.9.26, and pm-changelog 2026.9.25 exactly.; The launcher is byte-identical to the published pm-ops template.; CI and the disabled sync workflow use the canonical project-local package installer and pin the same pm-github version recorded in managed metadata.; Real child checkout tests reject an incomplete pm-ops directory and a dangling package link without registering merge drivers."
+acceptance_criteria: "Install published pm-github 2026.9.26 in project scope and verify its exact managed source, activation, strict health, release gate, and privacy diff.; Keep scheduled GitHub sync disabled until its pre-push privacy gate exists.; The package manifest and lockfile resolve CLI 2026.9.27, pm-ops 2026.9.28, and pm-changelog 2026.9.25 exactly.; The launcher is byte-identical to the published pm-ops template.; CI and the disabled sync workflow use the canonical project-local package installer and pin the same pm-github version recorded in managed metadata.; Real child checkout tests reject an incomplete pm-ops directory and a dangling package link without registering merge drivers."
 severity: medium
 environment: pm-graph canonical checkout with host pm CLI 2026.9.26
 repro_steps: Run pm health --strict-exit --json in fleet/pm-graph; inspect extension_host_pm_cli_version_skew and .agents/pm/extensions/pm-github/package.json.
@@ -33,7 +33,7 @@ files[7]{path,scope,note}:
   .github/workflows/pm-github-sync.yml,project,Exact extension install while workflow remains disabled
   package-lock.json,project,Resolved dependency lock
   package.json,project,Compatible exact development tool pins
-  scripts/prepare-merge-driver.ts,project,Published pm-ops 2026.9.26 canonical launcher copy
+  scripts/prepare-merge-driver.ts,project,Published pm-ops 2026.9.28 canonical launcher copy
   test/prepare-merge-driver.test.ts,project,Broken directory and dangling link acceptance
 tests[3]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
   "npm run release:check",project,600,codex,"2026-09-27T07:22:23.666Z",local_mutation,fix/pm-graph-github-extension-cli-compat-2026-09-27
