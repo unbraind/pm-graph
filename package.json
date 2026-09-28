@@ -38,7 +38,7 @@
     "eslint": "^10.10.0",
     "fast-glob": "^3.3.3",
     "jscpd": "^4.3.0",
-    "pm-changelog": "2026.9.23",
+    "pm-changelog": "2026.9.25",
     "pm-ops": "2026.9.23",
     "typescript": "^7.0.2"
   },
