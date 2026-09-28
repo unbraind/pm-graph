@@ -6,7 +6,7 @@ status: in_progress
 priority: 1
 tags: []
 created_at: "2026-09-27T07:07:21.121Z"
-updated_at: "2026-09-27T08:35:52.808Z"
+updated_at: "2026-09-28T06:01:57.284Z"
 assignee: codex
 claim_principal: codex
 author: codex
@@ -16,6 +16,8 @@ environment: pm-graph canonical checkout with host pm CLI 2026.9.26
 repro_steps: Run pm health --strict-exit --json in fleet/pm-graph; inspect extension_host_pm_cli_version_skew and .agents/pm/extensions/pm-github/package.json.
 expected_result: Managed pm-github resolves against host PM CLI 2026.9.26; strict tracker health exits zero.
 actual_result: Managed pm-github copy is 2026.8.18; strict health exits one.
+comments[1]{created_at,author,text}:
+  "2026-09-28T06:01:57.284Z",claude-hub,"2026-09-28: pinned pm-ops 2026.9.28 and re-copied its templates/prepare-merge-driver.ts (pm-ops#124: the omit-dev skip now checks every Node resolution path for an incomplete hoisted pm-ops, so a broken ancestor install fails instead of silently skipping the merge drivers). release:check and changelog:check pass on this branch."
 notes[8]{created_at,author,text}:
   "2026-09-27T07:15:27.801Z",codex,"First full release:check ran 292 tests and failed exactly one assertion: the prepare launcher was not the unmodified published pm-ops template. Copied the installed pm-ops 2026.9.26 template byte for byte; will rerun the full gate. This is the published local broken-install guard, not the unmerged hoisted guard from pm-ops #124."
   "2026-09-27T07:21:59.571Z",codex,"The npm registry published @unbrained/pm-cli 2026.9.27 while pm-github latest remains 2026.9.26. A real local CLI 2026.9.27 probe failed strict health with extension_host_pm_cli_version_skew:2026.9.27:2026.9.26:pm-github. Reverted the development CLI pin to the newest compatible published pair (2026.9.26) and retained the verified green release gate. Fleet certification must revisit this after pm-github 2026.9.27 is published; do not call this latest-CLI certification."
