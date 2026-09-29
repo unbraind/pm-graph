@@ -2,7 +2,7 @@
 
 Knowledge graph and dependency graph extension for [pm CLI](https://github.com/unbraind/pm-cli) workspaces, with optional Neo4j sync.
 
-The extension reads the current workspace through `pm list-all --json` and `pm deps <id> --json`, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
+The extension reads item metadata through the pm SDK, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
 
 It can sync that graph into Neo4j, or export it offline to **Mermaid**, **Graphviz DOT**, **JSON Graph**, **Cypher**, **GraphML**, or **PlantUML** via `pm pm-graph export` — with neighborhood (`--root`/`--depth`), edge-type (`--edges`), and node (`--filter type=...|status=...`) shaping.
 
@@ -59,6 +59,10 @@ pm install github.com/unbraind/pm-graph --force
 | `PM_GRAPH_PROJECT_KEY` | No | Override the project key (defaults to workspace directory name) |
 
 The commands `export`, `cypher`, `analyze`, `cycles`, `path`, `critical-path`, `topo-sort`, and `impact`, plus the `graph-export` exporter adapter, do not require Neo4j at all.
+
+## Pure graph projection
+
+TypeScript consumers can call `graphFromItems(items, workspace, extraDependencies)` from `pm-graph`. It builds the same node and relationship shape as the offline export without installing or activating an extension, reading a tracker, or contacting Neo4j. Supply a certified complete, authorization-scoped item collection; the function does not perform those checks for callers. `extraDependencies` is a `Map` keyed by item ID and can be empty when the item metadata already contains its dependencies. The first occurrence of a duplicate `(from, to, type)` relationship supplies its properties.
 
 ## Commands
 
