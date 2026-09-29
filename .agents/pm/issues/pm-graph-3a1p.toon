@@ -6,7 +6,7 @@ status: in_progress
 priority: 1
 tags: []
 created_at: "2026-09-29T09:15:55.866Z"
-updated_at: "2026-09-29T09:34:25.836Z"
+updated_at: "2026-09-29T09:46:35.686Z"
 author: codex
 acceptance_criteria: Real export shape and duplicate-edge semantics are unchanged; a representative multi-thousand-item export completes within a measured bound; release and packed gates pass; all evidence is linked to this item.
 repro_steps: "Inspect src/index.ts graphFromItems: items.some in addRelationship; relationships.filter with all.findIndex on every edge."
@@ -14,12 +14,14 @@ expected_result: "Graph construction scales with item and edge counts, preservin
 actual_result: Graph construction has O(items x edges + edges squared) scans.
 dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
   pm-graph-6zil,related,"2026-09-29T09:31:10.155Z",codex,"cli:update:dep",detected
-notes[5]{created_at,author,text}:
+notes[7]{created_at,author,text}:
   "2026-09-29T09:31:10.155Z",codex,"2026-09-29: graph projection uses indexed item IDs and insertion-time edge keys. A synthetic 3000-item graph with parent blocker duplicate dependency and two tags completed in 61.59 ms under the full coverage run. First-edge properties and external node semantics passed focused tests."
   "2026-09-29T09:31:10.155Z",codex,"Exact local npm run release:check passed 294 tests with zero failures and skips; 0 duplicated lines; 90 documented declarations; production audit and changelog checks passed. Measured coverage 99.65% lines 94.07% branches 100% functions; pm-graph-6zil owns the remaining 100% gap."
   "2026-09-29T09:31:10.155Z",codex,Installed pm-ops 2026.9.28 canonical merge-driver launcher copied byte-identically after the first full gate caught template drift. Fresh isolated npm/Node and Bun 1.3.5 installs of the packed artifact both loaded graphFromItems and projected a graph. Local pm health still reports five merge-driver config drift keys even after pm merge install with pinned CLI 2026.9.27; investigate separately.
   "2026-09-29T09:32:35.884Z",codex,An isolated fresh npm Git workspace with pinned CLI 2026.9.27 passes strict health after init and merge install. The five-key drift reproduces only in this existing checkout so no upstream issue is asserted from this evidence.
   "2026-09-29T09:34:25.815Z",codex,Stacked this change on pm-graph PR #116 to inherit its CLI SDK and pm-ops certification. The new branch initially showed two chain mismatches in this item history; pm history-repair dry-run proved item content already matched and an audited repair rehashed two entries with zero skipped operations. Strict health now passes with two stale-item advisories.
+  "2026-09-29T09:40:31.819Z",codex,"Greptile on PR #122 head baabeef identified an untested output-order contract. Accepted: the small duplicate-blocker/external-target acceptance now asserts exact node and edge insertion order; focused Node test and linked pm test both pass. Full exact-head gate and renewed bot reviews follow the next push."
+  "2026-09-29T09:46:35.665Z",codex,"Greptile order finding fix exact local gate: npm run release:check passed 295 tests with zero failures/skips; 0 duplicate lines; 90 documented declarations; 0 production vulnerabilities. Coverage remains 99.65 lines 94.07 branches 100 functions. PR #122 remains open for new-head CI and bot review."
 files[4]{path,scope,note}:
   src/index.ts,project,Linear graph projection
   test/graph-builder-scale.test.ts,project,Contract and scale acceptance
@@ -27,6 +29,7 @@ files[4]{path,scope,note}:
   README.md,project,Pure graph projection API and current SDK read path
 tests[1]{command,scope,timeout_seconds,pm_context_mode,provenance{author,created_at,source_kind,source_ref}}:
   node --test test/graph-builder-scale.test.ts,project,30,schema,codex,"2026-09-29T09:31:41.849Z",local_mutation,perf/pm-graph-linear-export-2026-09-29
-docs[1]{path,scope,note}:
+docs[2]{path,scope,note}:
+  "https://github.com/unbraind/pm-graph/pull/122#discussion_r4131898043",global,Accepted Greptile output-order finding
   "https://github.com/unbraind/pm-web/blob/main/.agents/pm/features/pm-web-38n5.toon",global,Potential pure graph API consumer for observational reads
 body: ""
