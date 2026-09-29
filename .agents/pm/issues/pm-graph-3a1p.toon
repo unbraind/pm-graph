@@ -1,0 +1,32 @@
+id: pm-graph-3a1p
+title: Graph export uses quadratic item and edge scans on large trackers
+description: "The pm-graph graphFromItems builder calls items.some for relationship targets and deduplicates all edges with a final filter/findIndex. Large workspaces with many relations therefore perform repeated full scans. Replace both with indexed membership and insertion-time edge keys while preserving first-edge properties, ordering, external nodes, and export shape."
+type: Issue
+status: in_progress
+priority: 1
+tags: []
+created_at: "2026-09-29T09:15:55.866Z"
+updated_at: "2026-09-29T09:34:25.836Z"
+author: codex
+acceptance_criteria: Real export shape and duplicate-edge semantics are unchanged; a representative multi-thousand-item export completes within a measured bound; release and packed gates pass; all evidence is linked to this item.
+repro_steps: "Inspect src/index.ts graphFromItems: items.some in addRelationship; relationships.filter with all.findIndex on every edge."
+expected_result: "Graph construction scales with item and edge counts, preserving the existing export contract."
+actual_result: Graph construction has O(items x edges + edges squared) scans.
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-graph-6zil,related,"2026-09-29T09:31:10.155Z",codex,"cli:update:dep",detected
+notes[5]{created_at,author,text}:
+  "2026-09-29T09:31:10.155Z",codex,"2026-09-29: graph projection uses indexed item IDs and insertion-time edge keys. A synthetic 3000-item graph with parent blocker duplicate dependency and two tags completed in 61.59 ms under the full coverage run. First-edge properties and external node semantics passed focused tests."
+  "2026-09-29T09:31:10.155Z",codex,"Exact local npm run release:check passed 294 tests with zero failures and skips; 0 duplicated lines; 90 documented declarations; production audit and changelog checks passed. Measured coverage 99.65% lines 94.07% branches 100% functions; pm-graph-6zil owns the remaining 100% gap."
+  "2026-09-29T09:31:10.155Z",codex,Installed pm-ops 2026.9.28 canonical merge-driver launcher copied byte-identically after the first full gate caught template drift. Fresh isolated npm/Node and Bun 1.3.5 installs of the packed artifact both loaded graphFromItems and projected a graph. Local pm health still reports five merge-driver config drift keys even after pm merge install with pinned CLI 2026.9.27; investigate separately.
+  "2026-09-29T09:32:35.884Z",codex,An isolated fresh npm Git workspace with pinned CLI 2026.9.27 passes strict health after init and merge install. The five-key drift reproduces only in this existing checkout so no upstream issue is asserted from this evidence.
+  "2026-09-29T09:34:25.815Z",codex,Stacked this change on pm-graph PR #116 to inherit its CLI SDK and pm-ops certification. The new branch initially showed two chain mismatches in this item history; pm history-repair dry-run proved item content already matched and an audited repair rehashed two entries with zero skipped operations. Strict health now passes with two stale-item advisories.
+files[4]{path,scope,note}:
+  src/index.ts,project,Linear graph projection
+  test/graph-builder-scale.test.ts,project,Contract and scale acceptance
+  scripts/prepare-merge-driver.ts,project,Canonical pm-ops 2026.9.28 launcher
+  README.md,project,Pure graph projection API and current SDK read path
+tests[1]{command,scope,timeout_seconds,pm_context_mode,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/graph-builder-scale.test.ts,project,30,schema,codex,"2026-09-29T09:31:41.849Z",local_mutation,perf/pm-graph-linear-export-2026-09-29
+docs[1]{path,scope,note}:
+  "https://github.com/unbraind/pm-web/blob/main/.agents/pm/features/pm-web-38n5.toon",global,Potential pure graph API consumer for observational reads
+body: ""

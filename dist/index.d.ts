@@ -1,4 +1,4 @@
-import { type Exporter } from "@unbrained/pm-cli/sdk";
+import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
 /** Context passed to extension command handlers by the pm CLI host. */
 export type CommandContext = {
     command?: string;
@@ -64,6 +64,24 @@ export type Graph = {
     nodes: GraphNode[];
     relationships: GraphRelationship[];
 };
+/**
+ * Build a workspace graph (nodes + relationships) from pm item metadata.
+ *
+ * Emits one `PmItem` node per item, then derives edges from the item's
+ * structural fields: `CHILD_OF` for a parent, `BLOCKED_BY` for a blocker, and
+ * a normalized relationship per dependency (merging the legacy `deps[]` and
+ * typed `dependencies[]`, de-duplicated by `from->to:type`). Facet fields
+ * (type/status/assignee/sprint/release) and tags become `PmFacet` nodes with
+ * their own edges. A relationship whose target is not among the items — and
+ * not already a node — is materialized as an `ExternalPmItem` so the graph
+ * never dangles a half-edge.
+ *
+ * @param items - pm item metadata to project.
+ * @param workspace - Workspace path, recorded on the returned graph.
+ * @param depsByItem - Extra dependency records keyed by item id.
+ * @returns The shaped graph with project metadata.
+ */
+export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>): Graph;
 type AnalyticsFlags = {
     json: boolean;
     includeClosed: boolean;
