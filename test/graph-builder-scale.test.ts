@@ -15,6 +15,14 @@ test("graph projection retains the first dependency edge and external targets", 
     tags: [],
   } satisfies ItemMetadata;
   const graph = graphFromItems([item], "/tmp/pm-graph-contract", new Map());
+  assert.deepEqual(graph.nodes.map((node) => node.id), [
+    "item-1", "external-1", "type:task", "status:open",
+  ]);
+  assert.deepEqual(graph.relationships.map((edge) => [edge.from, edge.to, edge.type]), [
+    ["item-1", "external-1", "BLOCKED_BY"],
+    ["item-1", "type:task", "HAS_TYPE"],
+    ["item-1", "status:open", "HAS_STATUS"],
+  ]);
   const edges = graph.relationships.filter((edge) =>
     edge.from === "item-1" && edge.to === "external-1" && edge.type === "BLOCKED_BY");
   assert.equal(edges.length, 1);
