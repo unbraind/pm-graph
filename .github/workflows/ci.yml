@@ -39,16 +39,7 @@ jobs:
 
       - name: Install project pm-github extension
         shell: bash
-        run: |
-          set -euo pipefail
-          ./node_modules/.bin/pm package install npm:pm-github@2026.9.26 --project
-          node -e 'if (require("./.agents/pm/extensions/pm-github/package.json").version !== "2026.9.26") process.exit(1)'
-          managed_registry=".agents/pm/extensions/.managed-extensions.json"
-          if git ls-files --error-unmatch "${managed_registry}" > /dev/null 2>&1; then
-            git restore -- "${managed_registry}"
-          else
-            rm -f "${managed_registry}"
-          fi
+        run: bash scripts/install-pm-github.sh
 
       - name: Verify tracked pm project health
         shell: bash
