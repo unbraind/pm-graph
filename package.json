@@ -37,7 +37,7 @@
     "@unbrained/pm-cli": "2026.9.27",
     "eslint": "^10.10.0",
     "fast-glob": "^3.3.3",
-    "jscpd": "^4.3.0",
+    "jscpd": "^5.4.0",
     "pm-changelog": "2026.9.25",
     "pm-ops": "2026.9.28",
     "typescript": "^7.0.2"
