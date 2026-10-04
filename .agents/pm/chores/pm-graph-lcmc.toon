@@ -6,13 +6,13 @@ status: in_progress
 priority: 1
 tags: []
 created_at: "2026-10-04T10:53:39.576Z"
-updated_at: "2026-10-04T12:21:08.749Z"
+updated_at: "2026-10-04T13:39:03.523Z"
 author: codex-sol
 blocked_by: pm-graph-g8uc
-actual_result: "Release gate 301/301, zero skips; zero duplication, four-file coverage 99.66 lines/94.07 branches/100 functions. Strict health exit 0; npm/native Bun packed acceptance passes. Fast-glob removal attempt exposed undeclared pm-ops duplication import and was reverted to preserve the canonical gate. Full audit remains four high dev entries; owner pm-graph-g8uc. GitHub preview zero wouldSync; CI and reviews pending."
+actual_result: "Node24 and Node22/npm10 full release:check 301/301, zero skips; zero duplication; Node22 coverage99.63/93.98/100 over4 configured files. Test-first npm10 pack parser fix. Repeated packed real-tracker npm/nativeBun parity185nodes330edges; scratch deleted. Strict health0, prod audit0; full dev audit4high blocked by g8uc. Bot replies recorded, zero unresolved threads, some reviews unavailable/pending."
 dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
   pm-graph-g8uc,blocked_by,"2026-10-04T11:40:30.561Z",codex-sol,"cli:update:blocked_by",detected
-comments[17]{created_at,author,text}:
+comments[19]{created_at,author,text}:
   "2026-10-04T10:53:56.533Z",codex-sol,"Isolated worktree from origin/main 1d47a84; consolidating Dependabot #118 #119 #120 #121. Open Dependabot alerts: zero. Preserve coverage ownership pm-graph-6zil; measure current gate without weakening thresholds."
   "2026-10-04T10:54:43.000Z",codex-sol,"Exact dev pins include CLI/pm-ops/pm-changelog 2026.10.4, jscpd 5.4.0, @types/node 26.6.4, eslint 10.12.0. Retained @babel/eslint-parser 8.0.5 because latest dist-tag 7.29.9 would downgrade the existing version. SDK floor remains 2026.8.7 because no new API is required."
   "2026-10-04T11:00:07.856Z",codex-sol,"Installed published CLI/ops/changelog 2026.10.4; copied canonical launcher byte-for-byte; scoped launcher tests 7/7 passed. Full npm audit uncovered transitive braces <=3.0.3 stack-exhaustion advisory GHSA-vfj7-8cjw-p6xm through fast-glob/micromatch, despite zero open GitHub alerts; resolving without downgrading pm-ops."
@@ -30,6 +30,8 @@ comments[17]{created_at,author,text}:
   "2026-10-04T12:00:34.452Z",codex-sol,Resolved development audit blocker by removing unused direct fast-glob devDependency; src/scripts/test contain no imports and current pm-ops 2026.10.4 no longer depends on it. npm audit and npm audit --omit=dev now both report zero vulnerabilities. Repeat serialized full gate and packed acceptance before pushing final candidate.
   "2026-10-04T12:05:24.418Z",codex-sol,"Removing fast-glob makes audit clean but exposes a published pm-ops 2026.10.4 defect: dist/duplication.js statically imports fast-glob although its package manifest omits the dependency. Full gate fails ERR_MODULE_NOT_FOUND before duplication scan. Restore exact fast-glob 3.3.3 to preserve the canonical gate; audit remains blocked until upstream provides a compatible patched chain/implementation. No gate replacement or audit suppression."
   "2026-10-04T12:21:07.753Z",codex-sol,Certification implementation and packed acceptance committed; item remains in_progress for orchestrator verification. Releasing ownership while consolidated PR waits for dependency/upstream and review gates. No item closed.
+  "2026-10-04T13:24:26.247Z",codex-sol,"Exact-head CI exposed a Node22/npm10-only contract-fixture failure: npm pack --ignore-scripts --json prints the prepare launcher output before JSON, so archive discovery fails despite successful packing. Node26 passes. Reproducing with installed Node22, then replace stdout parsing with strict discovery of the one actual tarball. Canonical launcher remains byte-identical and every command assertion remains intact."
+  "2026-10-04T13:39:01.224Z",codex-sol,"Node 22.23.1/npm 10.9.8 full linked release:check passed 301/301 with zero skips after test-first pack archive discovery repair. Duplication 0/12119 lines across 50 sources, unchanged threshold 0; measured coverage 99.63% lines, 93.98% branches, 100% functions over 4 configured files, statements unmeasured. Repeated packed real-tracker npm/npx and native Bun commands passed with matching 185 nodes/330 edges and owner present; scratch removed. Strict pinned health passed after restoring Node 24 canonical merge drivers. All existing bot bodies reacted/replied; no unresolved threads. Full dev audit still blocked by pm-graph-g8uc; unavailable/absent reviews do not count as approval."
 files[20]{path,scope}:
   .agents/pm/extensions/.managed-extensions.json,project
   .agents/pm/history/pm-graph-3a1p.jsonl,project

@@ -12,11 +12,13 @@ Heavy commands ran under `flock /tmp/claude-1000/heavy-gate.lock`.
 - `node --test test/impact-command.test.ts test/neo4j-retry-default.test.ts test/neo4j-retry-named.test.ts`: 12/12 pass.
 - `node --test test/export-and-contract.test.ts`: 19/19 pass using the packed distribution, including custom tracker path `.pmx`.
 - `pm test pm-graph-lcmc --run --only-index 1 --progress --json`: linked `env -u PM_PATH npm run release:check` passes, 301/301 tests, zero skips. The child clears the runner-injected project path so disposable fixtures initialize their own trackers, while the global tracker stays sandboxed.
-- Duplication: 0/12116 lines, 50 sources, zero clone pairs at the unchanged 0% threshold.
+- Node 22.23.1 / npm 10.9.8 full CI gate: 301/301 pass, zero skips; duplication 0/12119 lines, 50 sources, zero clone pairs at the unchanged 0% threshold. Measured coverage on Node 22 is 99.63% lines, 93.98% branches and 100% functions across the same four files.
 - Coverage: 99.66% lines, 94.07% branches, 100% functions across four configured files. Statement coverage is unmeasured. Existing owner `pm-graph-6zil` remains open; thresholds were preserved, and the shared entry guard was added to the measured source set.
 - `npx pm health --strict-exit --require-merge-drivers`: exit 0; one advisory finding covers two stale in-progress items.
 - `npm audit --omit=dev`: zero vulnerabilities.
 - `npm audit`: four high development vulnerability entries through braces/micromatch/fast-glob/pm-ops, owned by `pm-graph-g8uc`. Published braces 3.0.3 is vulnerable; 3.0.4 is unavailable. The suggested pm-ops downgrade would violate required pins. This remains a certification blocker.
+
+The first remote Node 22 job exposed npm 10 prepare output preceding `npm pack --json`, which made the fixture parse launcher output as JSON. The custom-tracker contract reproduced the failure before the fix and passed afterwards. Archive discovery now verifies exactly one real tarball in a fresh directory, preserving every packed-install assertion. The full Node 22 gate and real-tracker npm/native Bun acceptance were repeated successfully.
 
 The original contract fixture hit the CLI's fail-closed 10000-entry checkout limit. It now packs declared files once and installs the archive, preserving every command and output assertion. jscpd 5.4.0 clone findings were removed through shared guard and test-fixture helpers without exclusions or threshold changes.
 

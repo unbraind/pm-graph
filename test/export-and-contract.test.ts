@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,13 +48,16 @@ function extensionArchive(): string {
   archiveDirectory = mkdtempSync(path.join(tmpdir(), "pmg-contract-pack-"));
   const packed = spawnSync(
     process.platform === "win32" ? "npm.cmd" : "npm",
-    ["pack", "--ignore-scripts", "--json", "--pack-destination", archiveDirectory],
+    ["pack", "--ignore-scripts", "--pack-destination", archiveDirectory],
     { cwd: path.resolve(HERE, ".."), encoding: "utf-8", shell: process.platform === "win32" },
   );
   assert.equal(packed.status, 0, `npm pack failed: ${packed.stdout}\n${packed.stderr}`);
-  const entries = JSON.parse(packed.stdout) as Array<{ filename: string }>;
-  assert.equal(entries.length, 1, "one declared npm distribution");
-  archivePath = path.join(archiveDirectory, entries[0].filename);
+  // npm 10 can print prepare output before its pack JSON. Inspect the artifact
+  // itself so lifecycle diagnostics cannot corrupt distribution discovery.
+  const entries = readdirSync(archiveDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".tgz"));
+  assert.equal(entries.length, 1, "one actual declared npm distribution");
+  archivePath = path.join(archiveDirectory, entries[0].name);
   return archivePath;
 }
 
