@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
 import { spawnSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -35,18 +36,40 @@ function pm(cwd: string, args: string[]): { status: number; stdout: string; stde
 const pmProbe = spawnSync("pm", ["--version"], { encoding: "utf-8" });
 const pmAvailable = !pmProbe.error && pmProbe.status === 0;
 
+let archiveDirectory: string | undefined;
+let archivePath: string | undefined;
+after(() => {
+  if (archiveDirectory !== undefined) rmSync(archiveDirectory, { recursive: true, force: true });
+});
+
+/** Pack the declared distribution once; never snapshot the dependency-heavy source checkout. */
+function extensionArchive(): string {
+  if (archivePath !== undefined) return archivePath;
+  archiveDirectory = mkdtempSync(path.join(tmpdir(), "pmg-contract-pack-"));
+  const packed = spawnSync(
+    process.platform === "win32" ? "npm.cmd" : "npm",
+    ["pack", "--ignore-scripts", "--json", "--pack-destination", archiveDirectory],
+    { cwd: path.resolve(HERE, ".."), encoding: "utf-8", shell: process.platform === "win32" },
+  );
+  assert.equal(packed.status, 0, `npm pack failed: ${packed.stdout}\n${packed.stderr}`);
+  const entries = JSON.parse(packed.stdout) as Array<{ filename: string }>;
+  assert.equal(entries.length, 1, "one declared npm distribution");
+  archivePath = path.join(archiveDirectory, entries[0].filename);
+  return archivePath;
+}
+
 /** Initialise a workspace and install the locally-built pm-graph extension. */
 function ensureExtension(ws: string): void {
-  // Initialise the tracker then install the locally-built pm-graph from this
-  // repo into the throwaway workspace.
+  // CI has already rebuilt dist. Install its npm distribution into the fixture
+  // so an incomplete checkout scan cannot masquerade as package acceptance.
   const init = spawnSync("pm", ["init"], { cwd: ws, encoding: "utf-8", maxBuffer: 50 * 1024 * 1024 });
   assert.equal(init.status, 0, `pm init failed: ${init.stdout}\n${init.stderr}`);
   const install = spawnSync(
     "pm",
-    ["install", path.resolve(HERE, "..")],
+    ["package", "install", extensionArchive(), "--project"],
     { cwd: ws, encoding: "utf-8", maxBuffer: 50 * 1024 * 1024 },
   );
-  assert.equal(install.status, 0, `pm install failed: ${install.stdout}\n${install.stderr}`);
+  assert.equal(install.status, 0, `packed pm package install failed: ${install.stdout}\n${install.stderr}`);
 }
 
 /** Run a pm-graph command against a fresh workspace with the extension installed. */
@@ -286,8 +309,8 @@ test("analytics honour a custom tracker path via pm_root (--pm-path fix)", { ski
   try {
     const init = pm(ws, ["init", "--pm-path", ".pmx"]);
     assert.equal(init.status, 0, `pm init --pm-path failed: ${init.stdout}\n${init.stderr}`);
-    const install = pm(ws, ["install", path.resolve(HERE, ".."), "--pm-path", ".pmx"]);
-    assert.equal(install.status, 0, `pm install failed: ${install.stdout}\n${install.stderr}`);
+    const install = pm(ws, ["package", "install", extensionArchive(), "--project", "--pm-path", ".pmx"]);
+    assert.equal(install.status, 0, `packed pm package install failed: ${install.stdout}\n${install.stderr}`);
     const created = pm(ws, ["create", "task", "gamma", "--pm-path", ".pmx"]);
     assert.equal(created.status, 0, `create failed: ${created.stderr}`);
 
