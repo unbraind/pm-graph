@@ -34,7 +34,7 @@
     "@babel/eslint-parser": "^8.0.5",
     "@babel/plugin-syntax-typescript": "^8.0.3",
     "@types/node": "^26.2.0",
-    "@unbrained/pm-cli": "2026.9.27",
+    "@unbrained/pm-cli": "2026.10.1",
     "eslint": "^10.10.0",
     "fast-glob": "^3.3.3",
     "jscpd": "^4.3.0",
