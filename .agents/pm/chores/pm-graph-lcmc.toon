@@ -6,15 +6,15 @@ status: in_progress
 priority: 1
 tags: []
 created_at: "2026-10-04T10:53:39.576Z"
-updated_at: "2026-10-04T11:51:41.467Z"
+updated_at: "2026-10-04T12:07:02.798Z"
 assignee: codex-sol
 claim_principal: codex-sol
 author: codex-sol
 blocked_by: pm-graph-g8uc
-actual_result: "Release gate 301/301, zero skips; duplication zero; coverage 99.66 lines/94.07 branches/100 functions in four files, statements unmeasured. Strict health exit 0 after hash-only inherited history repair. Packed real tracker npm/native Bun pass, identical 185-node/330-edge graphs; scratch removed. GitHub preview dryRun true/wouldSync 0/skipped 1/planned 1. Production audit clean; full audit four high dev entries blocked by pm-graph-g8uc. CI and PR review pending."
+actual_result: "Release gate 301/301, zero skips; zero duplication, four-file coverage 99.66 lines/94.07 branches/100 functions. Strict health exit 0; npm/native Bun packed acceptance passes. Fast-glob removal attempt exposed undeclared pm-ops duplication import and was reverted to preserve the canonical gate. Full audit remains four high dev entries; owner pm-graph-g8uc. GitHub preview zero wouldSync; CI and reviews pending."
 dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
   pm-graph-g8uc,blocked_by,"2026-10-04T11:40:30.561Z",codex-sol,"cli:update:blocked_by",detected
-comments[14]{created_at,author,text}:
+comments[16]{created_at,author,text}:
   "2026-10-04T10:53:56.533Z",codex-sol,"Isolated worktree from origin/main 1d47a84; consolidating Dependabot #118 #119 #120 #121. Open Dependabot alerts: zero. Preserve coverage ownership pm-graph-6zil; measure current gate without weakening thresholds."
   "2026-10-04T10:54:43.000Z",codex-sol,"Exact dev pins include CLI/pm-ops/pm-changelog 2026.10.4, jscpd 5.4.0, @types/node 26.6.4, eslint 10.12.0. Retained @babel/eslint-parser 8.0.5 because latest dist-tag 7.29.9 would downgrade the existing version. SDK floor remains 2026.8.7 because no new API is required."
   "2026-10-04T11:00:07.856Z",codex-sol,"Installed published CLI/ops/changelog 2026.10.4; copied canonical launcher byte-for-byte; scoped launcher tests 7/7 passed. Full npm audit uncovered transitive braces <=3.0.3 stack-exhaustion advisory GHSA-vfj7-8cjw-p6xm through fast-glob/micromatch, despite zero open GitHub alerts; resolving without downgrading pm-ops."
@@ -29,6 +29,8 @@ comments[14]{created_at,author,text}:
   "2026-10-04T11:39:13.805Z",codex-sol,"Corrected full run: 286/301 passed, zero skips; measured lines 99.66%, branches 94.07%, functions 100%. Remaining 15 failures reproduce CLI fail-closed incomplete local-directory install (10000-entry cap). Changed real contract fixture to pack declared built distribution once, install tarball via pm package install, and delete package scratch after suite; all command assertions retained."
   "2026-10-04T11:49:45.264Z",codex-sol,"Full release gate passes 301/301, no failures/skips; duplication 0/12116 lines, 50 sources, zero pairs; coverage 99.66 lines/94.07 branches/100 functions across four files (statements unmeasured). Strict health inherited history drift from merged #122 item pm-graph-3a1p; canonical dry-run and repair rehashed two of 19 entries, repaired/skipped zero patches, preserved provenance and byte-identical item, added audit marker. Verified repaired history; health now passes with two advisory stale-work warnings."
   "2026-10-04T11:51:40.245Z",codex-sol,"Packed real-tracker npm/native Bun acceptance passed: npx -y @unbrained/pm-cli@2026.10.4 and bunx --bun @unbrained/pm-cli@2026.10.4 ran pm-graph ping/export/analyze/cycles/cypher/critical-path/impact/path. Deep comparison (timestamps independently validated) matched 185 nodes and 330 edges, owner included. Scratch deleted. Durable exact commands/outputs and boundaries in docs/certification-2026.10.4.md. Health has one advisory finding covering two stale items."
+  "2026-10-04T12:00:34.452Z",codex-sol,Resolved development audit blocker by removing unused direct fast-glob devDependency; src/scripts/test contain no imports and current pm-ops 2026.10.4 no longer depends on it. npm audit and npm audit --omit=dev now both report zero vulnerabilities. Repeat serialized full gate and packed acceptance before pushing final candidate.
+  "2026-10-04T12:05:24.418Z",codex-sol,"Removing fast-glob makes audit clean but exposes a published pm-ops 2026.10.4 defect: dist/duplication.js statically imports fast-glob although its package manifest omits the dependency. Full gate fails ERR_MODULE_NOT_FOUND before duplication scan. Restore exact fast-glob 3.3.3 to preserve the canonical gate; audit remains blocked until upstream provides a compatible patched chain/implementation. No gate replacement or audit suppression."
 files[20]{path,scope}:
   .agents/pm/extensions/.managed-extensions.json,project
   .agents/pm/history/pm-graph-3a1p.jsonl,project

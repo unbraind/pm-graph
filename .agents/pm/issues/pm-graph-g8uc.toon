@@ -6,11 +6,11 @@ status: open
 priority: 1
 tags: []
 created_at: "2026-10-04T11:00:37.158Z"
-updated_at: "2026-10-04T11:00:56.373Z"
+updated_at: "2026-10-04T12:07:03.844Z"
 author: codex-sol
 severity: high
 expected_result: npm audit reports zero vulnerabilities with PM 2026.10.4 pins.
-actual_result: "Four high dev vulnerability entries: braces, micromatch, fast-glob and pm-ops; production audit separately measured."
+actual_result: "Removal attempted: full npm audit zero, but canonical pm-ops/dist/duplication.js fails ERR_MODULE_NOT_FOUND for its undeclared fast-glob import. Required runtime peer restored at exact 3.3.3; compatible patched braces release unavailable. Full audit blocker remains; no gate weakening."
 files[2]{path,scope}:
   package-lock.json,project
   package.json,project
