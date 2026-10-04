@@ -1,0 +1,46 @@
+id: pm-graph-3a1p
+title: Graph export uses quadratic item and edge scans on large trackers
+description: "The pm-graph graphFromItems builder calls items.some for relationship targets and deduplicates all edges with a final filter/findIndex. Large workspaces with many relations therefore perform repeated full scans. Replace both with indexed membership and insertion-time edge keys while preserving first-edge properties, ordering, external nodes, and export shape."
+type: Issue
+status: blocked
+priority: 1
+tags: []
+created_at: "2026-09-29T09:15:55.866Z"
+updated_at: "2026-10-02T23:07:56.404Z"
+author: codex
+acceptance_criteria: Real export shape and duplicate-edge semantics are unchanged; a representative multi-thousand-item export completes within a measured bound; release and packed gates pass; all evidence is linked to this item.
+repro_steps: "Inspect src/index.ts graphFromItems: items.some in addRelationship; relationships.filter with all.findIndex on every edge."
+expected_result: "Graph construction scales with item and edge counts, preserving the existing export contract."
+actual_result: Graph construction has O(items x edges + edges squared) scans.
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-graph-6zil,related,"2026-09-29T09:31:10.155Z",codex,"cli:update:dep",detected
+comments[4]{created_at,author,text}:
+  "2026-10-02T22:10:50.898Z",codex-sol-land,"Resumed PR #122 from d27eefcd1048f0b8e30efe9e08be908aa3c3586e. Rebase onto current fix/pm-graph-github-extension-cli-compat-2026-09-27 yields 64f2abe3b138cbd8bb4c9d4a77e55758bf6256ec. All existing bot artifacts and restart-era owner replies inspected; no new actionable finding. Preserve earlier fixes and technical refusals. Verifying unchanged CI gates under the shared heavy lock; no merge, release or closure."
+  "2026-10-02T22:13:02.054Z",codex-sol-land,"The original focused test is retained at its 30-second timeout. Its first linked attempt refused the historical branch provenance after the necessary isolated worktree branch rename; the newly linked identical command itself passed 2/2. Reviewed and acknowledged the existing command for this clone, without changing trust policy or test gates, and removed only the duplicate command added by this restart."
+  "2026-10-02T22:30:02.207Z",codex-sol-land,"Parent #116 received new workflow duplication and current-metadata findings in its resumed review. It now has a test-first shared installer fix queued for full verification. Stopped the redundant child full gate against the earlier parent after focused tests, strict health and fresh-build comparison passed; the child must rebase onto that final parent and run its full gate once, preserving all local tracker work. No stopped run is counted as a pass."
+  "2026-10-02T23:07:53.000Z",codex-sol-land,"Resumed verification: npm ci, current-base rebase, fresh committed-dist comparison, strict local tracker health with required merge drivers, npm run release:check, and bun install --no-save all passed. Full gate: 300 tests, 300 pass, 0 skips; configured coverage thresholds unchanged. PM-linked test/graph-builder-scale.test.ts passed. Earlier findings and technical refusals retained; no new source fix was needed in this restart. Exact pushed-head CI and substantive reviewer availability remain separate checks; no merge, release, publication or item closure."
+notes[7]{created_at,author,text}:
+  "2026-09-29T09:31:10.155Z",codex,"2026-09-29: graph projection uses indexed item IDs and insertion-time edge keys. A synthetic 3000-item graph with parent blocker duplicate dependency and two tags completed in 61.59 ms under the full coverage run. First-edge properties and external node semantics passed focused tests."
+  "2026-09-29T09:31:10.155Z",codex,"Exact local npm run release:check passed 294 tests with zero failures and skips; 0 duplicated lines; 90 documented declarations; production audit and changelog checks passed. Measured coverage 99.65% lines 94.07% branches 100% functions; pm-graph-6zil owns the remaining 100% gap."
+  "2026-09-29T09:31:10.155Z",codex,Installed pm-ops 2026.9.28 canonical merge-driver launcher copied byte-identically after the first full gate caught template drift. Fresh isolated npm/Node and Bun 1.3.5 installs of the packed artifact both loaded graphFromItems and projected a graph. Local pm health still reports five merge-driver config drift keys even after pm merge install with pinned CLI 2026.9.27; investigate separately.
+  "2026-09-29T09:32:35.884Z",codex,An isolated fresh npm Git workspace with pinned CLI 2026.9.27 passes strict health after init and merge install. The five-key drift reproduces only in this existing checkout so no upstream issue is asserted from this evidence.
+  "2026-09-29T09:34:25.815Z",codex,Stacked this change on pm-graph PR #116 to inherit its CLI SDK and pm-ops certification. The new branch initially showed two chain mismatches in this item history; pm history-repair dry-run proved item content already matched and an audited repair rehashed two entries with zero skipped operations. Strict health now passes with two stale-item advisories.
+  "2026-09-29T09:40:31.819Z",codex,"Greptile on PR #122 head baabeef identified an untested output-order contract. Accepted: the small duplicate-blocker/external-target acceptance now asserts exact node and edge insertion order; focused Node test and linked pm test both pass. Full exact-head gate and renewed bot reviews follow the next push."
+  "2026-09-29T09:46:35.665Z",codex,"Greptile order finding fix exact local gate: npm run release:check passed 295 tests with zero failures/skips; 0 duplicate lines; 90 documented declarations; 0 production vulnerabilities. Coverage remains 99.65 lines 94.07 branches 100 functions. PR #122 remains open for new-head CI and bot review."
+files[4]{path,scope,note}:
+  README.md,project,Pure graph projection API and current SDK read path
+  scripts/prepare-merge-driver.ts,project,Canonical pm-ops 2026.9.28 launcher
+  src/index.ts,project,Linear graph projection
+  test/graph-builder-scale.test.ts,project,Contract and scale acceptance
+tests[1]{command,scope,timeout_seconds,pm_context_mode,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/graph-builder-scale.test.ts,project,30,schema,codex,"2026-09-29T09:31:41.849Z",local_mutation,perf/pm-graph-linear-export-2026-09-29
+docs[3]:
+  - path: "https://github.com/unbraind/pm-graph/pull/122#discussion_r4131898043"
+    scope: global
+    note: Accepted Greptile output-order finding
+  - path: "https://github.com/unbraind/pm-web/blob/main/.agents/pm/features/pm-web-38n5.toon"
+    scope: global
+    note: Potential pure graph API consumer for observational reads
+  - path: "https://github.com/unbraind/pm-graph/pull/122"
+    scope: project
+body: ""

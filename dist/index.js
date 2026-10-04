@@ -541,15 +541,21 @@ function facetNodeId(kind, value) {
  * @param depsByItem - Extra dependency records keyed by item id.
  * @returns The shaped graph with project metadata.
  */
-function graphFromItems(items, workspace, depsByItem) {
+export function graphFromItems(items, workspace, depsByItem) {
     const nodesById = new Map();
+    const itemIds = new Set(items.map((item) => item.id));
     const relationships = [];
+    const relationshipKeys = new Set();
     const addNode = (node) => {
         if (!nodesById.has(node.id))
             nodesById.set(node.id, node);
     };
     const addRelationship = (from, to, type, properties) => {
-        if (!nodesById.has(to) && !items.some((item) => item.id === to)) {
+        const key = JSON.stringify([from, to, type]);
+        if (relationshipKeys.has(key))
+            return;
+        relationshipKeys.add(key);
+        if (!nodesById.has(to) && !itemIds.has(to)) {
             addNode({
                 id: to,
                 labels: ["ExternalPmItem"],
@@ -643,9 +649,7 @@ function graphFromItems(items, workspace, depsByItem) {
         workspace,
         projectKey: projectKeyForWorkspace(workspace),
         nodes: Array.from(nodesById.values()),
-        relationships: relationships.filter((relationship, index, all) => all.findIndex((candidate) => candidate.from === relationship.from &&
-            candidate.to === relationship.to &&
-            candidate.type === relationship.type) === index),
+        relationships,
     };
 }
 /**
