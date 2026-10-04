@@ -112,9 +112,9 @@ export function freshWorkspace(prefix: string = "pmg-"): string {
   return mkdtempSync(path.join(tmpdir(), prefix));
 }
 
-/** Create a task item and return its id. */
-export function createItem(cwd: string, title: string, blockedBy?: string): string {
-  const args = ["create", "Task", title, "--json"];
+/** Create an item of the requested type (Task by default) and return its id. */
+export function createItem(cwd: string, title: string, blockedBy?: string, type = "Task"): string {
+  const args = ["create", type, title, "--json"];
   if (blockedBy) args.push("--blocked-by", blockedBy);
   const out = pm(cwd, args);
   const created = JSON.parse(out) as { id?: string; item?: { id: string } };

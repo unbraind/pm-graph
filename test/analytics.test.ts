@@ -110,13 +110,19 @@ test("longestChain is cycle-safe (terminates, no infinite loop)", () => {
 /** Timestamp shared by the synthetic graphs in this file. */
 const GRAPH_TS = "2026-06-02T00:00:00.000Z";
 
+/** Build item nodes together with the facet noise analytics must reject. */
+function nodesWithFacet(ids: readonly string[]): GraphNode[] {
+  return [...ids.map((id) => node(id)), { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } }];
+}
+
+/** Canonical downstream paths from A through B to C. */
+const downstreamAffected = [
+  { id: "B", distance: 1, path: ["A", "B"] },
+  { id: "C", distance: 2, path: ["A", "B", "C"] },
+];
+
 const syntheticGraph: Graph = synthGraph(
-  [
-    node("A"), node("B"), node("C"), node("D"),
-    node("E"), node("F"), node("O"),
-    // facet node should be ignored by analytics
-    { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
-  ],
+  nodesWithFacet(["A", "B", "C", "D", "E", "F", "O"]),
   [
     rel("B", "A", "BLOCKED_BY"),
     rel("C", "B", "BLOCKED_BY"),
@@ -322,11 +328,7 @@ test("criticalConnectors finds articulation points and bridge edges in the undir
 // A graph with a 4-node dependency chain D->C->B->A, a separate E<->F cycle,
 // an orphan O, and facet/tag noise that must never leak into the subgraphs.
 const diagramGraph: Graph = synthGraph(
-  [
-    node("A"), node("B"), node("C"), node("D"),
-    node("E"), node("F"), node("O"),
-    { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
-  ],
+  nodesWithFacet(["A", "B", "C", "D", "E", "F", "O"]),
   [
     rel("D", "C", "BLOCKED_BY"),
     rel("C", "B", "BLOCKED_BY"),
@@ -595,10 +597,7 @@ test("parseAnalyticsFlags treats --format json as the text default (no diagram)"
 // A graph with a 3-node chain C -> B -> A (C blocked_by B, B blocked_by A) so
 // the downstream dependents of A are B and C, plus a disconnected orphan O.
 const impactGraph: Graph = synthGraph(
-  [
-    node("A"), node("B"), node("C"), node("O"),
-    { id: "status:open", labels: ["PmFacet", "Status"], properties: { id: "status:open", title: "open" } },
-  ],
+  nodesWithFacet(["A", "B", "C", "O"]),
   [
     rel("B", "A", "BLOCKED_BY"),
     rel("C", "B", "BLOCKED_BY"),
@@ -610,10 +609,7 @@ const impactGraph: Graph = synthGraph(
 test("impactSubgraph includes the root, all path nodes, and the connecting structural edges", () => {
   // Canonical incoming (downstream) traversal of A: affected B (path [A,B]) and
   // C (path [A,B,C]). The structural edges are C->B and B->A (item -> blocker).
-  const affected = [
-    { id: "B", distance: 1, path: ["A", "B"] },
-    { id: "C", distance: 2, path: ["A", "B", "C"] },
-  ];
+  const affected = downstreamAffected;
   const sub = impactSubgraph(impactGraph, "A", affected);
   // Root first, then affected/path nodes in first-seen order; no orphan/facet.
   assert.deepStrictEqual([...sub.nodes.map((n) => n.id)], ["A", "B", "C"]);
@@ -669,10 +665,7 @@ test("impactSubgraphFromNodeSet excludes edges with an endpoint outside the set"
 // --- impact --format mermaid via the projector ----------------------------
 
 test("impactSubgraph rendered as mermaid contains the root and affected node ids only", () => {
-  const affected = [
-    { id: "B", distance: 1, path: ["A", "B"] },
-    { id: "C", distance: 2, path: ["A", "B", "C"] },
-  ];
+  const affected = downstreamAffected;
   const out = renderAnalysisDiagram("mermaid", impactSubgraph(impactGraph, "A", affected));
   assert.ok(out.startsWith("graph TD"), "is a mermaid graph");
   for (const id of ["A", "B", "C"]) {

@@ -26,6 +26,12 @@ type ImpactResult = {
   diagram?: string;
 };
 
+/** Invoke the real registered impact handler with explicit presentation flags. */
+async function runImpact(cwd: string, id: string, flags: readonly string[]): Promise<ImpactResult> {
+  const run = collectHandlers().get("pm-graph impact")!;
+  return await run({ cwd, args: [id, ...flags] }) as ImpactResult;
+}
+
 let pmGraphImpactAvailable = false;
 if (pmAvailable) {
   try {
@@ -91,22 +97,17 @@ test("impact --filter restricts the canonical result set (post-filter engine par
     const b = createItem(ws, "BetaTask", a); // Task dependent of A
     // Gamma is an Issue directly blocked-by A, so both B and C are direct
     // dependents of A but of different types.
-    const gout = pm(ws, ["create", "Issue", "GammaIssue", "--blocked-by", a, "--json"]);
-    const parsed = JSON.parse(gout) as { id?: string; item?: { id: string } };
-    const c = (parsed.item?.id ?? parsed.id) as string;
-
-    const handlers = collectHandlers();
-    const run = handlers.get("pm-graph impact")!;
+    const c = createItem(ws, "GammaIssue", a, "Issue");
 
     // Unfiltered: both direct dependents are impacted, via the canonical engine.
-    const all = (await run({ cwd: ws, args: [a, "--format", "json"] })) as ImpactResult;
+    const all = await runImpact(ws, a, ["--format", "json"]);
     assert.ok(all.impacted.includes(b) && all.impacted.includes(c), "both dependents present unfiltered");
     assert.strictEqual(all.engine, "core-graph");
 
     // --filter type=task post-filters the canonical affected set to Tasks only,
     // proving the presentation flags now apply on the canonical path (previously
     // they were silently ignored there).
-    const filtered = (await run({ cwd: ws, args: [a, "--filter", "type=task", "--format", "json"] })) as ImpactResult;
+    const filtered = await runImpact(ws, a, ["--filter", "type=task", "--format", "json"]);
     assert.ok(filtered.impacted.includes(b), "Task dependent kept under --filter type=task");
     assert.ok(!filtered.impacted.includes(c), "Issue dependent removed under --filter type=task");
     assert.strictEqual(filtered.count, filtered.impacted.length, "count === impacted.length under filter");
@@ -122,16 +123,11 @@ test("impact --filter drops endpoints reachable only through a filtered-out inte
     pm(ws, ["init"]);
     // Chain A <- B <- C: A is a Task, B (the intermediary) is an Issue, C is a Task.
     const a = createItem(ws, "AlphaTask");
-    const bout = pm(ws, ["create", "Issue", "BetaIssue", "--blocked-by", a, "--json"]);
-    const bParsed = JSON.parse(bout) as { id?: string; item?: { id: string } };
-    const b = (bParsed.item?.id ?? bParsed.id) as string;
+    const b = createItem(ws, "BetaIssue", a, "Issue");
     const c = createItem(ws, "CharlieTask", b);
 
-    const handlers = collectHandlers();
-    const run = handlers.get("pm-graph impact")!;
-
     // Unfiltered downstream impact of A includes B and the transitive C.
-    const all = (await run({ cwd: ws, args: [a, "--format", "json"] })) as ImpactResult;
+    const all = await runImpact(ws, a, ["--format", "json"]);
     assert.ok(all.impacted.includes(b) && all.impacted.includes(c), "B and transitive C impacted unfiltered");
 
     // --filter type=task removes the Issue intermediary B. The fallback removes
@@ -139,7 +135,7 @@ test("impact --filter drops endpoints reachable only through a filtered-out inte
     // even though C itself is a Task. The canonical path validates each row's
     // full explaining path against the shaped set to reproduce this exactly, so
     // both engines agree that only-through-a-filtered-node endpoints drop out.
-    const filtered = (await run({ cwd: ws, args: [a, "--filter", "type=task", "--format", "json"] })) as ImpactResult;
+    const filtered = await runImpact(ws, a, ["--filter", "type=task", "--format", "json"]);
     assert.ok(!filtered.impacted.includes(b), "filtered-out Issue intermediary B absent");
     assert.ok(!filtered.impacted.includes(c), "Task C reachable only via filtered B is not impacted");
     assert.strictEqual(filtered.count, filtered.impacted.length, "count === impacted.length");

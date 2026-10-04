@@ -125,6 +125,16 @@ test("broken pm-ops directory and dangling link fail without skipping merge driv
   }
 });
 
+test("a non-directory lookup path preserves the original missing-module error", () => {
+  const directory = checkout("non-directory", "absent");
+  writeFileSync(join(directory, "node_modules"), "not a directory");
+  const result = prepare(directory, hostPath);
+  assert.notEqual(result.status, 0, result.stderr);
+  assert.match(result.stderr, /MODULE_NOT_FOUND/);
+  assert.doesNotMatch(result.stderr, /ENOTDIR|skipping merge-driver install/);
+  assert.deepEqual(registeredDrivers(directory), []);
+});
+
 test("a failing pm merge install fails the install with the same status", posixOnly, () => {
   const result = prepare(checkout("failing-pm", "pinned"), stubPm("failing-pm", 7));
   assert.equal(result.status, 7, result.stderr);
