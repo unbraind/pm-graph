@@ -2963,6 +2963,11 @@ export function activate(api: ExtensionApi): void {
         if (outputPath) {
           const absolutePath = path.resolve(outputPath.trim());
           writeFileSync(absolutePath, output + "\n", "utf-8");
+          // The caller selected a file, so this branch returns no graph rows:
+          // the rendered graph lives in the written file and the receipt stays
+          // small. The declared row collections stay present but empty — the
+          // host validates that every declared path exists on each structured
+          // result, and universal controls are already refused with --output.
           return {
             ok: true,
             format,
@@ -2970,7 +2975,7 @@ export function activate(api: ExtensionApi): void {
             nodes: graph.nodes.length,
             relationships: graph.relationships.length,
             file: absolutePath,
-            graph,
+            graph: { nodes: [], relationships: [] },
           };
         }
         // Wrap the rendered payload in a marker the output_format service override
@@ -3333,7 +3338,7 @@ export function activate(api: ExtensionApi): void {
   // --- pm-graph analyze ----------------------------------------------------
   api.registerCommand({
     name: "pm-graph analyze",
-    read_output: { row_keys: ["orphans", "roots", "leaves", "longestChain", "blockedItems", "topDegreeCentrality", "depthByItem", "articulationPoints", "bridgeEdges"] },
+    read_output: { row_keys: ["cycles", "orphans", "roots", "leaves", "longestChain", "blockedItems", "topDegreeCentrality", "depthByItem", "articulationPoints", "bridgeEdges"] },
     description:
       "Comprehensive offline graph-health report: cycles, orphans, roots, leaves, longest chain, bottleneck connectors, degree centrality, components, blocked items.",
     run: async (context) => {
@@ -3695,7 +3700,7 @@ export function activate(api: ExtensionApi): void {
   // --- pm-graph explain ----------------------------------------------------
   api.registerCommand({
     name: "pm-graph explain",
-    read_output: { row_keys: ["blockers", "dependents", "transitiveDependents", "criticalChainFromItem"] },
+    read_output: { row_keys: ["cycles", "blockers", "dependents", "transitiveDependents", "criticalChainFromItem"] },
     description:
       "Explain a single item offline: blockers, dependents, transitive impact, depth, and cycle participation.",
     run: async (context) => {

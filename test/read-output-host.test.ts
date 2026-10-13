@@ -166,6 +166,28 @@ test("raw exports remain documents; universal controls select structured rows", 
   assert.equal(existsSync(path), false);
 });
 
+/** The caller selected a file, so the host must not render exported graph rows on stdout. */
+test("file export receipts stay small: the written file carries the graph", () => {
+  const target = join(workspace, "file-receipt.json");
+  const result = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "export", "--format", "json", "--output", target, "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const receipt = JSON.parse(result.stdout) as { ok: boolean; file: string; nodes: number; graph: { nodes: unknown[]; relationships: unknown[] } };
+  assert.equal(receipt.ok, true);
+  assert.equal(receipt.file, target, "the receipt names the written file");
+  assert.ok(existsSync(target), "the rendered graph was written to the file");
+  const written = JSON.parse(readFileSync(target, "utf8")) as { graph: { nodes: unknown[] } };
+  assert.ok(Array.isArray(written.graph?.nodes), "the file contains the rendered graph");
+  assert.equal(receipt.nodes, written.graph.nodes.length, "the receipt reports the written node count");
+  assert.deepEqual(receipt.graph, { nodes: [], relationships: [] }, "the file receipt must not embed graph rows");
+  for (const id of ids) assert.ok(!result.stdout.includes(id), "stdout must not render exported nodes");
+  // The default TOON renderer must stay small as well: the graph is in the file.
+  const toonTarget = join(workspace, "file-receipt-toon.json");
+  const toon = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "export", "--format", "json", "--output", toonTarget]);
+  assert.equal(toon.status, 0, toon.stderr);
+  assert.ok(existsSync(toonTarget), "the file was written without --json");
+  for (const id of ids) assert.ok(!toon.stdout.includes(id), "default TOON stdout must not render exported nodes");
+});
+
 test("diagram variants cannot emit unbudgeted stdout alongside structured output", () => {
   for (const command of [["critical-path"], ["impact", ids[0]!]]) {
     const result = pm(["pm-graph", ...command, "--format", "mermaid", "--output-include", "path,impacted", "--output-budget", "unbounded"]);
@@ -201,6 +223,84 @@ test("cycle failures retain exit 1 without unbudgeted diagram stdout", () => {
   pm(["update", ids[0]!, "--blocked-by", ids[1]!]);
   const result = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "cycles", "--format", "mermaid", "--output-budget", "1000"]);
   assert.equal(result.status, 1);
-  assert.doesNotMatch(result.stdout, /flowchart/);
+  // renderMermaid emits `graph TD`, so reject that exact header: an unbudgeted
+  // diagram printed by the cycle handler must fail this assertion.
+  assert.doesNotMatch(result.stdout, /graph TD/);
   assert.match(result.stdout + result.stderr, /dependency cycle/);
+});
+
+/**
+ * The analyze and explain commands return `cycles` collections; the read_output
+ * contract must declare them so amount controls and budget continuations treat
+ * each cycle as an independently resumable row.
+ */
+test("analyze and explain declare nonempty cycles rows for amount controls and budget continuation", async () => {
+  // Fresh hub and partner items carry no structural chain edges, so every new
+  // cycle row is a small, uniform [hub, partner, hub] path; the analyze
+  // collection additionally keeps the ids[0] <-> ids[1] cycle from the
+  // preceding test. Both collections therefore span several short rows.
+  const client = new PmClient({ pmRoot: join(workspace, ".agents/pm"), author: "contract-test", noExtensions: true });
+  const hubItem = await client.create({ type: "Task", title: "Synthetic cycles hub", createMode: "progressive" });
+  const partnerIds: string[] = [];
+  for (let index = 0; index < 20; index++) {
+    const partner = await client.create({ type: "Task", title: `Synthetic cycles partner ${index}`, createMode: "progressive" });
+    partnerIds.push(partner.item.id);
+  }
+  for (const partnerId of partnerIds) {
+    await client.update(hubItem.item.id, { blockedBy: partnerId });
+    await client.update(partnerId, { blockedBy: hubItem.item.id });
+  }
+  const hub = hubItem.item.id;
+  for (const scenario of [
+    { name: "pm-graph analyze", args: ["pm-graph", "analyze"] },
+    { name: "pm-graph explain", args: ["pm-graph", "explain", hub] },
+  ]) {
+    const full = pm([...scenario.args, "--output-budget", "unbounded", "--output-limit", "unbounded", "--output-row-contract"]);
+    const expected = rows(full, "cycles");
+    assert.ok(expected.length >= 3, `${scenario.name}: fixture must return several cycle rows`);
+    const contract = full.row_contract as { row_keys: string[] } | undefined;
+    assert.ok(contract?.row_keys?.includes("cycles"), `${scenario.name}: cycles must be declared as rows`);
+    // Amount control: --output-limit bounds the declared cycles rows.
+    const limited = pm([...scenario.args, "--output-include", "cycles", "--output-limit", "2", "--output-budget", "unbounded"]);
+    assert.equal(rows(limited, "cycles").length, 2, `${scenario.name}: --output-limit must bound cycles rows`);
+    const applied = limited.applied_bound as { kind: string; value: number } | undefined;
+    assert.equal(applied?.kind, "output_limit", `${scenario.name}: amount truncation must be reported`);
+    assert.equal(applied?.value, 2);
+    // Cost control: find the first budget whose truncation offers a resumable
+    // cycles cursor, so the collection demonstrably pages under a ceiling.
+    const controls = ["--output-include", "cycles", "--output-limit", "unbounded"];
+    let budget = 0;
+    for (const candidate of [1600, 1400, 1200, 1000, 900, 800, 700, 600, 500, 400]) {
+      const result = pm([...scenario.args, ...controls, "--output-budget", String(candidate)], [0, 2]);
+      const truncation = result.output_budget_truncation as { compacted_row_paths?: string[]; continuations?: Array<{ path: string; cursor: string }> } | undefined;
+      if (!result.output_budget_exceeded && truncation?.continuations?.some((entry) => entry.path === "cycles")) { budget = candidate; break; }
+    }
+    assert.ok(budget > 0, `${scenario.name}: fixture must exercise budget continuation on cycles`);
+    // Resume pages through cursors until every row has returned once, in order.
+    // A page whose rows were compacted internally (nested cycles.<n> paths) or
+    // that exceeded the budget is refetched from the same cursor at a larger
+    // budget, following the receipt's recovery guidance.
+    const actual: unknown[] = [];
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    let raises = 0;
+    for (;;) {
+      const page = pm([...scenario.args, ...controls, "--output-budget", String(budget), ...(cursor ? ["--output-cursor", cursor] : [])], [0, 2]);
+      const truncation = page.output_budget_truncation as { compacted_row_paths?: string[]; continuations?: Array<{ path: string; cursor: string }> } | undefined;
+      const compactedRow = (truncation?.compacted_row_paths ?? []).some((rowPath) => /^cycles\.\d+$/.test(rowPath));
+      if (page.output_budget_exceeded || compactedRow) {
+        raises += 1;
+        assert.ok(raises <= 10, `${scenario.name}: bounded recovery must converge`);
+        budget *= 2;
+        continue;
+      }
+      actual.push(...rows(page, "cycles"));
+      const next = truncation?.continuations?.find((entry) => entry.path === "cycles");
+      if (!next) break;
+      assert.ok(!cursors.has(next.cursor), "continuation must advance");
+      cursors.add(next.cursor);
+      cursor = next.cursor;
+    }
+    assert.deepEqual(actual, expected, `${scenario.name}: every cycles row must return once, unchanged and in order`);
+  }
 });
