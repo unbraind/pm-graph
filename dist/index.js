@@ -56,6 +56,11 @@ let neo4jApi = null;
 // would make the whole extension unresolvable when a git-URL install shipped
 // without the driver) while satisfying the fleet's no-dynamic-imports policy.
 const requireNeo4j = createRequire(import.meta.url);
+/** Detect host output controls carried by CLI globals or SDK command options. */
+function readOutputRequested(context) {
+    return ["outputInclude", "outputLimit", "outputBudget", "outputFormat", "outputSession", "outputCursor", "outputRowContract"]
+        .some((key) => context.options?.[key] !== undefined || context.global?.[key] !== undefined);
+}
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -2354,6 +2359,7 @@ export function activate(api) {
     // --- pm-graph ping -------------------------------------------------------
     api.registerCommand({
         name: "pm-graph ping",
+        read_output: { row_keys: [] },
         description: "Verify that the pm-graph extension is active.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2377,10 +2383,14 @@ export function activate(api) {
     // --- pm-graph export -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph export",
+        read_output: { row_keys: ["graph.nodes", "graph.relationships"] },
         description: "Export the current workspace as a dependency and knowledge graph (JSON by default, or another offline format with --format).",
         run: async (context) => {
             const args = context.args ?? [];
             const rawFormat = readFlagStringValue(args, "--format");
+            if (readOutputRequested(context) && args.some((arg) => arg === "--output" || arg.startsWith("--output="))) {
+                throw new CommandError("Universal output controls cannot be combined with --output; request structured stdout instead.", EXIT_CODE.USAGE);
+            }
             if (hasHelpFlag(context)) {
                 return {
                     usage: "pm pm-graph export [--format <cypher|mermaid|dot|json|graphml|plantuml>] [--output <file>] [--edges <deps|tags|all>] [--root <id> [--depth <n>]] [--filter key=value[,value]] [--include-closed] [--json]",
@@ -2480,6 +2490,8 @@ export function activate(api) {
             }
             try {
                 const graph = await buildGraph();
+                if (readOutputRequested(context))
+                    return { ok: true, format, graph };
                 const output = renderExport(format, graph);
                 if (outputPath) {
                     const absolutePath = path.resolve(outputPath.trim());
@@ -2491,12 +2503,14 @@ export function activate(api) {
                         nodes: graph.nodes.length,
                         relationships: graph.relationships.length,
                         file: absolutePath,
+                        graph,
                     };
                 }
                 // Wrap the rendered payload in a marker the output_format service override
                 // unwraps, so the host writes the raw string to stdout instead of
                 // re-encoding it as TOON/JSON.
                 return {
+                    graph,
                     __pmGraphRawOutput: output,
                     format,
                     nodes: graph.nodes.length,
@@ -2511,6 +2525,7 @@ export function activate(api) {
     // --- pm-graph cypher -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph cypher",
+        read_output: { row_keys: ["statements"] },
         description: "Render Cypher statements for importing the current workspace graph into Neo4j.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2591,6 +2606,7 @@ export function activate(api) {
     // --- pm-graph status -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph status",
+        read_output: { row_keys: [] },
         description: "Show Neo4j configuration status, node/relationship counts, last sync timestamp, and extension version.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2672,6 +2688,7 @@ export function activate(api) {
     // --- pm-graph query ------------------------------------------------------
     api.registerCommand({
         name: "pm-graph query",
+        read_output: { row_keys: ["records"] },
         description: "Run a read-only Cypher query against Neo4j and return JSON results. Destructive keywords are blocked.",
         arguments: [
             { name: "cypher-query", required: true, variadic: true, description: "A read-only Cypher query (quote it on the shell)" },
@@ -2734,6 +2751,7 @@ export function activate(api) {
     // --- pm-graph neighbors --------------------------------------------------
     api.registerCommand({
         name: "pm-graph neighbors",
+        read_output: { row_keys: ["neighbors"] },
         description: "Return all 1-hop neighbors with relationships for a given node ID.",
         arguments: [
             { name: "node-id", required: true, description: "The PmGraphNode id to inspect (e.g. TASK-42)" },
@@ -2798,6 +2816,7 @@ export function activate(api) {
     // --- pm-graph analyze ----------------------------------------------------
     api.registerCommand({
         name: "pm-graph analyze",
+        read_output: { row_keys: ["orphans", "roots", "leaves", "longestChain", "blockedItems", "topDegreeCentrality", "depthByItem", "articulationPoints", "bridgeEdges"] },
         description: "Comprehensive offline graph-health report: cycles, orphans, roots, leaves, longest chain, bottleneck connectors, degree centrality, components, blocked items.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2838,6 +2857,7 @@ export function activate(api) {
     // --- pm-graph cycles -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph cycles",
+        read_output: { row_keys: ["cycles"] },
         description: "Detect and list dependency cycles among structural edges. Exits non-zero (1) when cycles exist — CI-usable.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2864,7 +2884,8 @@ export function activate(api) {
                 if (flags.format !== "text") {
                     // Emit the diagram first so users get the visualization, then exit 1
                     // to preserve the CI-gating contract.
-                    console.log(renderAnalysisDiagram(flags.format, cyclesSubgraph(graph, cycles)));
+                    if (!readOutputRequested(context))
+                        console.log(renderAnalysisDiagram(flags.format, cyclesSubgraph(graph, cycles)));
                 }
                 const detail = cycles.map((c) => c.join(" -> ")).join("; ");
                 throw new CommandError(`Found ${cycles.length} dependency cycle(s): ${detail}`, EXIT_CODE.GENERIC_FAILURE);
@@ -2877,6 +2898,7 @@ export function activate(api) {
     // --- pm-graph path -------------------------------------------------------
     api.registerCommand({
         name: "pm-graph path",
+        read_output: { row_keys: [] },
         description: "Shortest directed dependency path between two item ids (BFS over structural edges).",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2922,6 +2944,7 @@ export function activate(api) {
     // --- pm-graph critical-path ---------------------------------------------
     api.registerCommand({
         name: "pm-graph critical-path",
+        read_output: { row_keys: ["path"] },
         description: "The longest chain of blocking dependencies through the workspace (the critical path), as an ordered id list.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2946,7 +2969,8 @@ export function activate(api) {
             const chain = longestChain(items, edges);
             if (flags.format !== "text") {
                 const diagram = renderAnalysisDiagram(flags.format, criticalPathSubgraph(graph, chain));
-                console.log(diagram);
+                if (!readOutputRequested(context))
+                    console.log(diagram);
                 return { ok: true, format: flags.format, length: chain.length, path: chain, diagram };
             }
             return { ok: true, length: chain.length, path: chain };
@@ -2955,6 +2979,7 @@ export function activate(api) {
     // --- pm-graph topo-sort --------------------------------------------------
     api.registerCommand({
         name: "pm-graph topo-sort",
+        read_output: { row_keys: ["order"] },
         description: "Topological execution order respecting dependency/blocked_by edges (Kahn's algorithm). Exits non-zero (1) on a cycle.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -2991,6 +3016,7 @@ export function activate(api) {
     // --- pm-graph impact -----------------------------------------------------
     api.registerCommand({
         name: "pm-graph impact",
+        read_output: { row_keys: ["impacted"] },
         description: "List all items transitively impacted by an item id (downstream dependents by default), with a count. Runs the canonical registry-aware pm graph engine in-process; --include-closed uses the structural reverse-reachable set instead, because the canonical engine traverses active items only.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
@@ -3093,7 +3119,8 @@ export function activate(api) {
                     return base;
                 const sub = impactSubgraph(graph, resolvedId, affected);
                 const diagram = renderAnalysisDiagram(flags.format, sub);
-                console.log(diagram);
+                if (!readOutputRequested(context))
+                    console.log(diagram);
                 return { ...base, format: flags.format, diagram };
             }
             // Fallback: legacy structural reverse-reachable path (downstream only).
@@ -3109,13 +3136,15 @@ export function activate(api) {
                 return base;
             const sub = impactSubgraphFromNodeSet(graph, resolvedId, impacted);
             const diagram = renderAnalysisDiagram(flags.format, sub);
-            console.log(diagram);
+            if (!readOutputRequested(context))
+                console.log(diagram);
             return { ...base, format: flags.format, diagram };
         },
     });
     // --- pm-graph explain ----------------------------------------------------
     api.registerCommand({
         name: "pm-graph explain",
+        read_output: { row_keys: ["blockers", "dependents", "transitiveDependents", "criticalChainFromItem"] },
         description: "Explain a single item offline: blockers, dependents, transitive impact, depth, and cycle participation.",
         run: async (context) => {
             if (hasHelpFlag(context)) {
