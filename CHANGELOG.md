@@ -6,14 +6,6 @@
 
 - Adopt SDK read_output contracts on pm-graph read commands ([pm-graph-by2t](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-by2t.toon))
 
-### Fixed
-
-- Remove vulnerable braces dependency from certification toolchain ([pm-graph-g8uc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-g8uc.toon))
-
-### Other
-
-- Investigate isolated package installation timeout with runtime dependencies ([pm-graph-r58m](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-r58m.toon))
-
 ## 2026.10.5 - 2026-10-05
 
 ### Other
