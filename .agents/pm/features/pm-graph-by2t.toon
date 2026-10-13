@@ -1,0 +1,45 @@
+id: pm-graph-by2t
+title: Adopt SDK read_output contracts on pm-graph read commands
+description: "Declare universal output controls for read commands, retain writer rejection and raw-export compatibility, and verify packaged-host projection, budgets and cursor recovery with declaration-revert proof."
+type: Feature
+status: in_progress
+priority: 2
+tags: []
+created_at: "2026-10-13T13:07:03.967Z"
+updated_at: "2026-10-13T21:43:07.539Z"
+author: codex-agent
+comments[15]{created_at,author,text}:
+  "2026-10-13T13:07:58.529Z",codex-agent,"Plan: declare installed SDK read-output contracts for offline and Neo4j reads; keep sync undeclared. Preserve raw exports without host controls, expose structured graph rows when controls are present, and avoid diagram stdout bypassing requested budgets. Add packaged-host regression tests and run unchanged npm/Bun release gates."
+  "2026-10-13T13:16:09.750Z",codex-agent,"Installed SDK confirms structured-object results with dot-delimited row_keys. All thirteen read commands now opt in; sync stays undeclared. Packaged-host tests retain real trackers and use a synthetic Neo4j transport for query/neighbors/status, without replacing the pm SDK. This is output-contract evidence, not live Neo4j integration evidence."
+  "2026-10-13T13:27:58.640Z",codex-agent,"Lint, duplication (zero clone pairs), and docstring checks pass. The initial isolated-consumer host reinstall timed out; regression setup now installs the packed extension into a real scratch tracker using the package-local installed host. Redundant pre-fix verification processes were stopped before re-verification."
+  "2026-10-13T13:36:18.114Z",codex-agent,"The isolated pm package install step exceeded the 180-second test timeout twice, including offline cached dependency resolution. To isolate the authorized read-output change, tests now extract the npm-packed archive into the documented project extension directory and link the unchanged installed dependency graph; the real host still discovers, activates, validates, shapes and resumes the package. Installer timeout remains a separate reported limitation."
+  "2026-10-13T18:22:25.140Z",codex-agent,"Resumed after provider quota interruption. Re-reading the pinned SDK and reviewing every inherited change, then independently verifying declaration-revert failures, packaged-host behavior, and unchanged npm/Bun release gates before committing and opening the adoption PR."
+  "2026-10-13T18:26:28.398Z",codex-agent,"Fresh npm ci and strict tracker health with required merge drivers pass. Inherited regression assertions failed on host projection semantics, budget-window selection, and SDK harness rejection handling; correcting the assertions against the installed host and expanding fixtures rather than treating the draft as verified."
+  "2026-10-13T18:39:07.344Z",codex-agent,"Packaged-host reader checks now exercise a long dependency chain and explicit impact selection limits. Every successful continuation receipt is checked against its current budget; infeasible later pages retry the same cursor at a larger budget. Production audit, lint, duplication and docstrings pass. Full npm release verification and declaration-only revert proofs are running; revert experiments use isolated snapshots of the reviewed code."
+  "2026-10-13T18:41:02.967Z",codex-agent,"Behavioral revert proof: copied the current reviewed package into an isolated snapshot, removed only the 13 read_output declarations, rebuilt with npm run build, and ran node --test --test-name-pattern='packaged host' test/read-output-host.test.ts. All 13 selected reader regressions failed (0 passed, 0 skipped), each because the installed host refused universal output controls on the undeclared command. The implementation worktree remained unchanged."
+  "2026-10-13T18:51:45.091Z",codex-agent,"Final verification: clean-identity npm run release:check and bun run release:check each passed 319 tests, zero failures/skips, at unchanged thresholds. Measured coverage: 99.66% lines, 94.14% branches, 100% functions across the configured four sources. The linked node --test test/read-output-host.test.ts run passed all 18 tests and recorded its PM execution receipt. Declaration-only reversion failed all 13 reader tests. Production audit is clean; existing development-toolchain findings remain in pm-graph-g8uc. Ready for an unmerged adoption PR; the item stays in progress for orchestrator verification."
+  "2026-10-13T19:04:55.484Z",codex-agent,"Hosted CI passed Node 26 but exposed a Node 22/npm 10 fixture issue: npm pack --ignore-scripts --json emitted prepare-script TOON before the JSON archive receipt. The package read-output behavior was not reached. Discover the actual .tgz artifact instead, matching the repository's existing installer tests, and verify the corrected packaged-host fixture on the supported runtime floor before updating the PR. No history is rewritten."
+  "2026-10-13T19:51:06.125Z",codex-agent,"Final fixture correction: repeated clean-identity npm run release:check and bun run release:check both pass 319 tests with zero failures/skips; coverage remains 99.66% lines, 94.14% branches and 100% functions at unchanged thresholds. Node 22.23.1 passes all 18 packaged-host regressions after archive discovery stopped parsing npm 10 lifecycle stdout. Strengthened topo-sort projection independently passes its focused regression. Typechecking, lint and duplication checks pass. Update the existing PR with an additive test-and-evidence commit; no history is rewritten. Item stays in progress for orchestrator verification."
+  "2026-10-13T20:36:25.532Z",pi-agent,"Round 2: merged origin/main into the branch (dependency-pin conflicts resolved by keeping the newer pm-cli pin at 2026.10.13 and taking main's toolchain bumps; lockfile regenerated, not hand-merged). Now reviewing round-2 CodeRabbit findings on the PR."
+  "2026-10-13T21:09:36.640Z",pi-agent,"Round 2 findings: (1) export --output receipt reworked — the naive removal breaks the host contract (the installed host validates every declared row path on each structured result and exits 2 with extension_read_output_invalid), so the file branch now returns the declared collections as empty rows: the receipt stays small, the rendered graph lives in the written file, and the previous full-graph receipt also produced budget-truncation receipts whose --output-budget recovery is refused with --output. (2) cycles declared in the analyze and explain row keys, with a packaged-host test covering the row contract, amount control (output_limit 2) and resumable budget pages with cursor continuation and bounded recovery. (3) the cycle-failure assertion now rejects the emitted 'graph TD' header instead of 'flowchart'. All three have regression tests in test/read-output-host.test.ts (now 20 tests, all passing)."
+  "2026-10-13T21:18:54.173Z",pi-agent,"Behavioural revert proofs, each in an isolated snapshot of the reviewed package (single change + rebuild, worktree untouched): (1) restoring the full graph object in the export --output receipt makes the new 'file export receipts stay small' regression fail ('the file receipt must not embed graph rows'); (2) removing cycles from the analyze/explain row keys makes the new cycles-rows regression fail ('cycles must be declared as rows'); (3) removing the read-output guard on the cycles command diagram print makes the strengthened cycle-failure assertion fail on /graph TD/, while the previous /flowchart/ assertion passes against the same leak — proving the old test was blind and the new one detects the regression."
+  "2026-10-13T21:42:41.084Z",pi-agent,"Gates after the round-2 fixes and the origin/main merge: clean-identity npm run release:check and bun run release:check each pass 321 tests with zero failures/skips at unchanged thresholds; coverage 99.66% lines, 94.14% branches, 100% functions across the four configured sources; lint, duplication (0 clone pairs), docstrings, production audit, pack dry-run, changelog and release verification gates pass. Linked node --test test/read-output-host.test.ts passes all 20 packaged-host regressions."
+files[10]{path,scope}:
+  dist/index.d.ts,project
+  dist/index.js,project
+  dist/index.js.map,project
+  manifest.json,project
+  package-lock.json,project
+  package.json,project
+  src/index.ts,project
+  test/fixtures/read-output-neo4j-loader.ts,project
+  test/fixtures/read-output-neo4j.ts,project
+  test/read-output-host.test.ts,project
+tests[4]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  "npm run release:check",project,codex-agent,"2026-10-13T13:16:23.708Z",local_mutation,feat/read-output-contract
+  "bun run release:check",project,codex-agent,"2026-10-13T13:16:33.274Z",local_mutation,feat/read-output-contract
+  node --test test/read-output-host.test.ts,project,codex-agent,"2026-10-13T13:28:09.181Z",local_mutation,feat/read-output-contract
+  "env HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npm run release:check",project,codex-agent,"2026-10-13T18:39:11.715Z",local_mutation,feat/read-output-contract
+docs[1]{path,scope}:
+  README.md,project
+body: ""

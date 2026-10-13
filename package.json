@@ -34,7 +34,7 @@
     "@babel/eslint-parser": "8.0.7",
     "@babel/plugin-syntax-typescript": "8.0.3",
     "@types/node": "26.6.5",
-    "@unbrained/pm-cli": "2026.10.10",
+    "@unbrained/pm-cli": "2026.10.13",
     "eslint": "10.12.0",
     "fast-glob": "3.3.3",
     "jscpd": "5.4.1",
@@ -59,7 +59,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "peerDependencies": {
-    "@unbrained/pm-cli": ">=2026.8.7"
+    "@unbrained/pm-cli": ">=2026.10.13"
   },
   "engines": {
     "node": ">=22.18.0"
