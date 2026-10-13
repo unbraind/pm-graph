@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { devNull, homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { after, before, test } from "node:test";
@@ -44,9 +44,11 @@ function rows(result: Record<string, unknown>, path: string): unknown[] {
 
 before(async () => {
   mkdirSync(env.HOME);
-  const packed = success("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", workspace], root);
-  const filename = (JSON.parse(packed) as Array<{ filename: string }>)[0]!.filename;
-  const tarball = join(workspace, filename);
+  success("npm", ["pack", "--ignore-scripts", "--pack-destination", workspace], root);
+  // npm 10 can emit prepare output despite --ignore-scripts; discover the actual archive.
+  const archives = readdirSync(workspace).filter((name) => name.endsWith(".tgz"));
+  assert.equal(archives.length, 1, "pack must produce exactly one distribution archive");
+  const tarball = join(workspace, archives[0]!);
   writeFileSync(join(workspace, "package.json"), JSON.stringify({ name: "read-output-consumer", private: true, type: "module" }));
   // Resolve the package's actual executable instead of assuming its layout.
   const host = JSON.parse(readFileSync(join(root, "node_modules/@unbrained/pm-cli/package.json"), "utf8")) as { bin: { pm: string } };
@@ -84,7 +86,7 @@ const scenarios = [
   { name: "pm-graph cycles", args: () => ["pm-graph", "cycles"], selector: "cycles", excluded: "cycleCount", paths: ["cycles"] },
   { name: "pm-graph path", args: () => ["pm-graph", "path", ids[1]!, ids[0]!], selector: "path", excluded: "from", paths: [] },
   { name: "pm-graph critical-path", args: () => ["pm-graph", "critical-path"], selector: "path", excluded: "length", paths: ["path"] },
-  { name: "pm-graph topo-sort", args: () => ["pm-graph", "topo-sort"], selector: "order", excluded: "graph", paths: ["order"] },
+  { name: "pm-graph topo-sort", args: () => ["pm-graph", "topo-sort"], selector: "order", excluded: "ok", paths: ["order"] },
   { name: "pm-graph impact", args: () => ["pm-graph", "impact", ids[0]!, "--depth", "100", "--limit", "100"], selector: "impacted", excluded: "cost", paths: ["impacted"] },
   { name: "pm-graph explain", args: () => ["pm-graph", "explain", ids[0]!], selector: "dependents", excluded: "item", paths: ["transitiveDependents"] },
 ];
