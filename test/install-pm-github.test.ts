@@ -45,12 +45,19 @@ function install(directory: string, version = expectedVersion, fail = "0") {
   });
 }
 
-test("both Ubuntu workflows use the one tested extension installer", () => {
-  for (const path of [".github/workflows/ci.yml", ".github/workflows/pm-github-sync.yml"]) {
-    const workflow = readFileSync(path, "utf8");
-    assert.match(workflow, /run: bash scripts\/install-pm-github\.sh/);
-    assert.doesNotMatch(workflow, /pm package install npm:pm-github@/);
-  }
+test("CI owns its installer and issue sync delegates to the pinned gated workflow", () => {
+  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+  assert.match(ci, /run: bash scripts\/install-pm-github\.sh/);
+  assert.doesNotMatch(ci, /pm package install npm:pm-github@/);
+  const sync = readFileSync(".github/workflows/pm-github-sync.yml", "utf8");
+  assert.match(sync, /uses: unbraind\/pm-github\/\.github\/workflows\/pm-github-sync\.yml@a0880e9645097363824c9a560fed00fc286bbfc3/);
+  assert.match(sync, /pm-github-version: "2026\.10\.13"/);
+  assert.match(sync, /cron: "17 2 \* \* \*"/);
+  assert.match(sync, /workflow_dispatch:/);
+  assert.match(sync, /contents: write/);
+  assert.match(sync, /pull-requests: write/);
+  assert.match(sync, /issues: read/);
+  assert.doesNotMatch(sync, /^\s+(?:run|steps|if):/m);
 });
 
 test("the pinned install restores a tracked registry byte for byte", (t) => {
