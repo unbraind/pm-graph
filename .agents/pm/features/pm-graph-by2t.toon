@@ -2,12 +2,17 @@ id: pm-graph-by2t
 title: Adopt SDK read_output contracts on pm-graph read commands
 description: "Declare universal output controls for read commands, retain writer rejection and raw-export compatibility, and verify packaged-host projection, budgets and cursor recovery with declaration-revert proof."
 type: Feature
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-10-13T13:07:03.967Z"
-updated_at: "2026-10-13T21:43:07.539Z"
+updated_at: "2026-10-13T22:20:42.899Z"
+closed_at: "2026-10-13T22:20:42.888Z"
+completed_at: "2026-10-13T22:20:42.888Z"
 author: codex-agent
+resolution: Implemented and merged in #132 (9eff66e).
+expected_result: The change described by this item is on main.
+actual_result: "Merged in #132 as 9eff66e; checks successful at head 65d16a5: CodeQL, codeql, semgrep-cloud-platform/scan, test (22), test (26), windows-prepare-lifecycle."
 comments[15]{created_at,author,text}:
   "2026-10-13T13:07:58.529Z",codex-agent,"Plan: declare installed SDK read-output contracts for offline and Neo4j reads; keep sync undeclared. Preserve raw exports without host controls, expose structured graph rows when controls are present, and avoid diagram stdout bypassing requested budgets. Add packaged-host regression tests and run unchanged npm/Bun release gates."
   "2026-10-13T13:16:09.750Z",codex-agent,"Installed SDK confirms structured-object results with dot-delimited row_keys. All thirteen read commands now opt in; sync stays undeclared. Packaged-host tests retain real trackers and use a synthetic Neo4j transport for query/neighbors/status, without replacing the pm SDK. This is output-contract evidence, not live Neo4j integration evidence."
@@ -42,4 +47,5 @@ tests[4]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   "env HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npm run release:check",project,codex-agent,"2026-10-13T18:39:11.715Z",local_mutation,feat/read-output-contract
 docs[1]{path,scope}:
   README.md,project
+close_reason: "Delivered by #132 \"Adopt read_output controls on graph readers\" (merged as 9eff66e). Checks successful at the PR head 65d16a5: CodeQL, codeql, semgrep-cloud-platform/scan, test (22), test (26), windows-prepare-lifecycle."
 body: ""

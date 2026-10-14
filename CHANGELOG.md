@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Adopt SDK read_output contracts on pm-graph read commands ([pm-graph-by2t](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-by2t.toon))
+
 ## 2026.10.5 - 2026-10-05
 
 ### Other
