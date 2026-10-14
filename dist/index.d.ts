@@ -1,4 +1,5 @@
 import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
+import type { ExtensionCommandReadOutput } from "@unbrained/pm-cli/sdk/authoring";
 /** Context passed to extension command handlers by the pm CLI host. */
 export type CommandContext = {
     command?: string;
@@ -21,6 +22,7 @@ export type ExtensionCommandArgumentDefinition = {
 export type RegisterCommand = {
     name: string;
     description: string;
+    read_output?: ExtensionCommandReadOutput;
     run: (context: CommandContext) => Promise<unknown>;
     arguments?: ExtensionCommandArgumentDefinition[];
     intent?: string;
