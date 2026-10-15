@@ -50,8 +50,11 @@ test("CI owns its installer and issue sync delegates to the pinned gated workflo
   assert.match(ci, /run: bash scripts\/install-pm-github\.sh/);
   assert.doesNotMatch(ci, /pm package install npm:pm-github@/);
   const sync = readFileSync(".github/workflows/pm-github-sync.yml", "utf8");
-  assert.match(sync, /uses: unbraind\/pm-github\/\.github\/workflows\/pm-github-sync\.yml@a0880e9645097363824c9a560fed00fc286bbfc3/);
-  assert.match(sync, /pm-github-version: "2026\.10\.13"/);
+  // The pin is a full commit SHA annotated with its release; the version input must name
+  // that same release. Asserting the literal SHA made every pm-github repin fail this test.
+  const pin = sync.match(/uses: unbraind\/pm-github\/\.github\/workflows\/pm-github-sync\.yml@([0-9a-f]{40}) # pm-github (\d{4}\.\d{1,2}\.\d{1,2})/);
+  assert.ok(pin, "the sync caller pins the reusable workflow to a full commit annotated with its release");
+  assert.match(sync, new RegExp(`pm-github-version: "${pin[2].replaceAll(".", "\\.")}"`));
   assert.match(sync, /cron: "17 2 \* \* \*"/);
   assert.match(sync, /workflow_dispatch:/);
   assert.match(sync, /contents: write/);
