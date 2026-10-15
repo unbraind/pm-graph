@@ -4,9 +4,9 @@ description: Enable the SHA-pinned fail-closed issue sync caller and remove fast
 type: Chore
 status: in_progress
 priority: 1
-tags: []
+tags[1]: changed
 created_at: "2026-10-14T09:49:43.707Z"
-updated_at: "2026-10-14T11:05:31.255Z"
+updated_at: "2026-10-15T12:27:25.034Z"
 author: codex-agent
 comments[5]{created_at,author,text}:
   "2026-10-14T09:49:52.694Z",codex-agent,"Plan: author this package own thin caller, pin workflow SHA and pm-github to 2026.10.13, and verify isolated npm/Bun release gates without changing thresholds. Remove fast-glob and any jscpd4 alias; pin pm-ops 2026.10.14. Published changelog reviewed: attestation alias/function rejection, read-only pack prepare, release repair and Windows proof support. Duplication now uses Node glob with jscpd 5. No workflow dispatch, bot requests, merges, or source function changes."
