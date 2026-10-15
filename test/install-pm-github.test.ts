@@ -45,12 +45,22 @@ function install(directory: string, version = expectedVersion, fail = "0") {
   });
 }
 
-test("both Ubuntu workflows use the one tested extension installer", () => {
-  for (const path of [".github/workflows/ci.yml", ".github/workflows/pm-github-sync.yml"]) {
-    const workflow = readFileSync(path, "utf8");
-    assert.match(workflow, /run: bash scripts\/install-pm-github\.sh/);
-    assert.doesNotMatch(workflow, /pm package install npm:pm-github@/);
-  }
+test("CI owns its installer and issue sync delegates to the pinned gated workflow", () => {
+  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+  assert.match(ci, /run: bash scripts\/install-pm-github\.sh/);
+  assert.doesNotMatch(ci, /pm package install npm:pm-github@/);
+  const sync = readFileSync(".github/workflows/pm-github-sync.yml", "utf8");
+  // The pin is a full commit SHA annotated with its release; the version input must name
+  // that same release. Asserting the literal SHA made every pm-github repin fail this test.
+  const pin = sync.match(/uses: unbraind\/pm-github\/\.github\/workflows\/pm-github-sync\.yml@([0-9a-f]{40}) # pm-github (\d{4}\.\d{1,2}\.\d{1,2})/);
+  assert.ok(pin, "the sync caller pins the reusable workflow to a full commit annotated with its release");
+  assert.match(sync, new RegExp(`pm-github-version: "${pin[2].replaceAll(".", "\\.")}"`));
+  assert.match(sync, /cron: "17 2 \* \* \*"/);
+  assert.match(sync, /workflow_dispatch:/);
+  assert.match(sync, /contents: write/);
+  assert.match(sync, /pull-requests: write/);
+  assert.match(sync, /issues: read/);
+  assert.doesNotMatch(sync, /^\s+(?:run|steps|if):/m);
 });
 
 test("the pinned install restores a tracked registry byte for byte", (t) => {
