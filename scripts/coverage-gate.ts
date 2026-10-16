@@ -187,7 +187,7 @@ export function runCoverageGate(root: string): void {
     `--test-coverage-branches=${config.thresholds.branches}`,
     `--test-coverage-functions=${config.thresholds.functions}`,
     "--test-reporter=spec", "--test-reporter-destination=stdout",
-    `--test-reporter=${resolve(import.meta.dirname, "completion-reporter.ts")}`,
+    `--test-reporter=${new URL("./completion-reporter.ts", import.meta.url).href}`,
     `--test-reporter-destination=${receiptPath}`,
     "--test-reporter=lcov", `--test-reporter-destination=${reportPath}`,
     ...new Set(tests),
