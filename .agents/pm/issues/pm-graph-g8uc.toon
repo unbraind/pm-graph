@@ -2,18 +2,22 @@ id: pm-graph-g8uc
 title: Remove vulnerable braces dependency from certification toolchain
 description: pm-ops 2026.10.4 and direct fast-glob 3.3.3 depend on micromatch 4.0.8 / braces 3.0.3. Full npm audit flags GHSA-vfj7-8cjw-p6xm (stack exhaustion). npm view braces version returns 3.0.3; braces@3.0.4 is E404. Require published compatible fix or independently tested safe replacement; do not downgrade required pm-ops pin or suppress audit.
 type: Issue
-status: open
+status: in_progress
 priority: 1
 tags: []
 created_at: "2026-10-04T11:00:37.158Z"
-updated_at: "2026-10-13T22:23:08.912Z"
+updated_at: "2026-10-16T07:09:09.246Z"
 author: codex-sol
 severity: high
-comments[3]{created_at,author,text}:
+comments[5]{created_at,author,text}:
   "2026-10-04T14:13:51.136Z",codex-sol,"Correction after complete installed manifest inspection: pm-ops2026.10.4 DOES declare fast-glob^3.3.3 as an optional peer, not a direct dependency. The earlier undeclared-import wording was inaccurate; its duplication entrypoint statically imports that peer, so a duplication consumer must supply it. The removal experiment still proved clean audit plus broken canonical duplication, then restoring exact3.3.3 preserved the gate. This is an unresolved vulnerable optional-peer chain, not a proven missing-declaration upstream defect. Full development audit4high remains the blocker; prod audit0 and full functional gates are unchanged."
   "2026-10-13T18:48:51.633Z",codex-agent,"Fresh npm audit --json on the adoption dependency graph reports four high findings in the existing development toolchain: braces, micromatch, fast-glob and pm-ops. The required npm run audit:prod reports zero vulnerabilities. Reusing this existing investigation; toolchain remediation remains outside the read_output adoption change."
   "2026-10-13T22:23:08.911Z",claude-hub,"Reopened: this item was linked in the merged PR body as an open follow-up or risk, not as delivered work. The automated close-out closed it in error; it remains open."
+  "2026-10-16T06:32:51.456Z",codex-agent,"Fixed on current main: a17e819 (#138), package.json devDependencies and package-lock.json remove the fast-glob/micromatch/braces chain, shipped in npm pm-graph 2026.10.14. npm ls braces micromatch fast-glob --all reports an empty tree; full npm audit reports 0 vulnerabilities (206 dependency entries). No suppression or dependency downgrade required."
+  "2026-10-16T06:41:50.596Z",codex-agent,"Release correction: a17e819 is after tag v2026.10.14 and no release tag currently contains it. The registry pm-graph@2026.10.14 gitHead is ae63a4d and its development manifest still names pm-ops 2026.10.6 and fast-glob 3.3.3. Thus the braces-chain fix is verified on current main be385d3, not in the latest published development toolchain. The earlier comment conflated the unchanged package version with release inclusion; this comment supersedes that release claim."
 files[2]{path,scope}:
   package-lock.json,project
   package.json,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  npm audit,project,codex-agent,"2026-10-16T06:44:55.236Z",local_mutation,fix/gates-and-backlog
 body: ""

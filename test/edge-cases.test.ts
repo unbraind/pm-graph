@@ -536,3 +536,12 @@ test("dependencyDepths reports increasing depth along a chain", () => {
   assert.strictEqual(depths.get("B"), 1);
   assert.strictEqual(depths.get("C"), 0, "C is a leaf");
 });
+
+
+test("analytics help flags never become item positionals", () => {
+  for (const help of ["--help", "-h"]) {
+    const flags = parseAnalyticsFlags([help, "pm-item", "--filter", "status=open"]);
+    assert.deepEqual(flags.positionals, ["pm-item"]);
+    assert.deepEqual(flags.filter, [{ key: "status", values: ["open"] }]);
+  }
+});

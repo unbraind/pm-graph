@@ -486,6 +486,14 @@ pm install --project .
 pm pm-graph ping
 ```
 
+Run `npm run release:check` and `bun run release:check` before submitting changes.
+The coverage gate inventories authored runtime TypeScript throughout the repository,
+including root modules and executable scripts. Dependencies, build output, tracker
+metadata and test fixtures are structural exclusions; runtime exemptions and
+coverage suppression pragmas are rejected. Every configured test pattern must match
+files, and every selected file must declare a passing test. Skipped or TODO tests
+and suites fail the gate, including empty skipped suites.
+
 ## Release Automation
 
 This package supports GitHub, npm, and Bun-compatible installs. Publication remains blocked until the independently tracked full-history privacy and repository-wide exact coverage/source-quality gates are resolved. CI runs type checking, build, production dependency audit, package packing, Bun install verification, and pm-changelog validation. The daily release workflow publishes only when commits exist after the latest release tag and uses pm-changelog to generate CHANGELOG.md and GitHub release notes.

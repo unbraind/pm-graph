@@ -108,17 +108,14 @@
   },
   "coverageGate": {
     "sources": [
-      "src",
-      "scripts/prepare-merge-driver.ts",
-      "scripts/docstring-gate.ts",
-      "scripts/main-invocation.ts"
+      "."
     ],
     "tests": [
       "test/*.test.ts"
     ],
     "thresholds": {
-      "lines": 99,
-      "branches": 93,
+      "lines": 99.7,
+      "branches": 94.9,
       "functions": 100
     },
     "ignore": []
