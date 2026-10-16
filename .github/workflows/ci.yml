@@ -156,3 +156,6 @@ jobs:
 
       - name: Exercise the real Windows command parser
         run: node --test test/windows-prepare.integration.ts
+
+      - name: Verify Windows coverage paths with real glob and completion receipts
+        run: node --test "--test-name-pattern=path comparison|Windows-shaped|coverage gate passes a complete real suite" test/coverage-gate.test.ts

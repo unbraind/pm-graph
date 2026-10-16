@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import type { TestEvent } from "node:test/reporters";
 import completionReporter from "../scripts/completion-reporter.ts";
-import { assertCompleteRun, assertReported, assertThresholds, collectSources, hasRuntime, readPolicy, runCoverageGate } from "../scripts/coverage-gate.ts";
+import { assertCompleteRun, assertReported, assertThresholds, collectSources, hasRuntime, readPolicy, runCoverageGate, testPathKey } from "../scripts/coverage-gate.ts";
 import "../scripts/lint.ts";
 import "../scripts/duplication-gate.ts";
 
@@ -122,6 +122,37 @@ test("completion and file receipts fail closed when absent, partial or nonpassin
   assert.throws(() => assertCompleteRun(complete.replace('"cancelled":0', '"cancelled":1'), root, []), /incomplete/);
   assert.throws(() => assertReported(resolve("."), "", ["missing.ts"]), /never loaded/);
   assert.doesNotThrow(() => assertReported(resolve("."), `SF:${resolve("src/index.ts")}\nSF:src/other.ts\n`, ["src/index.ts", "src/other.ts"]));
+});
+
+test("test path comparison handles Windows separators and drive case", () => {
+  for (const file of ["test\\value.test.ts", "test/value.test.ts", "c:\\PROJECT\\test\\Value.test.ts", "C:/project/test/value.test.ts"]) {
+    assert.equal(testPathKey("C:\\project", file), "test/value.test.ts");
+  }
+  assert.equal(testPathKey("c:/project", "C:\\PROJECT\\test\\value.test.ts"), "test/value.test.ts");
+});
+
+test("test path comparison preserves POSIX case and resolves relative paths", () => {
+  for (const file of ["test/value.test.ts", "/project/test/value.test.ts", "test/../test/value.test.ts"]) {
+    assert.equal(testPathKey("/project", file), "test/value.test.ts");
+  }
+  assert.equal(testPathKey("/project", "/project/test/Value.test.ts"), "test/Value.test.ts");
+});
+
+test("coverage completion accepts Windows-shaped glob results and event paths", () => {
+  const root = "C:\\project";
+  const selected = ["test\\value.test.ts", "test\\other.test.ts"];
+  const output = [
+    ...["c:/PROJECT/test/Value.test.ts", "C:\\project\\test\\other.test.ts"].map((file) => ({
+      type: "test:pass", data: { file, line: 1, name: "declared test", details: { type: "test" } },
+    })),
+    { type: "test:summary", data: { counts: { failed: 0, cancelled: 0, skipped: 0, todo: 0 } } },
+  ].map((event) => JSON.stringify(event)).join("\n");
+  assert.doesNotThrow(() => assertCompleteRun(output, root, selected));
+  assert.deepEqual(selected, ["test\\value.test.ts", "test\\other.test.ts"]);
+  assert.throws(() => assertCompleteRun(output, root, [...selected, "test\\missing.test.ts"]), /no declared tests/);
+  for (const name of ["test\\value.test.ts", "c:/PROJECT/test/Value.test.ts"]) {
+    assert.throws(() => assertCompleteRun(output.replace("declared test", name.replaceAll("\\", "\\\\")), root, selected), /no declared tests/);
+  }
 });
 
 

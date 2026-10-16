@@ -1,7 +1,7 @@
 /** Fail closed over every authored runtime module and a complete, unskipped test run. */
 import { spawnSync } from "node:child_process";
 import { globSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, posix, relative, resolve, sep, win32 } from "node:path";
 import { stripTypeScriptTypes } from "node:module";
 import { isMainInvocation } from "./main-invocation.ts";
 
@@ -82,6 +82,13 @@ export function readPolicy(root: string): CoverageConfig {
   return config;
 }
 
+/** Compare test paths relative to the root, preserving POSIX case and folding Windows case. */
+export function testPathKey(root: string, file: string): string {
+  const paths = /^(?:[a-z]:[\\/]|\\\\)/i.test(root) ? win32 : posix;
+  const key = paths.relative(root, paths.resolve(root, file.replaceAll("\\", "/"))).replaceAll("\\", "/");
+  return paths === win32 ? key.toLowerCase() : key;
+}
+
 /** Require declared tests in every selected file and reject skips, TODOs and failures, including suites. */
 export function assertCompleteRun(output: string, root: string, tests: string[]): void {
   const declared = new Set<string>();
@@ -104,14 +111,14 @@ export function assertCompleteRun(output: string, root: string, tests: string[])
         throw new Error("coverage-gate: incomplete test run (declined or failed test/suite)");
       }
       if (event.data.details?.type === "test" && event.data.line !== undefined && event.data.file) {
-        const file = relative(root, event.data.file).split(sep).join("/");
+        const file = testPathKey(root, event.data.file);
         // Node synthesizes a passing test named after an otherwise empty file.
-        const name = event.data.name?.split(sep).join("/");
-        if (name !== undefined && name !== file && name !== event.data.file.split(sep).join("/")) declared.add(file);
+        const name = event.data.name === undefined ? undefined : testPathKey(root, event.data.name);
+        if (name !== undefined && name !== file) declared.add(file);
       }
     }
   }
-  if (!summary || tests.some((file) => !declared.has(file))) {
+  if (!summary || tests.some((file) => !declared.has(testPathKey(root, file)))) {
     throw new Error("coverage-gate: incomplete test run (no declared tests or missing summary)");
   }
 }
