@@ -184,5 +184,6 @@ test("LCOV floors reject incomplete or impossible counters and retain fractional
   assert.throws(() => assertThresholds(report, { lines: 99.7, branches: 95.1, functions: 100 }), /branches coverage/);
   assert.throws(() => assertThresholds(report.replace("FNF:0", "FNF:1"), { lines: 99.7, branches: 95, functions: 100 }), /functions coverage/);
   assert.throws(() => assertThresholds(report.replace("LH:997", "LH:1001"), { lines: 0, branches: 0, functions: 0 }), /impossible/);
+  assert.throws(() => assertThresholds(report.replace("LF:1000", "LF:9007199254740992"), { lines: 0, branches: 0, functions: 0 }), /invalid LCOV/);
   assert.throws(() => assertThresholds(report.replace("LF:1000\n", ""), { lines: 0, branches: 0, functions: 0 }), /invalid LCOV/);
 });

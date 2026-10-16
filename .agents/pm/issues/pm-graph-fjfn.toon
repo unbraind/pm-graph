@@ -6,7 +6,7 @@ status: in_progress
 priority: 0
 tags[4]: coverage,docstrings,quality,release-blocker
 created_at: "2026-08-07T18:45:28.584Z"
-updated_at: "2026-10-16T07:10:12.876Z"
+updated_at: "2026-10-16T07:35:07.237Z"
 author: codex
 estimated_minutes: 480
 acceptance_criteria: "Every executable authored TypeScript file is enumerated or discovered fail-closed; Coverage is exactly 100/100/100 with behavior-driven tests; Docstring, lint, duplication, and anti-cheat checks are mandatory in release:check and CI"
@@ -18,7 +18,7 @@ expected_result: "All authored runtime source and scripts are governed by exact 
 actual_result: "coverageGate.sources contains only src with thresholds 81/77/88; no mandatory docstring, lint, or duplication gates are present."
 component: quality-gates
 customer_impact: "Regressions or undocumented behavior could pass release checks, so the package cannot honestly be called production or publication ready."
-comments[8]{created_at,author,text}:
+comments[9]{created_at,author,text}:
   "2026-10-16T06:29:09.692Z",codex-agent,"Baseline main be385d3: auditing source discovery, mandatory quality gates and runtime coverage rejection paths. Will add executable failure probes and preserve or raise all existing thresholds; the separate 6zil item records any remaining measured coverage gap."
   "2026-10-16T06:34:42.335Z",codex-agent,"Failure probes exposed two Node runner edge cases: an empty skipped suite has skipped=0 in the aggregate counters; a file with no declared tests counts as one passing file test. Added a dedicated machine-readable completion reporter to require real declared tests per selected file and reject skipped/TODO suite events. Coverage now inventories the repository independently of the configured source list, includes executable scripts and root modules, rejects source omissions and empty patterns, and detects type-only modules by native erasable emit without runtime ignore entries."
   "2026-10-16T06:43:34.999Z",codex-agent,"Behavioral revert proof: removing only runCoverageGate completion validation produces three assertion failures (empty skipped suite, empty TODO suite, zero-test file); restoring it passes all 15 focused tests. Reverting only its repository inventory to configured-source selection produces one failure for omitted root/script modules. Existing presence rejection of an unloaded module and nonexistent configured path is preserved. Linked pm test --run --progress passes; test-result tracking is disabled by existing policy, so its receipt is recorded here without changing that policy."
@@ -27,6 +27,7 @@ comments[8]{created_at,author,text}:
   "2026-10-16T07:04:39.629Z",codex-agent,"Final behavioral proofs: in isolated copies, changing only runCoverageGate to configured-source discovery fails 1/1 omission regression; removing completion validation fails 3/3 skipped/TODO/zero-test regressions; removing exact LCOV enforcement fails 1/1 fractional-floor regression. Restored code passes 20/20 focused tests on Node 22.23.1, 24.19.0 and 26.12.0. Linked pm test --run --progress passes 20/20. Clean-HOME npm release:check passes 342/342 with 10/10 runtime modules present and 99.71/95.04/100 coverage; lint and duplication are clean, all 95 governed declarations documented, audit reports no vulnerabilities. Final Bun gate pending."
   "2026-10-16T07:09:06.444Z",codex-agent,"Final verification: clean-HOME npm run release:check and bun run release:check both pass 342/342 tests, zero failures/skips/cancellations/TODOs. All 10 runtime TypeScript modules present; 99.71% lines / 95.04% branches / 100% functions, with exact independent floors 99.7/94.9/100. Changelog regenerated, canonical lint/docstrings/zero-duplication gates pass, production audit clean. Leave all backlog items unclosed for orchestrator review; full-coverage and historical-timeout gaps remain documented."
   "2026-10-16T07:10:12.876Z",codex-agent,"Precision note for the final receipts: npm measures 99.71/95.04/100 and Bun measures 99.71/95.05/100 (lines/branches/functions); both pass 342/342 with all ten runtime modules present. The minimum across the two is 99.71/95.04/100. Claims remain released and no items were closed."
+  "2026-10-16T07:35:04.402Z",codex-agent,"CI follow-up verified: deterministic suggestion ranking and both analytics help flags hit src/index.ts:2332 and :1027 under real Node 22 and 26 coverage. Removing only substring-ranking priority makes the new SDK-harness assertion fail; removing only the help-flag parser branch makes the -h positional assertion fail. Correct fixtures pass, including the linked ranking test. Full npm/Node26 and Bun-launcher/Node22 release checks now pass 344/344 each, no failures/skips/cancellations/TODOs; minimum coverage 99.71/95.08/100 over all ten runtime modules. Exact floors unchanged at 99.7/94.9/100."
 files[4]{path,scope}:
   package.json,project
   scripts/completion-reporter.ts,project

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { collectHandlers, createItem, pm, pmAvailable } from "./helpers.ts";
+import { collectHandlers, createItem, makeHarness, pm, pmAvailable } from "./helpers.ts";
 
 function uniqueNonExactPrefix(id: string, allIds: string[]): string | null {
   for (let len = 1; len < id.length; len++) {
@@ -179,4 +180,30 @@ test("analytics --root not-found includes item suggestions", { skip: !pmAvailabl
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
+});
+
+
+test("missing IDs rank substring suggestions before equal-prefix candidates deterministically", async () => {
+  const ws = mkdtempSync(path.join(tmpdir(), "pmg-id-ranking-"));
+  try {
+    const cli = path.resolve(import.meta.dirname, "../node_modules/@unbrained/pm-cli/dist/cli.js");
+    // Bind both the pinned host and the fixture root, including in a linked-test sandbox.
+    const run = (args: string[]) => execFileSync(process.execPath, [cli, "--pm-path", ".agents/pm", ...args], { cwd: ws, encoding: "utf8" });
+    run(["init"]);
+    for (const id of ["azzz-one", "azzz-two", "x-pm-azzz-missing"]) {
+      run(["create", "Task", `Suggestion ${id}`, "--id", id]);
+    }
+    const harness = await makeHarness();
+    await assert.rejects(
+      () => harness.runCommand({
+        command: "pm-graph path", args: ["pm-azzz-missing", "pm-azzz-one"],
+        pmRoot: path.join(ws, ".agents", "pm"),
+      }),
+      (error: Error & { exitCode?: number }) => {
+        assert.equal(error.exitCode, 3, error.message);
+        assert.match(error.message, /Did you mean: pm-x-pm-azzz-missing, pm-azzz-one, pm-azzz-two\?/);
+        return true;
+      },
+    );
+  } finally { rmSync(ws, { recursive: true, force: true }); }
 });
