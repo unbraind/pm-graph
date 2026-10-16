@@ -217,6 +217,11 @@ interface PublishShape {
 }
 
 const ENTRY_PATH_FIXTURES: readonly PublishShape[] = [
+  {
+    name: "an attested sibling cannot hide an unquoted-variable publish (pm-graph-ifqz)",
+    publish: "npm publish --provenance\n          NPM=npm\n          $NPM publish --access public",
+    failing: true,
+  },
   { name: "a plain unattested publish", publish: "npm publish --access public", failing: true },
   // The subcommand need not be adjacent to `npm`: an option may precede it, and
   // a diverted implementation matching only the literal pair `npm publish` would
