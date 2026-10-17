@@ -76,7 +76,7 @@ also [ignores archive integrity for Git dependencies](https://github.com/npm/pac
 
 The pinned kit's Git prepare script invokes an extensionless compiler shim and
 does not run on Windows. The Windows lifecycle job installs locked artifacts
-without dependency scripts, then runs this package's own prepare through npm
+using tested npm 11.17 without dependency scripts, then runs this package's own prepare through npm
 and the real command parser. Its strict merge-driver health, adversarial parser
 and coverage-path checks remain in place. Linux CI retains normal dependency
 lifecycles and both full release gates. The remaining Windows development-install limitation is tracked as

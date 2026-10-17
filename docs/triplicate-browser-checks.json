@@ -892,5 +892,17 @@
         "paper": "rgb(13, 17, 23)"
       }
     ]
+  },
+  "outputEquivalence": {
+    "reason": "Explicit normalized empty-string checks replace truthiness; visual output remains byte-identical.",
+    "sourceSha256": "2199ba6fa975edf44c466d5e300b1d4dd2d209a2160d3ec98ccac06adb42bba3",
+    "artifactSha256": {
+      "graph.mmd": "81c97b3c03335bd2512b9f4e970648a1fc8547922ad7b77a6eaf6e0c3b726e22",
+      "graph-dark.mmd": "2001f913cbb9463a57141a7b48cc8657649939d4d8127719188109d83e6ad5ae",
+      "graph.dot": "133b5289c8e9a67cafa677f2809b0c7d69ac62f5e62cd500ff489ceb91a240d9",
+      "graph-dark.dot": "6a5a2a93f8c0d90a919a6e669854592eabb413ab86c7cb6b2da53d1186c273e9",
+      "graph.puml": "87236b98c8c71d2864d917ed4b797d23a48e3cf7833f337732960392416fcde3",
+      "graph-dark.puml": "c9a5e336c0afdb363abd6a0eff18772c2a135d7ccbc77bd7d9d4ecffea810c61"
+    }
   }
 }

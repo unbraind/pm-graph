@@ -1167,7 +1167,7 @@ function renderDot(graph, theme = "light") {
         const bg = brandColor(theme, `status-${state}-bg`);
         const border = brandColor(theme, `status-${state}-border`);
         const statusText = state === 'canceled' ? `<S>${xmlEscape(status)}</S>` : xmlEscape(status);
-        const chip = status ? `<TR><TD ALIGN="LEFT"><TABLE BORDER="1" COLOR="${border}" BGCOLOR="${bg}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT FACE="${mono}" POINT-SIZE="11" COLOR="${fg}">${statusText}</FONT></TD></TR></TABLE></TD></TR>` : '';
+        const chip = status !== "" ? `<TR><TD ALIGN="LEFT"><TABLE BORDER="1" COLOR="${border}" BGCOLOR="${bg}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT FACE="${mono}" POINT-SIZE="11" COLOR="${fg}">${statusText}</FONT></TD></TR></TABLE></TD></TR>` : '';
         const label = `<TABLE BORDER="1" COLOR="${rule}" BGCOLOR="${sheet}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="8" STYLE="ROUNDED"><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(nodeStrip(node).length * 8 + 20)}"><FONT FACE="${mono}" POINT-SIZE="10" COLOR="${brandValue(theme, 'graphite')}">${xmlEscape(nodeStrip(node))}</FONT></TD></TR><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(title.length * 8 + 20)}"><FONT FACE="${body}" POINT-SIZE="12" COLOR="${carbon}">${xmlEscape(title)}</FONT></TD></TR>${chip}</TABLE>`;
         lines.push(`  "${dotEscape(node.id)}" [label=<${label}>, tooltip="${dotEscape(diagramLabel(node))}"];`);
     }
@@ -1281,7 +1281,7 @@ export function renderPlantuml(graph, theme = "light") {
         const state = brandStatus(status);
         const label = `<font:${diagramFont(theme, 'font-mono')}>${xmlEscape(plantumlLabel(nodeStrip(node)))}</font>\\n${xmlEscape(plantumlLabel(title))}`;
         const text = state === 'canceled' ? `<s>${xmlEscape(plantumlLabel(status))}</s>` : xmlEscape(plantumlLabel(status));
-        const chip = status ? `\\n<${brandColor(theme, `status-${state}-bg`)},${brandColor(theme, `status-${state}-border`)}>|<color:${brandColor(theme, `status-${state}-fg`)}> ${text} |` : '';
+        const chip = status !== "" ? `\\n<${brandColor(theme, `status-${state}-bg`)},${brandColor(theme, `status-${state}-border`)}>|<color:${brandColor(theme, `status-${state}-fg`)}> ${text} |` : '';
         lines.push(`object "${label}${chip}" as ${plantumlAlias(node.id)}`);
     }
     if (graph.relationships.length > 0)

@@ -161,7 +161,8 @@ jobs:
       # Use its committed build here, then exercise this package's own prepare
       # through npm/cmd.exe. Linux jobs retain full dependency lifecycles.
       - name: Install locked dependencies for Windows lifecycle checks
-        run: npm ci --ignore-scripts
+        # npm 10 still prepares some Git dependencies with --ignore-scripts.
+        run: npx --yes npm@11.17.0 ci --ignore-scripts
 
       - name: Run the package prepare lifecycle through npm
         run: npm run prepare
