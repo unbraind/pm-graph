@@ -177,7 +177,7 @@ test("impact --format mermaid prints a diagram containing the root and affected 
   const { ws, a, b, c, run } = setupChainWorkspace("pmg-impact-mermaid-", "pm-graph impact");
   try {
     const { result, stdout } = await captureStdout(() => run({ cwd: ws, args: [a, "--format", "mermaid"] }));
-    assert.ok(stdout.startsWith("graph TD"), "mermaid diagram printed on stdout");
+    assert.ok(/^%%\{init:[^\n]+\}%%\ngraph TD\n/u.test(stdout), "mermaid diagram printed on stdout");
     for (const id of [a, b, c]) {
       assert.ok(stdout.includes(`n_${id.replace(/[^A-Za-z0-9_]/g, "_")}[`), `impact node ${id} present in mermaid`);
     }

@@ -1,3 +1,4 @@
+import type { BrandTheme } from "./brand.ts";
 import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
 import type { ExtensionCommandReadOutput } from "@unbrained/pm-cli/sdk/authoring";
 /** Context passed to extension command handlers by the pm CLI host. */
@@ -139,7 +140,7 @@ export declare function renderGraphml(graph: Graph): string;
  * node and one arrow per relationship, the relationship type as the arrow
  * label. Renders with PlantUML / Structurizr / many docs toolchains.
  */
-export declare function renderPlantuml(graph: Graph): string;
+export declare function renderPlantuml(graph: Graph, theme?: BrandTheme): string;
 type StructuralEdge = {
     from: string;
     to: string;
@@ -274,7 +275,7 @@ export declare function impactSubgraph(graph: Graph, rootId: string, affected: A
  */
 export declare function impactSubgraphFromNodeSet(graph: Graph, rootId: string, nodeIds: string[]): Graph;
 /** Render an analysis subgraph via the existing full-graph renderers. */
-export declare function renderAnalysisDiagram(format: AnalysisDiagramFormat, graph: Graph): string;
+export declare function renderAnalysisDiagram(format: AnalysisDiagramFormat, graph: Graph, theme?: BrandTheme): string;
 type AnalyzeReport = {
     workspace: string;
     projectKey: string;

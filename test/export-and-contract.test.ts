@@ -151,7 +151,7 @@ test("export --format mermaid writes a raw mermaid diagram to stdout (G2 bonus)"
     ensureExtension(ws);
     const res = pm(ws, ["pm-graph", "export", "--format", "mermaid"]);
     assert.equal(res.status, 0, `exit 0\nstdout:\n${res.stdout.slice(0, 500)}`);
-    assert.match(res.stdout, /^graph TD/, "mermaid diagram printed");
+    assert.match(res.stdout, /^%%\{init:[^\n]+\}%%\ngraph TD\n/u, "mermaid diagram printed");
     assert.doesNotMatch(res.stdout, /^ok: true/, "no TOON summary prefix");
   } finally {
     rmSync(ws, { recursive: true, force: true });

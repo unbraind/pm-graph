@@ -186,7 +186,7 @@ test("explainItem returns null for an id that is a facet node, not a PmItem", ()
 test("renderAnalysisDiagram mermaid on an empty subgraph emits a bare graph header", () => {
   const empty = graph([], []);
   const out = renderAnalysisDiagram("mermaid", empty as never);
-  assert.ok(out.startsWith("graph TD"), "mermaid header present");
+  assert.ok(/^%%\{init:[^\n]+\}%%\ngraph TD\n/u.test(out), "mermaid header present");
   assert.ok(!out.includes("-->"), "no edges in empty graph");
 });
 

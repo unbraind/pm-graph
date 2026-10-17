@@ -59,6 +59,9 @@ jobs:
           # still exiting successfully.
           timeout --signal=TERM --kill-after=10s 120s ./node_modules/.bin/pm health --strict-exit --require-merge-drivers
 
+      - name: Verify baked brand values before building
+        run: npm run brand:check
+
       - name: Type check
         run: npm run typecheck
 
@@ -132,6 +135,13 @@ jobs:
 
       - name: Verify Bun can install the package graph
         run: bun install --no-save
+
+      - name: Verify full npm and Bun release gates
+        if: matrix.node-version == 26
+        shell: bash
+        run: |
+          npm run release:check
+          bun run release:check
 
   windows-prepare-lifecycle:
     runs-on: windows-latest
