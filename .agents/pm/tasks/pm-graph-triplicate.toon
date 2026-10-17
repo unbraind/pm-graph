@@ -6,14 +6,13 @@ status: in_progress
 priority: 2
 tags: []
 created_at: "2026-10-17T09:27:51.195Z"
-updated_at: "2026-10-17T10:50:59.381Z"
-assignee: codex-agent
-claim_principal: codex-agent
+updated_at: "2026-10-17T11:29:20.761Z"
 author: codex-agent
-comments[3]{created_at,author,text}:
+comments[4]{created_at,author,text}:
   "2026-10-17T09:28:13.055Z",codex-agent,"Design: form-paper canvas and ruled top sheets; carbon text, Martian Mono ids and dates, explicit status labels and contract chip fills. Canary and rose only convey in_progress and blocked. Brand values are generated at build time from an exact devDependency; published runtime has no brand dependency or CDN fetches. Existing scheduling, graph edges and serialization stay intact."
   "2026-10-17T10:12:53.675Z",codex-agent,"Visual formats are Mermaid flowcharts, DOT and PlantUML; interchange schemas remain unchanged. Each uses ruled sheets, a real mono form strip and explicit filled/outlined status cells. DOT/PlantUML accept literal dark palettes through renderer arguments; Mermaid adapts scoped CSS. Browser review caught ignored directives and variables rejected in Mermaid source style declarations; these now use a leading directive, scoped CSS values and a literal border declaration. Behavioral revert proof restores only each of the three renderers in turn: the unchanged real-tracker regression fails 1/1 each; the restored implementation passes 1/1. The README embeds pm-brand banner commit 5c80a2b707f3a00afe986e81e520843b86f3ee83. Full gates are pending."
   "2026-10-17T10:50:59.381Z",codex-agent,"Render review caught a Mermaid canvas rule rejected because bare declarations preceded it. Removed the invalid declarations and themed nested edge-label backgrounds. Real-tracker focused tests pass 5/5; scoped renderer revert proofs remain 1/1 failures for each of Mermaid, DOT and PlantUML, with 1/1 passes restored. Full computed-color browser checks and release gates are being rerun on the corrected implementation."
+  "2026-10-17T11:29:18.305Z",codex-agent,"Both CI-isolated npm run release:check and bun run release:check pass: each 352/352 tests; 99.72% lines, 95.24% branches and 100% functions over all 13 intended runtime sources, zero failed, canceled or skipped tests. The pinned pm runner passes focused tests 5/5; project test execution tracking remains disabled by existing policy, so results are recorded here. Published 72 before/after PNGs on pr-screenshots, with 36 after cases passing widths/themes/scales, no overflow, animations, interactive actions or external requests. Renderer hashes match the published evidence. Independent renderer reverts fail 1/1 each and restored renderers pass 1/1. Strict CI-isolated tracker health passes with existing advisories retained. CI retains Node 22 coverage and runs both full release gates on Node 26 without a redundant third coverage run. No brand token gap found; pm-brand release remains held. Claim released for orchestrator verification; item stays in progress."
 files[9]{path,scope}:
   scripts/brand-values.ts,project
   src/brand-values.ts,project
@@ -24,9 +23,12 @@ files[9]{path,scope}:
   test/render-triplicate.ts,project
   test/revert-triplicate.ts,project
   test/triplicate-visuals.test.ts,project
-tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   node --test test/brand-values.test.ts test/triplicate-visuals.test.ts,project,codex-agent,"2026-10-17T09:43:29.163Z",local_mutation,brand/triplicate-visuals
-docs[2]{path,scope}:
+  "env HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npm run release:check",project,codex-agent,"2026-10-17T11:29:14.582Z",local_mutation,brand/triplicate-visuals
+  "env HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 bun run release:check",project,codex-agent,"2026-10-17T11:29:16.433Z",local_mutation,brand/triplicate-visuals
+docs[3]{path,scope}:
+  docs/triplicate-browser-checks.json,project
   docs/triplicate-visuals.md,project
   README.md,project
 body: ""

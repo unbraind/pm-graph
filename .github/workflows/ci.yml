@@ -116,6 +116,8 @@ jobs:
         run: npm run docstring
 
       - name: Test with coverage gate
+        # Node 26 runs this complete suite in both full release gates below.
+        if: matrix.node-version != 26
         run: npm run coverage
 
       - name: Production dependency audit
