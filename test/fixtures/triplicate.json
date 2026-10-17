@@ -1,0 +1,67 @@
+{
+  "source": "https://github.com/unbraind/pm-brand/tree/7ad0970d96a20c24b8dbd9e0dcd1efeb8b4d5cc1/.agents/pm",
+  "items": [
+    {
+      "id": "pm-brand-kit",
+      "title": "pm-brand kit",
+      "type": "Epic",
+      "status": "in_progress",
+      "priority": 2,
+      "created_at": "2026-10-16T22:29:34.808Z"
+    },
+    {
+      "id": "pm-brand-images",
+      "title": "README banner and OG generators",
+      "type": "Feature",
+      "status": "in_progress",
+      "priority": 2,
+      "created_at": "2026-10-16T22:30:23.420Z",
+      "parent": "pm-brand-kit"
+    },
+    {
+      "id": "pm-brand-contrast",
+      "title": "Contrast and AA quality gates",
+      "type": "Feature",
+      "status": "in_progress",
+      "priority": 2,
+      "created_at": "2026-10-16T22:30:31.556Z",
+      "parent": "pm-brand-kit"
+    },
+    {
+      "id": "pm-brand-mark",
+      "title": "Generated mark, lockups and icons",
+      "type": "Feature",
+      "status": "in_progress",
+      "priority": 2,
+      "created_at": "2026-10-16T22:30:15.958Z",
+      "parent": "pm-brand-kit"
+    },
+    {
+      "id": "pm-brand-tokens",
+      "title": "Typed tokens with CSS parity",
+      "type": "Feature",
+      "status": "in_progress",
+      "priority": 2,
+      "created_at": "2026-10-16T22:30:06.752Z",
+      "parent": "pm-brand-kit"
+    },
+    {
+      "id": "pm-brand-fonts",
+      "title": "Self-hosted fonts and measured fallbacks",
+      "type": "Feature",
+      "status": "in_progress",
+      "priority": 2,
+      "created_at": "2026-10-16T22:29:54.107Z",
+      "parent": "pm-brand-kit"
+    },
+    {
+      "id": "pm-brand-borders",
+      "title": "Approve contract changes for low-contrast status borders",
+      "type": "Issue",
+      "status": "canceled",
+      "priority": 2,
+      "created_at": "2026-10-16T22:52:11.956Z",
+      "parent": "pm-brand-contrast"
+    }
+  ]
+}

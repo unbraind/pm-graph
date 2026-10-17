@@ -1,5 +1,10 @@
 # pm-graph
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/unbraind/pm-brand/5c80a2b707f3a00afe986e81e520843b86f3ee83/banners/pm-graph-dark.svg">
+  <img src="https://raw.githubusercontent.com/unbraind/pm-brand/5c80a2b707f3a00afe986e81e520843b86f3ee83/banners/pm-graph.svg" alt="pm-graph · Triplicate">
+</picture>
+
 Knowledge graph and dependency graph extension for [pm CLI](https://github.com/unbraind/pm-cli) workspaces, with optional Neo4j sync.
 
 The extension reads item metadata through the pm SDK, then turns items, parent links, `blocked_by` metadata, dependency metadata, tags, statuses, types, assignees, sprints, and releases into graph nodes and relationships.
@@ -544,3 +549,12 @@ compaction. Command-local selection limits and document budgets still apply.
    trackers: projection, budget omission, every-row cursor recovery, and writer
    rejection. Remove only the declarations, rebuild, and prove the tests fail.
 5. Run unchanged npm and Bun release gates and document their exact results.
+
+
+## Triplicate visual identity
+
+Visual exports use build-time values from the exact `pm-brand` development pin:
+form paper, carbon ink, ruled item sheets and explicit status fills. Portable font
+stacks put Archivo, Public Sans and Martian Mono first and fetch no external fonts.
+[Design, themes, token parity and reproducible review renders](docs/triplicate-visuals.md).
+The README banner embeds pm-brand's committed output at an immutable SHA.

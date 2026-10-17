@@ -358,7 +358,7 @@ test("criticalPathSubgraph contains exactly the chain nodes and connecting edges
 test("critical-path --format mermaid emits a mermaid graph with exactly the chain nodes", () => {
   const chain = longestChain(["A", "B", "C", "D"], chainEdges);
   const out = renderAnalysisDiagram("mermaid", criticalPathSubgraph(diagramGraph, chain));
-  assert.ok(out.startsWith("graph TD"), "is a mermaid graph");
+  assert.ok(/^%%\{init:[^\n]+\}%%\ngraph TD\n/u.test(out), "is a mermaid graph");
   for (const id of ["A", "B", "C", "D"]) {
     assert.ok(out.includes(`n_${id}[`), `chain node ${id} present`);
   }
@@ -458,7 +458,7 @@ test("renderAnalysisDiagram dot output is structurally distinct from mermaid and
   const mermaid = renderAnalysisDiagram("mermaid", sub);
   const graphml = renderAnalysisDiagram("graphml", sub);
   assert.ok(dot.startsWith("digraph"), "dot starts with digraph");
-  assert.ok(mermaid.startsWith("graph TD"), "mermaid starts with graph TD");
+  assert.ok(/^%%\{init:[^\n]+\}%%\ngraph TD\n/u.test(mermaid), "mermaid starts with graph TD");
   assert.ok(graphml.startsWith("<?xml"), "graphml starts with xml prolog");
   assert.notStrictEqual(dot, mermaid);
   assert.notStrictEqual(dot, graphml);
@@ -667,7 +667,7 @@ test("impactSubgraphFromNodeSet excludes edges with an endpoint outside the set"
 test("impactSubgraph rendered as mermaid contains the root and affected node ids only", () => {
   const affected = downstreamAffected;
   const out = renderAnalysisDiagram("mermaid", impactSubgraph(impactGraph, "A", affected));
-  assert.ok(out.startsWith("graph TD"), "is a mermaid graph");
+  assert.ok(/^%%\{init:[^\n]+\}%%\ngraph TD\n/u.test(out), "is a mermaid graph");
   for (const id of ["A", "B", "C"]) {
     assert.ok(out.includes(`n_${id}[`), `impact node ${id} present`);
   }

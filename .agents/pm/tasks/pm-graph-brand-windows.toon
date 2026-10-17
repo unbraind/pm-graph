@@ -1,0 +1,14 @@
+id: pm-graph-brand-windows
+title: Restore normal Windows development installs after the brand prepare script is portable
+description: "The exact pm-brand Git pin invokes an extensionless TypeScript compiler shim in scripts/prepare.ts and fails during Windows npm ci. The Windows lifecycle job uses locked committed artifacts without dependency scripts and then runs this package's own prepare through npm/cmd.exe, preserving strict driver health, adversarial parser and coverage-path assertions. The Linux jobs retain normal dependency lifecycles and full release gates. Coordinate the kit portability fix, update to its approved main SHA, and restore the normal Windows installation step."
+type: Task
+status: open
+priority: 2
+tags: []
+created_at: "2026-10-17T11:46:22.564Z"
+updated_at: "2026-10-17T11:46:24.538Z"
+author: codex-agent
+acceptance_criteria: The approved kit prepares portably on Windows; normal Windows npm ci and the existing lifecycle/parser/coverage checks pass without the temporary install workaround.
+files[1]{path,scope}:
+  .github/workflows/ci.yml,project
+body: ""

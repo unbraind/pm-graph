@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { brandCss, brandStatus, brandStatuses, brandValue, brandColor, mermaidBrand } from "./brand.ts";
+import type { BrandTheme } from "./brand.ts";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -1314,15 +1316,30 @@ function diagramLabel(node: GraphNode): string {
  * directed arrows labelled with their type; a blank line separates nodes from
  * edges only when there are edges, so an edge-free graph stays compact.
  */
-function renderMermaid(graph: Graph): string {
-  const lines: string[] = ["graph TD"];
+function renderMermaid(graph: Graph, theme: BrandTheme = "light"): string {
+  const chipCss = brandStatuses.map(status => `.pm-status-${status}{color:var(--pm-status-${status}-fg);background:var(--pm-status-${status}-bg);border:1px solid var(--pm-status-${status}-border);${status === "canceled" ? "text-decoration:line-through;" : ""}}`).join("\n");
+  const css = brandCss + `
+    .cluster rect{fill:var(--pm-paper);stroke:none}.node{filter:none}.node rect{filter:none;fill:var(--pm-sheet);stroke:var(--pm-rule);stroke-width:1px;rx:6px}
+    .pm-strip{font-family:var(--pm-font-mono);font-size:11px;color:var(--pm-graphite)}
+    .pm-title{font-family:var(--pm-font-body);color:var(--pm-carbon)}
+    .pm-chip{display:inline-block;font-family:var(--pm-font-mono);font-size:11px;padding:2px 6px;border-radius:3px;margin-top:8px}
+    .label,.label text,span{color:var(--pm-carbon);fill:var(--pm-carbon)}
+    .edgeLabel,.edgeLabel p,.labelBkg{color:var(--pm-graphite);background-color:var(--pm-paper)!important;fill:var(--pm-paper)}
+    .flowchart-link{stroke:var(--pm-graphite)!important}.marker{stroke:var(--pm-graphite);fill:var(--pm-graphite)}
+    @media(prefers-reduced-motion:reduce){*{animation:none;transition:none}}
+  ` + chipCss;
+  const lines: string[] = [mermaidBrand(css, theme), "graph TD", '  subgraph pm_canvas[" "]'];
   for (const node of graph.nodes) {
-    lines.push(`  ${mermaidId(node.id)}["${mermaidLabel(diagramLabel(node))}"]`);
+    const status = nodeStatus(node);
+    const chip = status ? `<br/><span class='pm-chip pm-status-${brandStatus(status)}'>${xmlEscape(status)}</span>` : "";
+    const label = `<span class='pm-strip'>${xmlEscape(nodeStrip(node))}</span><br/><span class='pm-title'>${xmlEscape(nodeTitle(node))}</span>${chip}`;
+    lines.push(`  ${mermaidId(node.id)}["${mermaidLabel(label)}"]`);
   }
   if (graph.relationships.length > 0) lines.push("");
   for (const rel of graph.relationships) {
-    lines.push(`  ${mermaidId(rel.from)} -->|${mermaidLabel(rel.type)}| ${mermaidId(rel.to)}`);
+    lines.push(`  ${mermaidId(rel.from)} -->|${mermaidLabel(xmlEscape(rel.type))}| ${mermaidId(rel.to)}`);
   }
+  lines.push("  end", "  style pm_canvas stroke:none");
   return lines.join("\n");
 }
 
@@ -1351,15 +1368,41 @@ function nodeLabelParts(node: GraphNode): { title: string; status: string } {
 }
 
 /** Render a graph as a Graphviz DOT digraph with left-to-right ranking. */
-function renderDot(graph: Graph): string {
-  const lines: string[] = ["digraph pm_graph {", "  rankdir=LR;", '  node [shape=box, style=rounded];'];
+/** Assemble an item's actual form strip; facet nodes retain their own label. */
+function nodeStrip(node: GraphNode): string {
+  const type = typeof node.properties.type === "string" ? node.properties.type : node.labels.join(" · ");
+  const priority = node.properties.priority;
+  return `${node.id} · ${type}${typeof priority === "number" || typeof priority === "string" ? ` · P${priority}` : ""}`;
+}
+
+/** Remove quoting delimiters from a font stack for diagram-engine font attributes. */
+function diagramFont(theme: BrandTheme, role: 'font-mono' | 'font-body'): string {
+  return brandValue(theme, role).replace(/"/g, '');
+}
+
+/** Render Graphviz sheets and nested status cells, preserving every node id and directed edge. */
+function renderDot(graph: Graph, theme: BrandTheme = "light"): string {
+  const paper = brandValue(theme, 'paper');
+  const sheet = brandValue(theme, 'sheet');
+  const carbon = brandValue(theme, 'carbon');
+  const rule = brandColor(theme, 'rule');
+  const mono = xmlEscape(diagramFont(theme, 'font-mono'));
+  const body = xmlEscape(diagramFont(theme, 'font-body'));
+  const lines: string[] = ["digraph pm_graph {", "  rankdir=LR;",
+    `  graph [bgcolor="${paper}", pad="0.3", nodesep="0.4", ranksep="1.2"];`,
+    `  node [shape=plain, fontname="${dotEscape(diagramFont(theme, 'font-body'))}", fontcolor="${carbon}"];`,
+    `  edge [color="${brandValue(theme, 'graphite')}", fontcolor="${carbon}", fontname="${dotEscape(diagramFont(theme, 'font-mono'))}"];`,
+  ];
   for (const node of graph.nodes) {
     const { title, status } = nodeLabelParts(node);
-    // Build the second line first, then join with the DOT line-break directive
-    // "\n" AFTER escaping so dotEscape does not double-escape the backslash.
-    const second = status ? `[${node.id}] ${status}` : `[${node.id}]`;
-    const label = `${dotEscape(title)}\\n${dotEscape(second)}`;
-    lines.push(`  "${dotEscape(node.id)}" [label="${label}"];`);
+    const state = brandStatus(status);
+    const fg = brandColor(theme, `status-${state}-fg`);
+    const bg = brandColor(theme, `status-${state}-bg`);
+    const border = brandColor(theme, `status-${state}-border`);
+    const statusText = state === 'canceled' ? `<S>${xmlEscape(status)}</S>` : xmlEscape(status);
+    const chip = status !== "" ? `<TR><TD ALIGN="LEFT"><TABLE BORDER="1" COLOR="${border}" BGCOLOR="${bg}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT FACE="${mono}" POINT-SIZE="11" COLOR="${fg}">${statusText}</FONT></TD></TR></TABLE></TD></TR>` : '';
+    const label = `<TABLE BORDER="1" COLOR="${rule}" BGCOLOR="${sheet}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="8" STYLE="ROUNDED"><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(nodeStrip(node).length * 8 + 20)}"><FONT FACE="${mono}" POINT-SIZE="10" COLOR="${brandValue(theme, 'graphite')}">${xmlEscape(nodeStrip(node))}</FONT></TD></TR><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(title.length * 8 + 20)}"><FONT FACE="${body}" POINT-SIZE="12" COLOR="${carbon}">${xmlEscape(title)}</FONT></TD></TR>${chip}</TABLE>`;
+    lines.push(`  "${dotEscape(node.id)}" [label=<${label}>, tooltip="${dotEscape(diagramLabel(node))}"];`);
   }
   for (const rel of graph.relationships) {
     lines.push(`  "${dotEscape(rel.from)}" -> "${dotEscape(rel.to)}" [label="${dotEscape(rel.type)}"];`);
@@ -1463,12 +1506,24 @@ function plantumlLabel(s: string): string {
  * node and one arrow per relationship, the relationship type as the arrow
  * label. Renders with PlantUML / Structurizr / many docs toolchains.
  */
-export function renderPlantuml(graph: Graph): string {
-  const lines: string[] = ["@startuml", "left to right direction"];
+export function renderPlantuml(graph: Graph, theme: BrandTheme = "light"): string {
+  const lines: string[] = ["@startuml", "left to right direction", "skinparam shadowing false", "skinparam roundCorner 6",
+    `skinparam backgroundColor ${brandValue(theme, 'paper')}`,
+    `skinparam defaultFontName ${diagramFont(theme, 'font-body')}`,
+    `skinparam defaultFontColor ${brandValue(theme, 'carbon')}`,
+    `skinparam objectBackgroundColor ${brandValue(theme, 'sheet')}`,
+    `skinparam objectBorderColor ${brandColor(theme, 'rule')}`,
+    `skinparam ArrowColor ${brandValue(theme, 'graphite')}`,
+    `skinparam ArrowFontName ${diagramFont(theme, 'font-mono')}`,
+    `skinparam ArrowFontColor ${brandValue(theme, 'carbon')}`,
+  ];
   for (const node of graph.nodes) {
     const { title, status } = nodeLabelParts(node);
-    const label = status ? `${title} [${node.id}] (${status})` : `${title} [${node.id}]`;
-    lines.push(`object "${plantumlLabel(label)}" as ${plantumlAlias(node.id)}`);
+    const state = brandStatus(status);
+    const label = `<font:${diagramFont(theme, 'font-mono')}>${xmlEscape(plantumlLabel(nodeStrip(node)))}</font>\\n${xmlEscape(plantumlLabel(title))}`;
+    const text = state === 'canceled' ? `<s>${xmlEscape(plantumlLabel(status))}</s>` : xmlEscape(plantumlLabel(status));
+    const chip = status !== "" ? `\\n<${brandColor(theme, `status-${state}-bg`)},${brandColor(theme, `status-${state}-border`)}>|<color:${brandColor(theme, `status-${state}-fg`)}> ${text} |` : '';
+    lines.push(`object "${label}${chip}" as ${plantumlAlias(node.id)}`);
   }
   if (graph.relationships.length > 0) lines.push("");
   for (const rel of graph.relationships) {
@@ -2101,9 +2156,9 @@ export function impactSubgraphFromNodeSet(
 }
 
 /** Render an analysis subgraph via the existing full-graph renderers. */
-export function renderAnalysisDiagram(format: AnalysisDiagramFormat, graph: Graph): string {
-  if (format === "mermaid") return renderMermaid(graph);
-  if (format === "dot") return renderDot(graph);
+export function renderAnalysisDiagram(format: AnalysisDiagramFormat, graph: Graph, theme: BrandTheme = "light"): string {
+  if (format === "mermaid") return renderMermaid(graph, theme);
+  if (format === "dot") return renderDot(graph, theme);
   return renderGraphml(graph);
 }
 
