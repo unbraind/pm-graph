@@ -73,3 +73,11 @@ fetching a different Git archive and rejects it. Registry package integrity
 values remain intact. A clean-cache installation reproduces the failure with
 the original Git entry and succeeds with commit-based identity. npm's Git fetcher
 also [ignores archive integrity for Git dependencies](https://github.com/npm/pacote/blob/main/lib/git.js).
+
+The pinned kit's Git prepare script invokes an extensionless compiler shim and
+does not run on Windows. The Windows lifecycle job installs locked artifacts
+without dependency scripts, then runs this package's own prepare through npm
+and the real command parser. Its strict merge-driver health, adversarial parser
+and coverage-path checks remain in place. Linux CI retains normal dependency
+lifecycles and both full release gates. The remaining Windows development-install limitation is tracked as
+pm-graph-brand-windows.
