@@ -1,0 +1,1330 @@
+{
+  "fixture": "test/fixtures/triplicate.json",
+  "fixtureSource": "https://github.com/unbraind/pm-brand/tree/7ad0970d96a20c24b8dbd9e0dcd1efeb8b4d5cc1/.agents/pm",
+  "beforeCommit": "596e437e1da88516eed0c17df51ecd7c28605b4c",
+  "rendererCommit": "dde757201b706e039c5da3b5d8a23720615279ca",
+  "rendererSha256": {
+    "src/index.ts": "3c075c6b7242e45fbedc1c7bade19e9da2a2d64174d10a57cee7c370d2145efb",
+    "src/brand.ts": "032945e6e193494347f33c5840528fe5c058b9ef7775d49573ae569d945b3c75",
+    "src/brand-values.ts": "0b1644efba51a063dd48c2f45c2ddd8f301215aec5c69cb6a1b0738e15c42114"
+  },
+  "browser": "Chrome for Testing 151.0.7922.34",
+  "engines": {
+    "mermaid": "12.2.0",
+    "graphvizWasm": "@viz-js/viz 3.31.0",
+    "plantuml": "1.2026.9 (Smetana layout)"
+  },
+  "reviewedScales": [
+    1,
+    2
+  ],
+  "externalRequests": {
+    "before": 0,
+    "after": 0
+  },
+  "mermaidComputedColorAssertions": "Canvas paper matches the resolved contract property in every theme, viewport and pixel scale.",
+  "cases": {
+    "before": [
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      }
+    ],
+    "after": [
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "light",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "dark",
+        "scale": 1,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 1440,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 1440,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 768,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 768,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 768,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 768,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "light",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(255, 255, 255)"
+      },
+      {
+        "name": "graph-mermaid",
+        "width": 390,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-dot",
+        "width": 390,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      },
+      {
+        "name": "graph-plantuml",
+        "width": 390,
+        "theme": "dark",
+        "scale": 2,
+        "scroll": false,
+        "actions": 0,
+        "animations": 0,
+        "minItemWidth": 390,
+        "maxItemHeight": 0,
+        "paper": "rgb(13, 17, 23)"
+      }
+    ]
+  },
+  "pngs": [
+    {
+      "path": "before/graph-dot-1440-dark.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "daa014014f114aebf5cb0078c62d66737e261f21a37aa0560843dd19a3088401"
+    },
+    {
+      "path": "before/graph-dot-1440-dark@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "c988943fd0196db8fe022831f18ab3ee2e26be75133e87497774ffce3f14f8c8"
+    },
+    {
+      "path": "before/graph-dot-1440-light.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "d3efdb18d788b9951e665ca10f6b518a99abf597fd04761567d63529a168c39d"
+    },
+    {
+      "path": "before/graph-dot-1440-light@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "2fca67f65798182dc764c7fe39b7740eca4ac0696f3b305e632608d107c7abff"
+    },
+    {
+      "path": "before/graph-dot-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "9919369499e24288066fd3d45ce782ea455e47dc6426865727fe5e5a804600a9"
+    },
+    {
+      "path": "before/graph-dot-390-dark@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "19ae777cd417a07a6c019636975b67d61b64ebaedd8412ecccf653fee69ddf30"
+    },
+    {
+      "path": "before/graph-dot-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "0fb447112405825bcee021a120f57dd6d84b95f85d9d4a8da95508bea3fc53d8"
+    },
+    {
+      "path": "before/graph-dot-390-light@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "8e81a57e7f935b5765fef14d7c67b9387eeaff79fd725f1078fcd52cc6b54070"
+    },
+    {
+      "path": "before/graph-dot-768-dark.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "652e8765e781fff275217f3517c9c45286139725be368493942436770ece018e"
+    },
+    {
+      "path": "before/graph-dot-768-dark@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "a82c79471b1a27df7d4bbbb47744fe202821d1e12b9de6bfcd3ce7d0f21e3566"
+    },
+    {
+      "path": "before/graph-dot-768-light.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "4986f93939fabb7e7c9504cb896979f50686ebbf8e9a6db3b89c773aeb3a275a"
+    },
+    {
+      "path": "before/graph-dot-768-light@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "d00a27dd8cdcf134e62f5c6ab7f020baae4c3ef815bef49d050330dd86cccd6c"
+    },
+    {
+      "path": "before/graph-mermaid-1440-dark.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "6083acfcf0efeedfa0112bff7e558031a6641c011a372f6213b8b9251dc95c79"
+    },
+    {
+      "path": "before/graph-mermaid-1440-dark@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "eb6938a0e7150f76157ba98cb2ad6ff600f37a625941f83e79b5fa5013bf89aa"
+    },
+    {
+      "path": "before/graph-mermaid-1440-light.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "8ca98c6bb9de53b765aa31335a7b37a4808ca475ab3063712bf9af1a5dc5f91d"
+    },
+    {
+      "path": "before/graph-mermaid-1440-light@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "edfebad1aef4bdfde72aa7977d97bf22ec1669dc834976e8b1d8de535f7334a1"
+    },
+    {
+      "path": "before/graph-mermaid-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "86d7fdae0f6ffc96796d7bd0eba27c06d479bae5de112aee83e72ebb459574dd"
+    },
+    {
+      "path": "before/graph-mermaid-390-dark@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "6222194a8c4e65cd8074e22f6f0bbc299c5bab4088aa9a983baa8b0705a73d7f"
+    },
+    {
+      "path": "before/graph-mermaid-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "c1aaea9920524426f6321399f6c76e412ddfe239d257c07675a1fa6135b7adaa"
+    },
+    {
+      "path": "before/graph-mermaid-390-light@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "e7465f7d91e38d79b18abba53c241bb7273c0a38f6999f139751ba3d9eee22ba"
+    },
+    {
+      "path": "before/graph-mermaid-768-dark.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "167eff004b36e9f19d3f9ca7acbac37f6a39f584e770fabbaecb5f90894f5a17"
+    },
+    {
+      "path": "before/graph-mermaid-768-dark@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "21ebedf707bbec120f286c910e848375b0bdec7849eb0eefb3e032f8859d6973"
+    },
+    {
+      "path": "before/graph-mermaid-768-light.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "9cf4204d5830a9809c5a627a0399cccc5ba88fa552b5050e3bbd98f3a69baa0d"
+    },
+    {
+      "path": "before/graph-mermaid-768-light@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "f6e6c204b17fc3128e9fc3abbd392ed7a4e31e4421e8db87dfbe66c3694be8ab"
+    },
+    {
+      "path": "before/graph-plantuml-1440-dark.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "ff52998c7fffbc7e0066c2f4de5352f849855282f6ed528804673e4d469c9868"
+    },
+    {
+      "path": "before/graph-plantuml-1440-dark@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "69cf86ce8b2e81e5230e72d920124b93bd4905087e441e318e5ccdea0522064f"
+    },
+    {
+      "path": "before/graph-plantuml-1440-light.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "a72c7ce0f95c699e19ebf07de69c9a1fec4cae8a4389a9ae5e02363d44aa87c5"
+    },
+    {
+      "path": "before/graph-plantuml-1440-light@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "ab9525150cbe28f6c579165f3726593f62f170c3957021aaf48b2e616675e0e7"
+    },
+    {
+      "path": "before/graph-plantuml-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "38d0bafda6c098c5fea46836d681eba63ea735c1c82e1596f84edb2d2f2b7484"
+    },
+    {
+      "path": "before/graph-plantuml-390-dark@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "c2f5daa89a52b4f4d21868a682a01dabb2f4c8e525a6dfb231618537d5771eb3"
+    },
+    {
+      "path": "before/graph-plantuml-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "385241cd041cba90b67414c384cb096d352e3dfe08d1009b43ffa5a2f4217b80"
+    },
+    {
+      "path": "before/graph-plantuml-390-light@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "939232bae4caedcd2edc6ff515d590da509693e923c1b0ff3175a7224f381667"
+    },
+    {
+      "path": "before/graph-plantuml-768-dark.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "c62967a8c5e3b36d5db4a0c8b39ae020aa68e9f58b56f604eaa91f563a9e095c"
+    },
+    {
+      "path": "before/graph-plantuml-768-dark@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "f54685e407ea5ace309be5e30c45898bddabdaffc38ff0f0df6f8af88e44b267"
+    },
+    {
+      "path": "before/graph-plantuml-768-light.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "a79e19a1751266b377e55633c37e8ecd0061c0989fe659c0ac2eae1b20e4a065"
+    },
+    {
+      "path": "before/graph-plantuml-768-light@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "a412fd49e393b0c65c5d8a41a09f036ac725c09b7e99eb0a57fe48864062d2ed"
+    },
+    {
+      "path": "after/graph-dot-1440-dark.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "a946406fa16aedb1b03252020cc6e2fe64340ebaaab9dc2ef2c7f5dadecbc429"
+    },
+    {
+      "path": "after/graph-dot-1440-dark@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "a30f1d3ee3f581f34fe99790a7b209b132d92fb07dd990d5bc8b19bb718b21a3"
+    },
+    {
+      "path": "after/graph-dot-1440-light.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "86c2211eeec0c1aa0907fbf8effdfa049ab8015cee07fa420d0c9fd1a6d8a310"
+    },
+    {
+      "path": "after/graph-dot-1440-light@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "8c76b6bdf317ac27bf763c4f9ee21d118db1e67b7af8e9a55e431da433260122"
+    },
+    {
+      "path": "after/graph-dot-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "d249936c6e892f154e65406aa165ebfbb92c311d8f66e80cf7cfc4d8e1dc7549"
+    },
+    {
+      "path": "after/graph-dot-390-dark@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "92b61682b08c592f602b6e391a640671f153dff61c67ad0084634477c735774e"
+    },
+    {
+      "path": "after/graph-dot-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "826ea4f89700a692c99d632990c9f49e118cb2dd8fec10a734e28e7ad01ff064"
+    },
+    {
+      "path": "after/graph-dot-390-light@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "140fdef0104bc2efb13ca8fffa70f02a1862f7d337640a15f983281a2f2f8fa6"
+    },
+    {
+      "path": "after/graph-dot-768-dark.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "5aa525b787bf6b0bf0a44efe26489ea8b678af3e78605b3d7f8b70e52f4b3602"
+    },
+    {
+      "path": "after/graph-dot-768-dark@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "f020ff13d07cd50ca30529bf4b171ebb62a15bac645e48f8639e6ea19d2b7051"
+    },
+    {
+      "path": "after/graph-dot-768-light.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "37f64afed0bb2a4183e0c8dc984c0543e4b97b4625c99e38ca5d15bfbc7b795e"
+    },
+    {
+      "path": "after/graph-dot-768-light@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "b5dae247b1a2fe04956031f6decd1a70cc1a38f9c5aed4ce3e2195930f2063cc"
+    },
+    {
+      "path": "after/graph-mermaid-1440-dark.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "745b2e32930988ab4cb26010188febee128059da1cabb26a454ecc34b92a6a59"
+    },
+    {
+      "path": "after/graph-mermaid-1440-dark@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "dab9bafc491c71333409a92d381d2143d9ca792e8fc145358ff697e7653a1802"
+    },
+    {
+      "path": "after/graph-mermaid-1440-light.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "b00c8054bf0d097491a8a0c54d1bb05bc9297dec3af8f5e074855035ba4693cb"
+    },
+    {
+      "path": "after/graph-mermaid-1440-light@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "a89a3923f1086fe9285174403644b181a7a47ece82d010cf8ea0a6354692a5f8"
+    },
+    {
+      "path": "after/graph-mermaid-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "085ae93a5bf81f4d8aecaf530c57d8d41e2bb41375f13192f9cc39e2552e0d01"
+    },
+    {
+      "path": "after/graph-mermaid-390-dark@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "e119dad99431178cb22b70cd73d6239666375eb61b9b8b215a07f24ba3012682"
+    },
+    {
+      "path": "after/graph-mermaid-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "19adb2f9cbd5fb1afc3941a76b5dae1e58bb8dc99ca2dce111cbdb1d547b4faf"
+    },
+    {
+      "path": "after/graph-mermaid-390-light@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "a83b8dd7bb1942a54a736056ac0fcd10b1ee759f6b7e3600b782e089b74deb3f"
+    },
+    {
+      "path": "after/graph-mermaid-768-dark.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "7fe764084487d499cb992ddf17be329d1638d5ddb81f4465f1cec794efeb8ee0"
+    },
+    {
+      "path": "after/graph-mermaid-768-dark@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "1d347f71013a650f03e3926f54c402e99d95fd44700714593a1a98721d63d426"
+    },
+    {
+      "path": "after/graph-mermaid-768-light.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "b378c99465c328b1794ce0b3f0eea25e47bd790001956d1ecc9c47513722132b"
+    },
+    {
+      "path": "after/graph-mermaid-768-light@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "d8b7e601ac5c10fe22932f471ad9dc65a61cf39c3caa3a621050501c0a11a1ff"
+    },
+    {
+      "path": "after/graph-plantuml-1440-dark.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "a0ca29fc0109e0616f7b628d1b96809a2180de89e5bedfeb185b92144af13597"
+    },
+    {
+      "path": "after/graph-plantuml-1440-dark@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "c8163ea38db386465fd6b04b6c065db19a053ac8ce5ae23fddb668f01a813026"
+    },
+    {
+      "path": "after/graph-plantuml-1440-light.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "946ce03a01c79fc6d3b7d3820a6f235acfc3796cd46a34b1e4a7e47910ec2fea"
+    },
+    {
+      "path": "after/graph-plantuml-1440-light@2x.png",
+      "width": 2880,
+      "height": 2000,
+      "sha256": "e1be04899c20be214d2c56f5807876709e6203d485a8d66d30aacb268f8b5c1e"
+    },
+    {
+      "path": "after/graph-plantuml-390-dark.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "c0ea1c3eb8ac669cf90b7fa0333a6bbe363e23c73f8e0a393b7571f3efee77c0"
+    },
+    {
+      "path": "after/graph-plantuml-390-dark@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "9a54d2d82f341fa2f8fbeda1cf8be61ba27b2518903b21e560f2085d401bf213"
+    },
+    {
+      "path": "after/graph-plantuml-390-light.png",
+      "width": 390,
+      "height": 1000,
+      "sha256": "a013c82fecf523346698dffe61488156d8c227a06d40f1fd466947b370d1cd79"
+    },
+    {
+      "path": "after/graph-plantuml-390-light@2x.png",
+      "width": 780,
+      "height": 2000,
+      "sha256": "07a1b52b9394b46fa40688c32cde5efed4a08cc59c70188c02c140fc84c902c7"
+    },
+    {
+      "path": "after/graph-plantuml-768-dark.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "1926d761fbecba62abf9195586276de574aa9c9015162a4876a0e58df7c798fe"
+    },
+    {
+      "path": "after/graph-plantuml-768-dark@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "c8a60e33d0541ab39ca27770c8aa134779734ef779e46173006ca76994b8fa71"
+    },
+    {
+      "path": "after/graph-plantuml-768-light.png",
+      "width": 768,
+      "height": 1000,
+      "sha256": "440911ee2fae17a0d756f0a1885ca3f22785b7e0a71bfee6b6597bdd57435fc7"
+    },
+    {
+      "path": "after/graph-plantuml-768-light@2x.png",
+      "width": 1536,
+      "height": 2000,
+      "sha256": "438d0f1e0216a23be48146def504e67eb51fe0d48386c5bddc147cc40d241888"
+    }
+  ]
+}
