@@ -14,7 +14,7 @@ import {
 import type { ExtensionCommandReadOutput } from "@unbrained/pm-cli/sdk/authoring";
 import { runGraph, type GraphCommandOptions } from "@unbrained/pm-cli/sdk/graph";
 
-const EXTENSION_VERSION = "2026.10.16";
+const EXTENSION_VERSION = "2026.10.17";
 
 // ---------------------------------------------------------------------------
 // Error contract
