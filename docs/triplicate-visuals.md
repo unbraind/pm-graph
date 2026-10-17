@@ -66,3 +66,10 @@ For explicit dark exports, renderer callers can use
 Mermaid accepts the same optional theme argument. No renderer or font service is
 contacted by the package. Review rasterization runs Mermaid, Graphviz WASM and
 PlantUML locally.
+
+The Git devDependency is locked by its exact commit. Its npm lock entry omits the
+optional prepared-archive integrity field: Bun 1.4.3 imports that hash while
+fetching a different Git archive and rejects it. Registry package integrity
+values remain intact. A clean-cache installation reproduces the failure with
+the original Git entry and succeeds with commit-based identity. npm's Git fetcher
+also [ignores archive integrity for Git dependencies](https://github.com/npm/pacote/blob/main/lib/git.js).
