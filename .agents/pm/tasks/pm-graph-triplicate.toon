@@ -6,13 +6,14 @@ status: in_progress
 priority: 2
 tags: []
 created_at: "2026-10-17T09:27:51.195Z"
-updated_at: "2026-10-17T10:12:53.677Z"
+updated_at: "2026-10-17T10:50:59.381Z"
 assignee: codex-agent
 claim_principal: codex-agent
 author: codex-agent
-comments[2]{created_at,author,text}:
+comments[3]{created_at,author,text}:
   "2026-10-17T09:28:13.055Z",codex-agent,"Design: form-paper canvas and ruled top sheets; carbon text, Martian Mono ids and dates, explicit status labels and contract chip fills. Canary and rose only convey in_progress and blocked. Brand values are generated at build time from an exact devDependency; published runtime has no brand dependency or CDN fetches. Existing scheduling, graph edges and serialization stay intact."
   "2026-10-17T10:12:53.675Z",codex-agent,"Visual formats are Mermaid flowcharts, DOT and PlantUML; interchange schemas remain unchanged. Each uses ruled sheets, a real mono form strip and explicit filled/outlined status cells. DOT/PlantUML accept literal dark palettes through renderer arguments; Mermaid adapts scoped CSS. Browser review caught ignored directives and variables rejected in Mermaid source style declarations; these now use a leading directive, scoped CSS values and a literal border declaration. Behavioral revert proof restores only each of the three renderers in turn: the unchanged real-tracker regression fails 1/1 each; the restored implementation passes 1/1. The README embeds pm-brand banner commit 5c80a2b707f3a00afe986e81e520843b86f3ee83. Full gates are pending."
+  "2026-10-17T10:50:59.381Z",codex-agent,"Render review caught a Mermaid canvas rule rejected because bare declarations preceded it. Removed the invalid declarations and themed nested edge-label backgrounds. Real-tracker focused tests pass 5/5; scoped renderer revert proofs remain 1/1 failures for each of Mermaid, DOT and PlantUML, with 1/1 passes restored. Full computed-color browser checks and release gates are being rerun on the corrected implementation."
 files[9]{path,scope}:
   scripts/brand-values.ts,project
   src/brand-values.ts,project

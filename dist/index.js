@@ -1090,13 +1090,12 @@ function diagramLabel(node) {
 function renderMermaid(graph, theme = "light") {
     const chipCss = brandStatuses.map(status => `.pm-status-${status}{color:var(--pm-status-${status}-fg);background:var(--pm-status-${status}-bg);border:1px solid var(--pm-status-${status}-border);${status === "canceled" ? "text-decoration:line-through;" : ""}}`).join("\n");
     const css = brandCss + `
-    background:var(--pm-paper);color:var(--pm-carbon);
     .cluster rect{fill:var(--pm-paper);stroke:none}.node{filter:none}.node rect{filter:none;fill:var(--pm-sheet);stroke:var(--pm-rule);stroke-width:1px;rx:6px}
     .pm-strip{font-family:var(--pm-font-mono);font-size:11px;color:var(--pm-graphite)}
     .pm-title{font-family:var(--pm-font-body);color:var(--pm-carbon)}
     .pm-chip{display:inline-block;font-family:var(--pm-font-mono);font-size:11px;padding:2px 6px;border-radius:3px;margin-top:8px}
     .label,.label text,span{color:var(--pm-carbon);fill:var(--pm-carbon)}
-    .edgeLabel{color:var(--pm-graphite);background:var(--pm-paper)}
+    .edgeLabel,.edgeLabel p,.labelBkg{color:var(--pm-graphite);background-color:var(--pm-paper)!important;fill:var(--pm-paper)}
     .flowchart-link{stroke:var(--pm-graphite)!important}.marker{stroke:var(--pm-graphite);fill:var(--pm-graphite)}
     @media(prefers-reduced-motion:reduce){*{animation:none;transition:none}}
   ` + chipCss;
