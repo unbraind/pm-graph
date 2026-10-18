@@ -6,11 +6,9 @@ status: in_progress
 priority: 2
 tags: []
 created_at: "2026-10-17T09:27:51.195Z"
-updated_at: "2026-10-18T03:42:51.999Z"
-assignee: codex-agent
-claim_principal: codex-agent
+updated_at: "2026-10-18T03:53:36.034Z"
 author: codex-agent
-comments[12]{created_at,author,text}:
+comments[13]{created_at,author,text}:
   "2026-10-17T09:28:13.055Z",codex-agent,"Design: form-paper canvas and ruled top sheets; carbon text, Martian Mono ids and dates, explicit status labels and contract chip fills. Canary and rose only convey in_progress and blocked. Brand values are generated at build time from an exact devDependency; published runtime has no brand dependency or CDN fetches. Existing scheduling, graph edges and serialization stay intact."
   "2026-10-17T10:12:53.675Z",codex-agent,"Visual formats are Mermaid flowcharts, DOT and PlantUML; interchange schemas remain unchanged. Each uses ruled sheets, a real mono form strip and explicit filled/outlined status cells. DOT/PlantUML accept literal dark palettes through renderer arguments; Mermaid adapts scoped CSS. Browser review caught ignored directives and variables rejected in Mermaid source style declarations; these now use a leading directive, scoped CSS values and a literal border declaration. Behavioral revert proof restores only each of the three renderers in turn: the unchanged real-tracker regression fails 1/1 each; the restored implementation passes 1/1. The README embeds pm-brand banner commit 5c80a2b707f3a00afe986e81e520843b86f3ee83. Full gates are pending."
   "2026-10-17T10:50:59.381Z",codex-agent,"Render review caught a Mermaid canvas rule rejected because bare declarations preceded it. Removed the invalid declarations and themed nested edge-label backgrounds. Real-tracker focused tests pass 5/5; scoped renderer revert proofs remain 1/1 failures for each of Mermaid, DOT and PlantUML, with 1/1 passes restored. Full computed-color browser checks and release gates are being rerun on the corrected implementation."
@@ -23,6 +21,7 @@ comments[12]{created_at,author,text}:
   "2026-10-18T03:07:38.759Z",codex-agent,"Additional issue 146 reproduced at the HTML-label escape path. Add literal backslash escaping and explicit BR elements for titles, strips and status cells, exercised with local Graphviz WASM because the native dot binary is unavailable. Consolidate revert probes in the existing harness to preserve zero duplication."
   "2026-10-18T03:35:08.346Z",codex-agent,"Round 2 evidence: all three review/issue function-only reverts fail their retained regression independently, then pass when restored. The focused renderer file passes 4/4. Browser captures cover all three visual formats at 1440/768/390 in both themes; all 18 after cases have no overflow, motion or interactive actions and zero external requests. Mermaid paper is checked against its selected theme. Main-based before and updated after evidence is under pr-screenshots/brand/triplicate-visuals/round2."
   "2026-10-18T03:42:51.999Z",codex-agent,"Prepared all requested renderer fixes and revert proofs. Typecheck, lint, 0% duplication and focused 4/4 tests pass. Full local release validation under heavy resource contention has an existing Neo4j connection-error timing assertion failure; its 5-second threshold is unchanged. Push the prepared tree for exact-head CI validation, then record complete gate receipts before handoff."
+  "2026-10-18T03:53:29.226Z",codex-agent,"Exact-head CI run 39094633261 at 3b24e69ac4b78d5c255a924c9fafce373a4bbb65 passes Node 22, Node 26 and the Windows lifecycle job. Node 26 npm run release:check and bun run release:check each pass 355/355 tests, zero failures/cancellations/skips/TODOs; coverage is 99.72% lines, 95.25% branches and 100% functions across all 13 gated sources. Thresholds remain unchanged. Three independent function reverts fail 1/1 each and restored functions pass 1/1 each; focused renderer suite passes 4/4. The unchanged local Neo4j timing control passes 1/1 in isolation; resource-contention full local runs are not counted as passing and were stopped after complete CI gates passed. No threads are resolved and no release occurs. Release ownership for orchestrator verification; item remains in progress."
 files[9]{path,scope}:
   scripts/brand-values.ts,project
   src/brand-values.ts,project
@@ -38,9 +37,10 @@ tests[4]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   "env HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 npm run release:check",project,codex-agent,"2026-10-17T11:29:14.582Z",local_mutation,brand/triplicate-visuals
   "env HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 bun run release:check",project,codex-agent,"2026-10-17T11:29:16.433Z",local_mutation,brand/triplicate-visuals
   node test/revert-triplicate.ts --review,project,codex-agent,"2026-10-18T03:07:35.504Z",local_mutation,brand/triplicate-visuals
-docs[4]{path,scope}:
+docs[5]{path,scope}:
   docs/triplicate-browser-checks.json,project
   docs/triplicate-round2-browser-checks.json,project
   docs/triplicate-visuals.md,project
+  "https://github.com/unbraind/pm-graph/actions/runs/39094633261",project
   README.md,project
 body: ""
