@@ -157,7 +157,7 @@ test("sync rejects read controls before any provider write", () => {
 test("raw exports remain documents; universal controls select structured rows", () => {
   const ordinary = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "export", "--format", "mermaid"]);
   assert.equal(ordinary.status, 0, ordinary.stderr);
-  assert.match(ordinary.stdout, /^graph TD/);
+  assert.match(ordinary.stdout, /^%%\{init:[^\n]+\}%%\ngraph TD\n/u);
   const structured = pm(["pm-graph", "export", "--format", "mermaid", "--output-include", "graph.nodes.id", "--output-budget", "unbounded"]);
   assert.equal(rows(structured, "graph.nodes").filter((row) => ids.includes((row as { id: string }).id)).length, ids.length);
   const path = join(workspace, "must-not-exist.mmd");

@@ -198,7 +198,7 @@ test("export --format dot emits a Graphviz digraph", { skip: !pmAvailable }, asy
     const raw = await runExportRaw(harness, pmRoot, "dot");
     assert.ok(raw.startsWith("digraph pm_graph {"), "real Graphviz digraph header");
     assert.ok(raw.includes("rankdir=LR;"), "rankdir directive present");
-    assert.ok(raw.includes('[shape=box, style=rounded];'), "node style declaration present");
+    assert.ok(raw.includes('node [shape=plain,') && raw.includes('TABLE BORDER="1"'), "ruled HTML sheet declaration present");
     assert.ok(raw.trim().endsWith("}"), "digraph closes with a brace");
   });
 });

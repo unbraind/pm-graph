@@ -38,7 +38,7 @@ test("critical-path --format mermaid prints a diagram and keeps the result objec
 
     // mermaid: prints a mermaid diagram containing exactly the chain nodes.
     const mermaid = await captureStdout(() => run({ cwd: ws, args: ["--format", "mermaid"] }));
-    assert.ok(mermaid.stdout.startsWith("graph TD"), "mermaid diagram printed");
+    assert.ok(/^%%\{init:[^\n]+\}%%\ngraph TD\n/u.test(mermaid.stdout), "mermaid diagram printed");
     for (const id of chain) {
       assert.ok(mermaid.stdout.includes(`n_${id.replace(/[^A-Za-z0-9_]/g, "_")}[`), `chain node ${id} present`);
     }

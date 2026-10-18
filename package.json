@@ -4,7 +4,7 @@
   "description": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run brand:build && tsc",
     "build:test": "tsc -p tsconfig.test.json",
     "typecheck": "tsc --noEmit",
     "prepare": "node scripts/prepare-merge-driver.ts",
@@ -17,7 +17,7 @@
     "changelog": "pm-changelog --pm-root .agents/pm --mode prepend --output CHANGELOG.md --release-version-from-package --date-from-version --since-previous-tag --until-release-tag --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --pm-arg=--output-budget --pm-arg=unbounded --pm-arg=--output-limit --pm-arg=unbounded",
     "changelog:full": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --date-from-version --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --pm-arg=--output-budget --pm-arg=unbounded --pm-arg=--output-limit --pm-arg=unbounded",
     "changelog:check": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --date-from-version --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --check --pm-arg=--output-budget --pm-arg=unbounded --pm-arg=--output-limit --pm-arg=unbounded",
-    "release:check": "npm run typecheck && npm run lint && npm run duplication && npm run build && npm run docstring && npm run coverage && npm run audit:prod && npm run pack:dry-run && npm run changelog:check && npm run verify:release-publish-attestation && npm run verify:release-changelog-date",
+    "release:check": "npm run brand:check && npm run typecheck && npm run lint && npm run duplication && npm run build && npm run docstring && npm run coverage && npm run audit:prod && npm run pack:dry-run && npm run changelog:check && npm run verify:release-publish-attestation && npm run verify:release-changelog-date",
     "prepack": "npm run build",
     "test": "npm run build && npm run build:test && node --test test/*.test.ts",
     "prepublishOnly": "npm run release:check",
@@ -25,7 +25,9 @@
     "merge:install": "pm merge install",
     "coverage": "npm run build && npm run build:test && node scripts/coverage-gate.ts",
     "verify:release-publish-attestation": "node scripts/verify-release-publish-attestation.ts",
-    "verify:release-changelog-date": "node scripts/verify-release-changelog-date.ts"
+    "verify:release-changelog-date": "node scripts/verify-release-changelog-date.ts",
+    "brand:build": "node scripts/brand-values.ts",
+    "brand:check": "node scripts/brand-values.ts --check"
   },
   "dependencies": {
     "neo4j-driver": "^6.2.0"
@@ -35,8 +37,10 @@
     "@babel/plugin-syntax-typescript": "8.0.3",
     "@types/node": "26.6.5",
     "@unbrained/pm-cli": "2026.10.13",
+    "@viz-js/viz": "3.31.0",
     "eslint": "10.12.0",
     "jscpd": "5.4.1",
+    "pm-brand": "github:unbraind/pm-brand#7ad0970d96a20c24b8dbd9e0dcd1efeb8b4d5cc1",
     "pm-changelog": "2026.10.13",
     "pm-ops": "2026.10.14",
     "typescript": "7.0.2"
