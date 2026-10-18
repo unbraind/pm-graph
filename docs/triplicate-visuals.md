@@ -54,7 +54,7 @@ formats. GraphML, Cypher and JSON are interchange data and keep their schemas.
 Graph nodes, ids, directed edges, analytics and shaping behavior are preserved.
 
 Mermaid initialization precedes `graph TD`, uses classic ruled sheets and real
-status chips, and adapts its scoped CSS to the browser theme. A borderless paper
+status chips, and fixes its scoped CSS to the explicitly selected light or dark theme. A borderless paper
 container supplies the ground without adding a graph-model node. Hosts must retain
 the initialization directive and scoped CSS; use DOT/PlantUML when they strip it.
 

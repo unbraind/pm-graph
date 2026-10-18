@@ -1,10 +1,12 @@
 /** Exercise branded output using real disposable tracker documents, never mocked SDK reads. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { instance } from '@viz-js/viz';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PmClient, listAllComplete, certifyCompleteListResult, type ItemMetadata } from '@unbrained/pm-cli/sdk';
+import { brandValues } from '../src/brand-values.ts';
 import { renderAnalysisDiagram,renderPlantuml,graphFromItems,type Graph } from '../src/index.ts';
 
 test('real tracker states retain labels, form strips, edges and deterministic Triplicate output', async () => {
@@ -38,4 +40,56 @@ test('real tracker states retain labels, form strips, edges and deterministic Tr
       assert.match(uml,/<s>canceled<\/s>/u); assert.match(uml,/skinparam shadowing false/u);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test('explicit Mermaid themes emit one palette even when the host prefers the opposite scheme', () => {
+  const graph: Graph = { workspace: 'synthetic', projectKey: 'fixture', nodes: [], relationships: [], generatedAt: 'fixture' };
+  for (const theme of ['light', 'dark'] as const) {
+    const output = renderAnalysisDiagram('mermaid', graph, theme);
+    const config = JSON.parse(output.slice('%%{init: '.length, output.indexOf('}%%'))) as { themeVariables: { darkMode: boolean }; themeCSS: string };
+    assert.equal(config.themeVariables.darkMode, theme === 'dark');
+    assert.match(config.themeCSS, new RegExp(`--pm-paper:${brandValues[theme].paper}`, 'u'));
+    assert.ok(!config.themeCSS.includes(brandValues[theme === 'light' ? 'dark' : 'light'].paper));
+    assert.doesNotMatch(config.themeCSS, /prefers-color-scheme|data-theme/u);
+    assert.match(config.themeCSS, /prefers-reduced-motion/u);
+  }
+});
+
+test('PlantUML custom status metacharacters stay inside a single literal cell', () => {
+  const graph: Graph = { workspace: 'synthetic', projectKey: 'fixture', nodes: [{ id: 'custom', labels: ['PmItem'], properties: {
+    title: 'Fixture', status: 'review|**bold**//italic//__under__--strike--~~wave~~[[link]]\\n<&>',
+  } }], relationships: [], generatedAt: 'fixture' };
+  for (const theme of ['light', 'dark'] as const) {
+    const output = renderPlantuml(graph, theme);
+    const line = output.split('\n').find(line => line.startsWith('object '))!;
+    assert.equal(line.split('|').length - 1, 2, 'only generated table separators remain');
+    assert.ok(line.includes('review<U+007C><U+002A><U+002A>bold'));
+    assert.ok(line.includes('<U+002F><U+002F>italic'));
+    assert.ok(line.includes('<U+005F><U+005F>under'));
+    assert.ok(line.includes('<U+002D><U+002D>strike'));
+    assert.ok(line.includes('<U+007E><U+007E>wave'));
+    assert.ok(line.includes('<U+005B><U+005B>link<U+005D><U+005D><U+005C>n&lt;&amp;&gt;'));
+  }
+});
+
+
+test('Graphviz HTML labels preserve literal substitutions, paths, XML text and title line breaks', async () => {
+  const graph: Graph = { workspace: 'synthetic', projectKey: 'fixture', nodes: [{ id: 'task\\N', labels: ['Task'], properties: {
+    title: 'line one\nline two \\N \\G C:\\work\\notes "quotes" & <text>',
+    type: 'Task\\G\nsecond type', status: 'review\\N|C:\\work & "quoted"\nsecond status',
+  } }], relationships: [], generatedAt: 'fixture' };
+  const viz = await instance();
+  for (const theme of ['light', 'dark'] as const) {
+    const svg = viz.renderString(renderAnalysisDiagram('dot', graph, theme), { format: 'svg' });
+    const texts = [...svg.matchAll(/<text\b[^>]*>(.*?)<\/text>/gsu)].map(match => match[1]
+      .replace(/&#(?:x([\da-f]+)|(\d+));/giu, (_entity, hex: string | undefined, decimal: string | undefined) => String.fromCodePoint(parseInt(hex ?? decimal!, hex ? 16 : 10)))
+      .replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+    assert.ok(texts.includes('line one'), JSON.stringify(texts));
+    assert.ok(texts.includes('line two \\N \\G C:\\work\\notes "quotes" & <text>'), JSON.stringify(texts));
+    assert.ok(texts.includes('task\\N · Task\\G'), JSON.stringify(texts));
+    assert.ok(texts.includes('second type'), JSON.stringify(texts));
+    assert.ok(texts.includes('review\\N|C:\\work & "quoted"'), JSON.stringify(texts));
+    assert.ok(texts.includes('second status'), JSON.stringify(texts));
+  }
 });

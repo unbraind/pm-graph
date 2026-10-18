@@ -29,7 +29,7 @@ export const brandCss = Object.entries(brandValues).map(([theme, values]) => {
 /** Configure Mermaid with a local font stack and theme values, never a font URL. */
 export function mermaidBrand(themeCss: string, theme: BrandTheme = 'light'): string {
   const values = brandValues[theme];
-  const themeStyles = theme === 'dark' ? themeCss.replace(brandCss, `*{${Object.entries(values).map(([name, value]) => `--pm-${name}:${value}`).join(';')};color-scheme:dark}`) : themeCss;
+  const themeStyles = themeCss.replace(brandCss, `*{${Object.entries(values).map(([name, value]) => `--pm-${name}:${value}`).join(';')};color-scheme:${theme}}`);
   return '%%{init: ' + JSON.stringify({ theme: 'base', look: 'classic', fontFamily: values['font-mono'], themeVariables: {
     darkMode: theme === 'dark', background: values.paper, primaryColor: values.sheet,
     primaryTextColor: values.carbon, primaryBorderColor: values.carbon,

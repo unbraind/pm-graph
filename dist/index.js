@@ -1147,6 +1147,10 @@ function nodeStrip(node) {
 function diagramFont(theme, role) {
     return brandValue(theme, role).replace(/"/g, '');
 }
+/** Protect literal user text from Graphviz substitutions while retaining intentional line breaks. */
+function dotHtmlText(value) {
+    return xmlEscape(value).replace(/\\/gu, '\\\\').replace(/\r\n|[\r\n]/gu, '<BR ALIGN="LEFT"/>');
+}
 /** Render Graphviz sheets and nested status cells, preserving every node id and directed edge. */
 function renderDot(graph, theme = "light") {
     const paper = brandValue(theme, 'paper');
@@ -1166,9 +1170,9 @@ function renderDot(graph, theme = "light") {
         const fg = brandColor(theme, `status-${state}-fg`);
         const bg = brandColor(theme, `status-${state}-bg`);
         const border = brandColor(theme, `status-${state}-border`);
-        const statusText = state === 'canceled' ? `<S>${xmlEscape(status)}</S>` : xmlEscape(status);
+        const statusText = state === 'canceled' ? `<S>${dotHtmlText(status)}</S>` : dotHtmlText(status);
         const chip = status !== "" ? `<TR><TD ALIGN="LEFT"><TABLE BORDER="1" COLOR="${border}" BGCOLOR="${bg}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4"><TR><TD><FONT FACE="${mono}" POINT-SIZE="11" COLOR="${fg}">${statusText}</FONT></TD></TR></TABLE></TD></TR>` : '';
-        const label = `<TABLE BORDER="1" COLOR="${rule}" BGCOLOR="${sheet}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="8" STYLE="ROUNDED"><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(nodeStrip(node).length * 8 + 20)}"><FONT FACE="${mono}" POINT-SIZE="10" COLOR="${brandValue(theme, 'graphite')}">${xmlEscape(nodeStrip(node))}</FONT></TD></TR><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(title.length * 8 + 20)}"><FONT FACE="${body}" POINT-SIZE="12" COLOR="${carbon}">${xmlEscape(title)}</FONT></TD></TR>${chip}</TABLE>`;
+        const label = `<TABLE BORDER="1" COLOR="${rule}" BGCOLOR="${sheet}" CELLBORDER="0" CELLSPACING="0" CELLPADDING="8" STYLE="ROUNDED"><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(nodeStrip(node).length * 8 + 20)}"><FONT FACE="${mono}" POINT-SIZE="10" COLOR="${brandValue(theme, 'graphite')}">${dotHtmlText(nodeStrip(node))}</FONT></TD></TR><TR><TD ALIGN="LEFT" WIDTH="${Math.ceil(title.length * 8 + 20)}"><FONT FACE="${body}" POINT-SIZE="12" COLOR="${carbon}">${dotHtmlText(title)}</FONT></TD></TR>${chip}</TABLE>`;
         lines.push(`  "${dotEscape(node.id)}" [label=<${label}>, tooltip="${dotEscape(diagramLabel(node))}"];`);
     }
     for (const rel of graph.relationships) {
@@ -1260,6 +1264,10 @@ function plantumlAlias(id) {
 function plantumlLabel(s) {
     return s.replace(/"/g, "'").replace(/\n/g, " ").trim();
 }
+/** Preserve literal status text inside a Creole cell, including table and formatting metacharacters. */
+function plantumlStatus(status) {
+    return xmlEscape(plantumlLabel(status)).replace(/[|~*/[\]\\]|_{2,}|-{2,}/gu, value => [...value].map(character => `<U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}>`).join(''));
+}
 /**
  * Render a PlantUML object diagram (`@startuml`…`@enduml`) with one object per
  * node and one arrow per relationship, the relationship type as the arrow
@@ -1280,7 +1288,7 @@ export function renderPlantuml(graph, theme = "light") {
         const { title, status } = nodeLabelParts(node);
         const state = brandStatus(status);
         const label = `<font:${diagramFont(theme, 'font-mono')}>${xmlEscape(plantumlLabel(nodeStrip(node)))}</font>\\n${xmlEscape(plantumlLabel(title))}`;
-        const text = state === 'canceled' ? `<s>${xmlEscape(plantumlLabel(status))}</s>` : xmlEscape(plantumlLabel(status));
+        const text = state === 'canceled' ? `<s>${plantumlStatus(status)}</s>` : plantumlStatus(status);
         const chip = status !== "" ? `\\n<${brandColor(theme, `status-${state}-bg`)},${brandColor(theme, `status-${state}-border`)}>|<color:${brandColor(theme, `status-${state}-fg`)}> ${text} |` : '';
         lines.push(`object "${label}${chip}" as ${plantumlAlias(node.id)}`);
     }
