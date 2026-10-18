@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph } from "@unbrained/pm-cli/sdk/graph";
-const EXTENSION_VERSION = "2026.10.17";
+const EXTENSION_VERSION = "2026.10.18";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
