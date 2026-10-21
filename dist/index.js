@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { registerSnapshotImpact } from "./snapshot-impact-command.js";
+export { compareGraphSnapshots } from "./snapshot-impact.js";
 import { brandCss, brandStatus, brandStatuses, brandValue, brandColor, mermaidBrand } from "./brand.js";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -2391,6 +2393,7 @@ async function loadShapedAnalytics(context) {
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api) {
+    registerSnapshotImpact(api);
     // The `pm-graph export --format <fmt>` handler renders the graph into a
     // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
     // and returns it wrapped in a marker object. The host renders command

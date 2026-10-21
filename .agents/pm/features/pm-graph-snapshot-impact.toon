@@ -1,0 +1,32 @@
+id: pm-graph-snapshot-impact
+title: Compare snapshot graph impact for resuming agents
+description: "Compare two explicit SDK-projected graph snapshots for changes in reachability, minimal blocker cuts and evidence support across backends; no snapshot capture or resume packet storage."
+type: Feature
+status: in_progress
+priority: 2
+tags: []
+created_at: "2026-10-21T21:36:13.954Z"
+updated_at: "2026-10-21T21:49:27.627Z"
+author: codex-agent
+acceptance_criteria: "Reordered unchanged input yields no changes; Removed nodes preserve explanation context; Bounded outputs expose omissions; Typed SDK and CLI with remedies, compact JSON/TOON, no-git tests and public tracker validation"
+comments[4]{created_at,author,text}:
+  "2026-10-21T21:36:16.231Z",codex-agent,"Overlap rechecked against the installed core SDK workspace-snapshot surface (capture, inspect, restore plans), pm-context README/context-receipts (resume packs and receipts), pm-graph impact/explain (single-state traversal), and open PR #154 (minimalBlockerCuts). This feature compares explicit Graph SDK values projected via graphFromItems; it will reuse the exact blocker-cuts module/tests from PR #154, not invent a second cut algorithm. Evidence support is the set of explicit SUPPORTS/EVIDENCE_FOR edges reaching each goal or its prerequisite cone; existence is structural support, not verification of linked content. No tracker entries from reconciliation PR #155 or blocker-cuts PR #154 will be changed. Host npm required a clean user config for npm ci because inherited allow-scripts broke Git dependency preparation; pins unchanged."
+  "2026-10-21T21:42:22.554Z",codex-agent,"Implemented compareGraphSnapshots plus snapshot-impact CLI over two explicit JSON Graph values (or graph export envelopes). Both use one exact goal and known gating-edge policy. Reachability includes terminal items; minimal cuts use the reused PR #154 active-frontier semantics. Support edges into the goal/prerequisite cone are compared as structural evidence facts. Input caps, work caps, clipped explanation text, deterministic pagination and typed nonzero refusals are explicit. Focused pure tests currently pass 17/17, including the reused 1024-DAG oracle. Typecheck, lint, docstrings and zero-duplication checks pass; installed no-git CLI validation is in progress."
+  "2026-10-21T21:47:26.011Z",codex-agent,"Public main tracker at f46704ef4083287ba54766a8a03e6e09df7ec7d6 was copied read-only into a non-git temporary directory. Certified 99/99 unique items; explicit doc-evidence adapter yielded 212 nodes, 379 relationships and 30 support links. All 99 reordered-goal comparisons produced zero changes/refusals. In-memory prerequisite removal produced 3 changes; support removal produced 1; limit=1 exposed 2 omissions and recovered all 3 rows. Full removal JSON was 1502 bytes; validation after source read took 695.23 ms. Independent file-name/byte digest unchanged. Revert proof: only compareGraphSnapshots was changed to read the before snapshot on both sides, restoring single-state behavior; 7 of 9 pure comparison tests failed (exit 1). Restored implementation passed the PM-linked 19/19 focused tests; final rebuild and focused coverage checks follow. Output explanations are now materialized only for the requested page, so omissions do not allocate duplicate context text. Shared blocker-cuts source/tests match PR #154 exactly."
+  "2026-10-21T21:49:27.627Z",codex-agent,"Final focused checks passed 19/19 with zero failures/skips; focused new-module coverage measured 99.67% lines, 97.72% branches and 100% functions. Rebuild, source/test typechecks, lint, docstring gate (126 documented declarations) and duplication gate (0%) passed. Added earlier-node context to INCOMPLETE_GRAPH refusals for deletion leaving a dangling reference; its pure regressions pass 9/9 after the final change. Local strict health reported lifecycle-managed merge_fence_drift against main tracked configuration and advisory stale existing items; those unrelated records/configuration are unchanged per scope. CI npm ci will prepare its own managed configuration before health. Full npm and Bun release gates are intentionally delegated to CI due host CPU saturation; no thresholds changed. Item remains in_progress and released for orchestrator verification."
+files[8]{path,scope}:
+  src/blocker-cuts.ts,project
+  src/index.ts,project
+  src/snapshot-impact-command.ts,project
+  src/snapshot-impact.ts,project
+  test/blocker-cuts.test.ts,project
+  test/snapshot-impact-command.test.ts,project
+  test/snapshot-impact-public.validation.ts,project
+  test/snapshot-impact.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/snapshot-impact.test.ts test/snapshot-impact-command.test.ts test/blocker-cuts.test.ts,project,codex-agent,"2026-10-21T21:42:30.322Z",local_mutation,feat/snapshot-change-impact
+docs[3]{path,scope}:
+  docs/snapshot-impact-example.md,project
+  docs/snapshot-impact-validation.md,project
+  README.md,project
+body: ""

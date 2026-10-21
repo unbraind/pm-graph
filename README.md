@@ -458,6 +458,70 @@ pm pm-graph impact pm-vc4q --json
 { "ok": true, "id": "pm-vc4q", "count": 3, "impacted": ["pm-0wtl", "pm-8k1m", "pm-yol1"] }
 ```
 
+## Snapshot graph change impact
+
+`compareGraphSnapshots(before, after, goal, options?)` compares two explicit
+`Graph` SDK values. The CLI accepts regular JSON files containing those values
+or the existing export command's `{ graph: ... }` envelope:
+
+```bash
+pm pm-graph snapshot-impact before.json after.json goal-id --limit 16 --json
+pm pm-graph snapshot-impact before.json after.json goal-id --limit 16 --offset 16
+```
+
+The result reports gained/lost upstream prerequisites and downstream dependents,
+added/removed minimal blocker frontiers, and explicit `SUPPORTS`/`EVIDENCE_FOR`
+links into the goal or its upstream prerequisites. Removed facts carry the
+earlier node title and status, even if that node was deleted. A deleted goal is
+valid when it exists in the earlier snapshot. Reordering inputs, duplicate
+edges and nonsemantic title/capture metadata edits produce no changes.
+
+The gating policy is `BLOCKED_BY`, `DEPENDS_ON`, `REQUIRES`, and reversed
+`BLOCKS`; hierarchy, facets and other relationships do not imply prerequisites.
+Reachability is structural, including terminal items. Blocker frontiers stop
+at terminal items and require all upstream paths to intersect a cut. Resolving
+a frontier still leaves intermediate work; `immediatelyUnblocked` identifies
+cuts containing every direct prerequisite. Both cut searches must finish before
+differences are reported. Cycles, missing cone endpoints, unknown active statuses
+and exhausted cut searches return typed refusals with remedies. A dangling
+reference to a deleted node retains its earlier explanation in `missingNode`
+while refusing to infer cut differences from incomplete input. For custom
+workflows, pass `cutOptions.resolvedStatuses`/`unresolvedStatuses` in the SDK or
+`--resolved-statuses done,canceled --unresolved-statuses ready,working` in the CLI.
+
+`receipt.output` exposes the exact total, returned/omitted counts and
+`nextOffset`. Keep both input files immutable while recovering pages.
+Defaults are 32 rows and 2,000,000 traversal work units; `--limit` accepts
+1..256 and `--max-work` accepts 1..20,000,000. Cut budgets have separate
+`--cut-max-states`, `--cut-max-work`, `--cut-max-cuts` and `--cut-max-size` flags
+(defaults: 20,000 / 2,000,000 / 32 / 8). Each snapshot is limited to 10,000 nodes,
+50,000 relationships and, for CLI files, 16 MiB. The active blocker cone is
+limited to 512 unresolved items. Explanation titles/statuses are clipped to
+160/64 Unicode code points with `textClipped: true`; ids are limited to 256
+characters. The host's JSON/TOON projection and token budgets also apply to the
+declared `changes` rows. Refusals exit 2 (unknown goal: 3) and preserve
+`refusal.code`, `refusal.remedy` and the failing side.
+
+This is a comparison over the supplied snapshots. Core owns snapshot capture
+and storage; pm-context owns resume packets. Certify backend reads separately
+(for example with `listAllComplete`) before `graphFromItems` projection. The
+projection includes item relationships and facets; evidence nodes and support
+edges must be supplied explicitly by the caller's backend. Support is a linked
+structural assertion, not verification of a document, file, test run or URL.
+The comparison never accesses those resources or either live backend.
+
+See the [SDK and CLI example](docs/snapshot-impact-example.md) and the
+[public tracker validation](docs/snapshot-impact-validation.md).
+
+## Without git
+
+Graph projection, export, offline analysis, path/impact/explain and snapshot
+comparison work in plain trackers. Snapshot comparison reads only the two
+explicit JSON files and also works without a tracker. Neo4j operations require
+their configured database connection. None of these graph operations needs a
+git repository; the no-git regression runs the installed CLI with git absent
+from PATH.
+
 ## Graph Model
 
 - **`PmItem`** nodes for real pm items, labelled with item type (e.g. `task`, `bug`).

@@ -1,3 +1,5 @@
+export { compareGraphSnapshots } from "./snapshot-impact.ts";
+export type { SnapshotImpactOptions, SnapshotNodeContext, SnapshotImpactChange, SnapshotImpactRefusalCode, SnapshotImpactRefusal, SnapshotImpactResult } from "./snapshot-impact.ts";
 import type { BrandTheme } from "./brand.ts";
 import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
 import type { ExtensionCommandReadOutput } from "@unbrained/pm-cli/sdk/authoring";
