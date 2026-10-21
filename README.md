@@ -304,11 +304,93 @@ Example output:
 }
 ```
 
+## Without git
+
+All offline graph commands, including `blocker-cuts`, and the graph exporter
+work in plain initialized trackers without Git. Neo4j commands need their
+documented database configuration and connectivity; they also do not need a
+Git repository.
+
 ## Offline Analytics
 
-These commands analyze the workspace dependency graph **entirely offline** — no Neo4j required. They operate on **structural edges only** (`BLOCKED_BY`, `CHILD_OF`, and dependency edges such as `BLOCKS`/`RELATED`) between real items; facet edges (type/status/assignee/sprint/release) and tag edges are deliberately excluded so cycle, path, and centrality results stay meaningful.
+### `pm pm-graph blocker-cuts <goal>`
 
-Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood. All analytics commands accept `--filter type=...|status=...` to keep only items matching the given type/status (same-key values are ORed; distinct keys are ANDed); non-item nodes (facets/tags) are always kept. `cycles` and `critical-path` additionally accept `--format <text|mermaid|graphml|dot>` (default `text`) to render the relevant subgraph as a diagram for docs — `dot` emits a Graphviz `digraph` consumable by `dot`, `neato`, etc.
+Return alternative **inclusion-minimal blocker frontiers**, smallest cardinality
+first, with separate source, graph and search completeness receipts. This is a
+graph-view data operation; it complements core dominators/articulation/plan/impact
+and this package's path/critical-path commands.
+
+```bash
+pm pm-graph blocker-cuts goal-id
+pm pm-graph blocker-cuts goal-id --max-cuts 16 --max-states 20000 --json
+```
+
+Every upstream unresolved prerequisite path must meet a returned cut. All
+prerequisites are conjunctive: for `goal -> a -> {b,c}`, the alternatives are
+`[a]` and `[b,c]`. These are **plans**: resolving `b,c` clears the upstream
+frontier, but `a` still needs completion. Each cut's `immediatelyUnblocked` is
+true only when that set includes every immediate unresolved prerequisite. This
+does not predict effort, duration, automatic task completion, or approvals.
+
+The command uses an extension-free, strict, full, unbounded SDK read (including
+terminal items), and exact goal ids. `BLOCKED_BY`, `DEPENDS_ON`, `REQUIRES` and
+reversed `BLOCKS` are prerequisites; hierarchy, related links and facets are
+excluded. Terminal statuses from the tracker registry stop traversal. A resolved
+goal or a goal with no active blockers returns the empty cut `[[]]`.
+
+`source` certifies the read, while `receipt.graph` describes the active goal cone
+in that supplied snapshot. It cannot prove that missing real-world relationships
+were recorded, nor provide transaction isolation from concurrent tracker edits.
+Unknown referenced items/statuses refuse with `INCOMPLETE_GRAPH`; a relevant
+cycle refuses with `CYCLE` and one closed cycle witness. Unrelated cycles and
+missing references outside the active cone do not prevent a goal proof.
+Missing-data receipts include total counts and at most 32 example ids per kind.
+
+`receipt.search.complete` means **all** inclusion-minimal cuts were enumerated.
+`completeThroughSize` certifies fully searched cardinalities;
+`minimumCardinality` is the proven smallest size, or `null` if no cut was found.
+Partial results remain individually minimal. Never interpret an empty partial
+list as "unblocked". To act on displayed rows, also inspect the host's
+`read_output` receipt: output compaction is independent of search completeness.
+
+| Budget | Default | Hard maximum |
+| --- | ---: | ---: |
+| `--max-states` (candidate subsets) | 20000 | 1000000 |
+| `--max-work` (search visits, edges, subset comparisons) | 2000000 | 20000000 |
+| `--max-cuts` (returned alternatives) | 32 | 256 |
+| `--max-size` (frontier cardinality) | 8 | 64 |
+
+Enumeration stops deterministically at the first cap and reports its name;
+raising that budget and rerunning restarts the search. Preflight scans are
+input-capped at 100000 nodes / 500000 relationships and 512 active unresolved
+vertices. Oversized snapshots refuse with `GRAPH_LIMIT` and a scoping remedy.
+`INVALID_OPTIONS`, `INVALID_GRAPH`, `UNKNOWN_GOAL`, and `SOURCE_INCOMPLETE` also
+include remedies. CLI refusals exit 2 (unknown goals exit 3); successful bounded
+searches exit 0, with partiality explicit in the receipt.
+
+The typed SDK has no filesystem, Git or Neo4j dependency:
+
+```ts
+import { minimalBlockerCuts } from "pm-graph";
+import type { BlockerCutResult } from "pm-graph";
+
+const result: BlockerCutResult = minimalBlockerCuts(snapshot, "goal-id", {
+  maxCuts: 16,
+  // For custom workflows, pass disjoint resolvedStatuses/unresolvedStatuses.
+});
+if (!result.ok) console.error(result.refusal.code, result.refusal.remedy);
+else renderFrontiers(result.cuts, result.receipt);
+```
+
+SDK callers must certify their own complete source read; the pure function only
+certifies the supplied goal cone. Results contain ids and receipts, excluding
+item bodies, titles and local paths. See [the worked example](docs/blocker-cuts-example.md).
+
+### Other offline analytics
+
+The following commands analyze the workspace dependency graph **entirely offline** — no Neo4j required. They operate on **structural edges only** (`BLOCKED_BY`, `CHILD_OF`, and dependency edges such as `BLOCKS`/`RELATED`) between real items; facet edges (type/status/assignee/sprint/release) and tag edges are deliberately excluded so cycle, path, and centrality results stay meaningful.
+
+Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood. These commands accept `--filter type=...|status=...` to keep only items matching the given type/status (same-key values are ORed; distinct keys are ANDed); non-item nodes (facets/tags) are always kept. `cycles` and `critical-path` additionally accept `--format <text|mermaid|graphml|dot>` (default `text`) to render the relevant subgraph as a diagram for docs — `dot` emits a Graphviz `digraph` consumable by `dot`, `neato`, etc.
 
 ### `pm pm-graph analyze`
 

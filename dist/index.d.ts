@@ -1,6 +1,9 @@
 import type { BrandTheme } from "./brand.ts";
 import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
 import type { ExtensionCommandReadOutput } from "@unbrained/pm-cli/sdk/authoring";
+export { minimalBlockerCuts } from "./blocker-cuts.ts";
+export type { BlockerCut, BlockerCutOptions, BlockerCutReceipt, BlockerCutRefusalCode, BlockerCutResult } from "./blocker-cuts.ts";
+export type { BlockerCutCommandRefusal } from "./blocker-cuts-command.ts";
 /** Context passed to extension command handlers by the pm CLI host. */
 export type CommandContext = {
     command?: string;

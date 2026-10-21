@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph } from "@unbrained/pm-cli/sdk/graph";
+import { registerBlockerCuts } from "./blocker-cuts-command.js";
+export { minimalBlockerCuts } from "./blocker-cuts.js";
 const EXTENSION_VERSION = "2026.10.20";
 // ---------------------------------------------------------------------------
 // Error contract
@@ -2391,6 +2393,7 @@ async function loadShapedAnalytics(context) {
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api) {
+    registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
     // The `pm-graph export --format <fmt>` handler renders the graph into a
     // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
     // and returns it wrapped in a marker object. The host renders command

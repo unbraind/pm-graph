@@ -15,6 +15,10 @@ import {
 } from "@unbrained/pm-cli/sdk";
 import type { ExtensionCommandReadOutput } from "@unbrained/pm-cli/sdk/authoring";
 import { runGraph, type GraphCommandOptions } from "@unbrained/pm-cli/sdk/graph";
+import { registerBlockerCuts } from "./blocker-cuts-command.ts";
+export { minimalBlockerCuts } from "./blocker-cuts.ts";
+export type { BlockerCut, BlockerCutOptions, BlockerCutReceipt, BlockerCutRefusalCode, BlockerCutResult } from "./blocker-cuts.ts";
+export type { BlockerCutCommandRefusal } from "./blocker-cuts-command.ts";
 
 const EXTENSION_VERSION = "2026.10.20";
 
@@ -2844,6 +2848,7 @@ async function loadShapedAnalytics(context: CommandContext): Promise<{
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api: ExtensionApi): void {
+  registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
   // The `pm-graph export --format <fmt>` handler renders the graph into a
   // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
   // and returns it wrapped in a marker object. The host renders command
