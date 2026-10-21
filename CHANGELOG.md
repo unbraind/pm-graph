@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Adopt pm-github 2026.10.16: default-branch-safe gated sync and daily gated closeout PRs ([pm-graph-mupl](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-mupl.toon))
+- Enable the gated GitHub issue sync and drop the braces chain ([pm-graph-maint1014](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-maint1014.toon))
+
+### Fixed
+
+- A release run bumped and committed a new version every night while publishing was impossible, because the only externally-failable step runs last ([pm-graph-wos1](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-wos1.toon))
+- Fix release publish ordering ahead of protected main push ([pm-graph-ihhe](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ihhe.toon))
+- Committed CHANGELOG.md drifts from deterministic regeneration after the pm-graph-3svp type classification change, breaking changelog:check on every PR ([pm-graph-brgk](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-brgk.toon))
+- Refresh managed pm-github extension for project-local PM CLI 2026.9.27 ([pm-graph-ipvn](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ipvn.toon))
+- Graph export uses quadratic item and edge scans on large trackers ([pm-graph-3a1p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-3a1p.toon))
+- Remove vulnerable braces dependency from certification toolchain ([pm-graph-g8uc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-g8uc.toon))
+- The publish-attestation gate misses a publish routed through an unquoted shell variable ([pm-graph-ifqz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ifqz.toon))
+- The changelog gate stamps an untagged version with the current date, so its verdict flips every midnight with no commit ([pm-graph-4glq](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-4glq.toon))
+- The release job authenticated with a stored npm token that expired, so publishing stopped while every other gate stayed green ([pm-graph-ybzl](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ybzl.toon))
+
+### Other
+
+- Cover the output_format decline contract with real SDK harness tests instead of a registration-only assertion ([pm-graph-vgj0](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-vgj0.toon))
+- Bring pm-graph to real 100% line/branch/function coverage and raise the gate to 100 ([pm-graph-6zil](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-6zil.toon))
+- Render package visuals with build-time Triplicate tokens ([pm-graph-triplicate](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-triplicate.toon))
+- Certify pm-graph on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates ([pm-graph-lcmc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-lcmc.toon))
+
 ## 2026.10.14 - 2026-10-14
 
 ### Added

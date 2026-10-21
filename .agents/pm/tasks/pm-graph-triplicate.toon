@@ -2,12 +2,15 @@ id: pm-graph-triplicate
 title: Render package visuals with build-time Triplicate tokens
 description: "Restyle every diagram format from pinned pm-brand values; preserve export behavior and prove light/dark accessibility with real tracker renders, regression and revert evidence."
 type: Task
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-10-17T09:27:51.195Z"
-updated_at: "2026-10-18T03:53:36.034Z"
+updated_at: "2026-10-21T19:09:05.521Z"
+closed_at: "2026-10-21T19:08:57.642Z"
+completed_at: "2026-10-21T19:08:57.642Z"
 author: codex-agent
+resolution: "Reverified main f46704ef4083 (unchanged since audit): [PR #145](https://github.com/unbraind/pm-graph/pull/145) (4c4ac08) styles exported graph diagrams from pinned build-time pm-brand values. Retained evidence: scripts/brand-values.ts, src/brand-values.ts, src/brand.ts."
 comments[13]{created_at,author,text}:
   "2026-10-17T09:28:13.055Z",codex-agent,"Design: form-paper canvas and ruled top sheets; carbon text, Martian Mono ids and dates, explicit status labels and contract chip fills. Canary and rose only convey in_progress and blocked. Brand values are generated at build time from an exact devDependency; published runtime has no brand dependency or CDN fetches. Existing scheduling, graph edges and serialization stay intact."
   "2026-10-17T10:12:53.675Z",codex-agent,"Visual formats are Mermaid flowcharts, DOT and PlantUML; interchange schemas remain unchanged. Each uses ruled sheets, a real mono form strip and explicit filled/outlined status cells. DOT/PlantUML accept literal dark palettes through renderer arguments; Mermaid adapts scoped CSS. Browser review caught ignored directives and variables rejected in Mermaid source style declarations; these now use a leading directive, scoped CSS values and a literal border declaration. Behavioral revert proof restores only each of the three renderers in turn: the unchanged real-tracker regression fails 1/1 each; the restored implementation passes 1/1. The README embeds pm-brand banner commit 5c80a2b707f3a00afe986e81e520843b86f3ee83. Full gates are pending."
@@ -43,4 +46,5 @@ docs[5]{path,scope}:
   docs/triplicate-visuals.md,project
   "https://github.com/unbraind/pm-graph/actions/runs/39094633261",project
   README.md,project
+close_reason: "Reverified main f46704ef4083 (unchanged since audit): [PR #145](https://github.com/unbraind/pm-graph/pull/145) (4c4ac08) styles exported graph diagrams from pinned build-time pm-brand values. Retained evidence: scripts/brand-values.ts, src/brand-values.ts, src/brand.ts."
 body: ""
