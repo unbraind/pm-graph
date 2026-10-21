@@ -144,6 +144,7 @@ export declare function renderGraphml(graph: Graph): string;
  * label. Renders with PlantUML / Structurizr / many docs toolchains.
  */
 export declare function renderPlantuml(graph: Graph, theme?: BrandTheme): string;
+/** Analytics edge in item-to-blocker direction, retaining its stored relation type. */
 type StructuralEdge = {
     from: string;
     to: string;
@@ -235,9 +236,10 @@ export type AnalysisDiagramFormat = "mermaid" | "graphml" | "dot";
  * properties are preserved verbatim from the source graph so the existing
  * renderers (renderMermaid / renderGraphml) produce labelled output. Edge keys
  * that have no matching relationship in the source graph are skipped, so the
- * subgraph never invents edges.
+ * subgraph never invents edges. Dependency keys reverse BLOCKS for selection
+ * only; returned relationships always retain their stored endpoints and type.
  */
-export declare function projectSubgraph(graph: Graph, nodeIds: string[], edgeKeys: string[]): Graph;
+export declare function projectSubgraph(graph: Graph, nodeIds: string[], edgeKeys: string[], direction?: "stored" | "dependency"): Graph;
 /**
  * Build the subgraph for a critical-path `chain` (an ordered id list): the
  * chain nodes plus the consecutive edges that connect them.

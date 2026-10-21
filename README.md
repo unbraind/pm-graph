@@ -390,7 +390,14 @@ item bodies, titles and local paths. See [the worked example](docs/blocker-cuts-
 
 The following commands analyze the workspace dependency graph **entirely offline** — no Neo4j required. They operate on **structural edges only** (`BLOCKED_BY`, `CHILD_OF`, and dependency edges such as `BLOCKS`/`RELATED`) between real items; facet edges (type/status/assignee/sprint/release) and tag edges are deliberately excluded so cycle, path, and centrality results stay meaningful.
 
-Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood. These commands accept `--filter type=...|status=...` to keep only items matching the given type/status (same-key values are ORed; distinct keys are ANDed); non-item nodes (facets/tags) are always kept. `cycles` and `critical-path` additionally accept `--format <text|mermaid|graphml|dot>` (default `text`) to render the relevant subgraph as a diagram for docs — `dot` emits a Graphviz `digraph` consumable by `dot`, `neato`, etc.
+Closed/canceled items are excluded by default; pass `--include-closed` to keep them. `analyze`, `cycles`, `critical-path`, and `topo-sort` also accept `--root <id>` / `--depth <n>` to scope the analysis to a neighborhood. `analyze`, `cycles`, `critical-path`, `topo-sort`, `path`, `impact`, and `explain` accept `--filter type=...|status=...` to keep only items matching the given type/status (same-key values are ORed; distinct keys are ANDed); non-item nodes (facets/tags) are always kept. `cycles` and `critical-path` additionally accept `--format <text|mermaid|graphml|dot>` (default `text`) to render the relevant subgraph as a diagram for docs — `dot` emits a Graphviz `digraph` consumable by `dot`, `neato`, etc.
+
+The host dependency contract stores `A --blocked_by--> B` and `B --blocks--> A`
+as the same prerequisite: A waits for B. Offline analytics normalize `BLOCKS`
+to item → blocker direction before computing paths, cycles, execution order,
+impact, depth, and explanations. Graph exports and diagram relationships retain
+their original stored endpoints and relation types. The edge-array SDK helpers
+(such as `topoSort`) expect this normalized item → blocker direction.
 
 ### `pm pm-graph analyze`
 
