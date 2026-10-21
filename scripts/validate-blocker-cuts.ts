@@ -7,6 +7,7 @@ import { performance } from "node:perf_hooks";
 import { listAllComplete, readSettings, resolveRuntimeStatusRegistry } from "@unbrained/pm-cli/sdk";
 import { graphFromItems, minimalBlockerCuts } from "../src/index.ts";
 import type { BlockerCutOptions } from "../src/index.ts";
+import { isMainInvocation } from "./main-invocation.ts";
 
 /** Fingerprint input records and settings without including mutable SDK caches. */
 function fingerprint(root: string): string {
@@ -64,9 +65,11 @@ export async function validateBlockerCuts(root: string): Promise<Record<string, 
   };
 }
 
-// This is an explicit local validation script; it never fetches or mutates a tracker.
-if (process.argv[1]?.endsWith("validate-blocker-cuts.ts")) {
-  const root = process.argv[2];
+/** Parse the replay CLI argument and print only the aggregate validation receipt. */
+export async function main(args: readonly string[]): Promise<void> {
+  const root = args[0];
   if (!root) throw new Error("Supply a read-only public tracker copy as the sole argument.");
   console.log(JSON.stringify(await validateBlockerCuts(root), null, 2));
 }
+
+if (isMainInvocation(process.argv, import.meta.url)) await main(process.argv.slice(2));

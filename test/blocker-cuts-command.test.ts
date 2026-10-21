@@ -7,8 +7,8 @@ import { after, before, test } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import type { BlockerCutCommandRefusal } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutResult } from "../src/blocker-cuts.ts";
-import { collectHandlers } from "./helpers.ts";
-import { validateBlockerCuts } from "../scripts/validate-blocker-cuts.ts";
+import { captureStdout, collectHandlers } from "./helpers.ts";
+import { main as replayMain, validateBlockerCuts } from "../scripts/validate-blocker-cuts.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const workspace = mkdtempSync(join(tmpdir(), "blocker-cuts-contract-"));
@@ -96,6 +96,11 @@ test("cycles and missing references use the same source and graph receipts", asy
   const replay = await validateBlockerCuts(pmRoot);
   assert.equal(replay.goals, 3);
   assert.equal(replay.inputUnchanged, true);
+  await assert.rejects(() => replayMain([]), /Supply a read-only public tracker copy/);
+  const replayOutput = await captureStdout(() => replayMain([pmRoot]));
+  const receipt = JSON.parse(replayOutput.stdout) as { goals: number; inputUnchanged: boolean };
+  assert.equal(receipt.goals, 3);
+  assert.equal(receipt.inputUnchanged, true);
   await client.update(upstream, { blockedBy: blocker });
   const cyclic = await validateBlockerCuts(pmRoot);
   assert.deepEqual(cyclic.refusals, { CYCLE: 3 });
