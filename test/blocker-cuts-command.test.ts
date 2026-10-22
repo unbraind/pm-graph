@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
+import { registerBlockerCuts } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutCommandRefusal } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutResult } from "../src/blocker-cuts.ts";
+import type { ExtensionApi } from "../src/index.ts";
 import { captureStdout, collectHandlers } from "./helpers.ts";
 import { main as replayMain, validateBlockerCuts } from "../scripts/validate-blocker-cuts.ts";
 
@@ -44,6 +46,30 @@ before(async () => {
   symlinkSync(join(root, "node_modules"), join(extensionRoot, "node_modules"), process.platform === "win32" ? "junction" : "dir");
 });
 after(() => rmSync(workspace, { recursive: true, force: true }));
+
+test("projection defects propagate instead of becoming source refusals", async () => {
+  const failure = new Error("projection defect");
+  let projectCalls = 0;
+  let projectedHandler: typeof handler = handler;
+  const api = {
+    registerCommand: (command) => {
+      projectedHandler = command.run;
+    },
+    registerExporter: () => {},
+    registerService: () => {},
+  } satisfies ExtensionApi;
+  registerBlockerCuts(api, (context) => context.pm_root!, (items, root) => {
+    projectCalls++;
+    assert.equal(root, pmRoot);
+    assert.equal(items.length, 3);
+    throw failure;
+  });
+  await assert.rejects(() => projectedHandler({ pm_root: pmRoot, args: [goal] }), (error) => error === failure);
+  assert.equal(projectCalls, 1);
+  const unreadable = await projectedHandler({ pm_root: join(workspace, "absent"), args: [goal] }) as BlockerCutCommandRefusal;
+  assert.equal(unreadable.code, "SOURCE_INCOMPLETE");
+  assert.equal(projectCalls, 1);
+});
 
 test("real CLI returns JSON and TOON from a non-git tracker with no git executable", () => {
   const json = run(["--json", "pm-graph", "blocker-cuts", goal], true);
