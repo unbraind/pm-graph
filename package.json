@@ -49,6 +49,7 @@
     "dist/",
     "manifest.json",
     "README.md",
+    "docs/blocker-cuts-example.md",
     "CHANGELOG.md"
   ],
   "repository": {
@@ -101,10 +102,12 @@
     },
     "docs": [
       "README.md",
+      "docs/blocker-cuts-example.md",
       "CHANGELOG.md"
     ],
     "examples": [
-      "README.md"
+      "README.md",
+      "docs/blocker-cuts-example.md"
     ]
   },
   "publishConfig": {

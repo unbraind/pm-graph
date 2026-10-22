@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph } from "@unbrained/pm-cli/sdk/graph";
+import { registerBlockerCuts } from "./blocker-cuts-command.js";
+export { minimalBlockerCuts } from "./blocker-cuts.js";
 const EXTENSION_VERSION = "2026.10.20";
 // ---------------------------------------------------------------------------
 // Error contract
@@ -1364,7 +1366,7 @@ function itemNodeIds(graph) {
     }
     return ids;
 }
-/** Extract the directed structural edges of a graph, between item nodes only. */
+/** Extract item-only analytics edges; BLOCKS stores the inverse dependency direction. */
 function structuralEdges(graph) {
     const items = itemNodeIds(graph);
     const seen = new Set();
@@ -1374,11 +1376,13 @@ function structuralEdges(graph) {
             continue;
         if (!items.has(rel.from) || !items.has(rel.to))
             continue;
-        const key = `${rel.from}->${rel.to}:${rel.type}`;
+        const from = rel.type === "BLOCKS" ? rel.to : rel.from;
+        const to = rel.type === "BLOCKS" ? rel.from : rel.to;
+        const key = `${from}->${to}:${rel.type}`;
         if (seen.has(key))
             continue;
         seen.add(key);
-        edges.push({ from: rel.from, to: rel.to, type: rel.type });
+        edges.push({ from, to, type: rel.type });
     }
     return edges;
 }
@@ -1712,9 +1716,10 @@ export function criticalConnectors(nodes, edges) {
  * properties are preserved verbatim from the source graph so the existing
  * renderers (renderMermaid / renderGraphml) produce labelled output. Edge keys
  * that have no matching relationship in the source graph are skipped, so the
- * subgraph never invents edges.
+ * subgraph never invents edges. Dependency keys reverse BLOCKS for selection
+ * only; returned relationships always retain their stored endpoints and type.
  */
-export function projectSubgraph(graph, nodeIds, edgeKeys) {
+export function projectSubgraph(graph, nodeIds, edgeKeys, direction = "stored") {
     const wanted = new Set(nodeIds);
     const seenNode = new Set();
     const nodesById = new Map();
@@ -1738,7 +1743,8 @@ export function projectSubgraph(graph, nodeIds, edgeKeys) {
             continue;
         if (!wanted.has(rel.from) || !wanted.has(rel.to))
             continue;
-        const key = `${rel.from}->${rel.to}`;
+        const key = direction === "dependency" && rel.type === "BLOCKS"
+            ? `${rel.to}->${rel.from}` : `${rel.from}->${rel.to}`;
         if (!keySet.has(key) || usedKey.has(key))
             continue;
         usedKey.add(key);
@@ -1755,7 +1761,7 @@ export function criticalPathSubgraph(graph, chain) {
     for (let i = 0; i < chain.length - 1; i++) {
         edgeKeys.push(`${chain[i]}->${chain[i + 1]}`);
     }
-    return projectSubgraph(graph, chain, edgeKeys);
+    return projectSubgraph(graph, chain, edgeKeys, "dependency");
 }
 /**
  * Build the subgraph for a set of detected `cycles` (each a closed id path
@@ -1778,7 +1784,7 @@ export function cyclesSubgraph(graph, cycles) {
             edgeKeys.push(`${cycle[i]}->${cycle[i + 1]}`);
         }
     }
-    return projectSubgraph(graph, nodeOrder, edgeKeys);
+    return projectSubgraph(graph, nodeOrder, edgeKeys, "dependency");
 }
 /**
  * Map a logical `pm-graph impact` direction to the canonical `pm graph impact`
@@ -1880,7 +1886,7 @@ export function impactSubgraphFromNodeSet(graph, rootId, nodeIds) {
         if (set.has(e.from) && set.has(e.to))
             edgeKeys.push(`${e.from}->${e.to}`);
     }
-    return projectSubgraph(graph, nodeOrder, edgeKeys);
+    return projectSubgraph(graph, nodeOrder, edgeKeys, "dependency");
 }
 /** Render an analysis subgraph via the existing full-graph renderers. */
 export function renderAnalysisDiagram(format, graph, theme = "light") {
@@ -2134,8 +2140,8 @@ export function analyzeGraph(graph, topN = 10) {
             }
         }
     }
-    // Blocked items: any item carrying a BLOCKED_BY outgoing edge.
-    const blockedItems = items.filter((id) => edges.some((e) => e.from === id && e.type === "BLOCKED_BY"));
+    // BLOCKS is now oriented item-to-blocker, just like BLOCKED_BY.
+    const blockedItems = items.filter((id) => edges.some((e) => e.from === id && (e.type === "BLOCKED_BY" || e.type === "BLOCKS")));
     const topDegreeCentrality = items
         .map((id) => ({
         id,
@@ -2391,6 +2397,7 @@ async function loadShapedAnalytics(context) {
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api) {
+    registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
     // The `pm-graph export --format <fmt>` handler renders the graph into a
     // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
     // and returns it wrapped in a marker object. The host renders command
@@ -2904,7 +2911,7 @@ export function activate(api) {
                         leaves: "Item ids with no outgoing dependency edge",
                         longestChain: "Ordered ids of the longest dependency chain",
                         connectedComponents: "Number of connected components (undirected projection)",
-                        blockedItems: "Item ids carrying a BLOCKED_BY edge",
+                        blockedItems: "Item ids waiting on a BLOCKED_BY or inverse BLOCKS dependency",
                         topDegreeCentrality: "Top-N items by total degree",
                         maxDepth: "Longest dependency depth across all items (critical-path depth)",
                         depthByItem: "Per-item dependency depth (longest path from the item to a leaf), sorted deepest-first",
