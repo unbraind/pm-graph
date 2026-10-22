@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { PmClient, listAllComplete } from "@unbrained/pm-cli/sdk";
 import { graphFromItems } from "../src/index.ts";
+import type { Graph } from "../src/index.ts";
 import type { SnapshotImpactResult } from "../src/snapshot-impact.ts";
 import { collectHandlers } from "./helpers.ts";
 
@@ -13,7 +14,7 @@ const root = resolve(import.meta.dirname, "..");
 const host = JSON.parse(readFileSync(join(root, "node_modules/@unbrained/pm-cli/package.json"), "utf8")) as { bin: { pm: string } };
 const cli = join(root, "node_modules/@unbrained/pm-cli", host.bin.pm);
 
-test("installed CLI compares real SDK snapshots in a non-git tracker with no git on PATH", async () => {
+test("documented CLI exports compare real SDK snapshots in a non-git tracker with no git on PATH", async () => {
   const ws = mkdtempSync(join(tmpdir(), "pmg-snapshot-no-git-"));
   try {
     const bin = join(ws, "bin");
@@ -21,6 +22,24 @@ test("installed CLI compares real SDK snapshots in a non-git tracker with no git
     symlinkSync(process.execPath, join(bin, process.platform === "win32" ? "node.exe" : "node"));
     const env = { ...process.env, HOME: join(ws, "isolated-home"), PATH: bin, GIT_CEILING_DIRECTORIES: dirname(ws), PM_AUTHOR: "snapshot-test", PM_PATH: join(ws, ".agents/pm") };
     const run = (args: string[]) => spawnSync(process.execPath, [cli, ...args], { cwd: ws, env, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+    const example = readFileSync(join(root, "docs/snapshot-impact-example.md"), "utf8");
+    const exports = [...example.matchAll(/^pm (.+) > (before|after)\.json$/gm)];
+    assert.equal(exports.length, 2, "document both snapshot exports");
+    /** Execute the documented export and verify every projected row before saving it. */
+    const exportSnapshot = (side: "before" | "after", items: Parameters<typeof graphFromItems>[0]): void => {
+      const args = exports.find((match) => match[2] === side)![1].split(/\s+/);
+      const result = run(args);
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      const value = JSON.parse(result.stdout) as { graph: Graph };
+      assert.ok(Array.isArray(value.graph.relationships), "documented exports must contain Graph relationships");
+      const expected = graphFromItems(items, ".", new Map());
+      assert.deepEqual(value.graph.nodes.map((node) => node.id).sort(), expected.nodes.map((node) => node.id).sort());
+      assert.deepEqual(value.graph.relationships, expected.relationships);
+      for (const flag of ["--output-limit", "--output-budget"]) {
+        assert.equal(args[args.indexOf(flag) + 1], "unbounded", `${side} export must explicitly disable ${flag}`);
+      }
+      writeFileSync(join(ws, `${side}.json`), result.stdout);
+    };
     const initialized = run(["init", "--defaults", "--agent-guidance", "skip", "--prefix", "snap"]);
     assert.equal(initialized.status, 0, initialized.stderr || initialized.stdout);
     const extensionRoot = join(ws, ".agents/pm/extensions/pm-graph");
@@ -34,10 +53,10 @@ test("installed CLI compares real SDK snapshots in a non-git tracker with no git
     const before = await listAllComplete({}, { pmRoot: join(ws, ".agents/pm"), noExtensions: true });
     assert.equal(before.complete_list.source_complete, true);
     assert.equal(before.items.length, 2);
-    writeFileSync(join(ws, "before.json"), JSON.stringify(graphFromItems(before.items, ".", new Map())));
+    exportSnapshot("before", before.items);
     await client.update(second.item.id, { status: "closed", closeReason: "Synthetic completion" });
     const after = await listAllComplete({}, { pmRoot: join(ws, ".agents/pm"), noExtensions: true });
-    writeFileSync(join(ws, "after.json"), JSON.stringify({ graph: graphFromItems(after.items, "portable", new Map()) }));
+    exportSnapshot("after", after.items);
     const args = ["pm-graph", "snapshot-impact", "before.json", "after.json", first.item.id];
     const json = run([...args, "--json", "--output-limit", "unbounded", "--output-budget", "unbounded"]);
     assert.equal(json.status, 0, json.stderr || json.stdout);

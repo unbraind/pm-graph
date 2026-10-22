@@ -58,14 +58,18 @@ Save projected values as JSON with your backend's export workflow. For the local
 tracker, full graph exports can also be requested explicitly:
 
 ```bash
-pm pm-graph export --include-closed --format json > before.json
+pm pm-graph export --include-closed --json --output-limit unbounded --output-budget unbounded > before.json
 # After a later complete source read:
-pm pm-graph export --include-closed --format json > after.json
+pm pm-graph export --include-closed --json --output-limit unbounded --output-budget unbounded > after.json
 pm pm-graph snapshot-impact before.json after.json goal-id --json
 pm pm-graph snapshot-impact before.json after.json goal-id --limit 1
 ```
 
-The second command defaults to TOON. An abbreviated successful receipt is:
+`--json` preserves the SDK Graph schema, including `relationships` and
+`properties`. Both exports request unbounded host output to retain every node
+and relationship. `--format json` renders a different schema for visualization.
+
+The comparison without `--json` defaults to TOON. An abbreviated successful receipt is:
 
 ```json
 {
