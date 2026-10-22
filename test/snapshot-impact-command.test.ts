@@ -34,7 +34,7 @@ test("documented CLI exports compare real SDK snapshots in a non-git tracker wit
       assert.ok(Array.isArray(value.graph.relationships), "documented exports must contain Graph relationships");
       const expected = graphFromItems(items, ".", new Map());
       assert.deepEqual(value.graph.nodes.map((node) => node.id).sort(), expected.nodes.map((node) => node.id).sort());
-      assert.deepEqual(value.graph.relationships, expected.relationships);
+      assert.deepEqual(value.graph.relationships.map((edge) => JSON.stringify(edge)).sort(), expected.relationships.map((edge) => JSON.stringify(edge)).sort());
       for (const flag of ["--output-limit", "--output-budget"]) {
         assert.equal(args[args.indexOf(flag) + 1], "unbounded", `${side} export must explicitly disable ${flag}`);
       }
