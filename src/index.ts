@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { registerSnapshotImpact } from "./snapshot-impact-command.ts";
+export { compareGraphSnapshots } from "./snapshot-impact.ts";
+export type { SnapshotImpactOptions, SnapshotNodeContext, SnapshotImpactChange, SnapshotImpactRefusalCode, SnapshotImpactRefusal, SnapshotImpactResult } from "./snapshot-impact.ts";
 import { brandCss, brandStatus, brandStatuses, brandValue, brandColor, mermaidBrand } from "./brand.ts";
 import type { BrandTheme } from "./brand.ts";
 import { existsSync, statSync, writeFileSync } from "node:fs";
@@ -2854,6 +2857,7 @@ async function loadShapedAnalytics(context: CommandContext): Promise<{
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api: ExtensionApi): void {
+  registerSnapshotImpact(api);
   registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
   // The `pm-graph export --format <fmt>` handler renders the graph into a
   // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)
