@@ -383,8 +383,11 @@ else renderFrontiers(result.cuts, result.receipt);
 ```
 
 SDK callers must certify their own complete source read; the pure function only
-certifies the supplied goal cone. Results contain ids and receipts, excluding
-item bodies, titles and local paths. See [the worked example](docs/blocker-cuts-example.md).
+certifies the supplied goal cone. Successful results contain ids and receipts,
+excluding item bodies, titles and local paths. `SOURCE_INCOMPLETE` remedies retain
+the original source error message to distinguish invalid roots, strict-read
+failures and bad settings; these diagnostics can include tracker paths.
+See [the worked example](docs/blocker-cuts-example.md).
 
 ### Other offline analytics
 

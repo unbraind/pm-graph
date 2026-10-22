@@ -74,8 +74,9 @@ export function registerBlockerCuts(
         const registry = resolveRuntimeStatusRegistry((await readSettings(root)).schema);
         options.resolvedStatuses = [...registry.terminal_statuses];
         options.unresolvedStatuses = [...registry.by_id.keys()].filter((status) => !registry.terminal_statuses.has(status));
-      } catch {
-        return commandRefusal("SOURCE_INCOMPLETE", "Restore a readable complete tracker; run pm list --all --full --strict-read --output-limit unbounded --output-budget unbounded, then retry.");
+      } catch (error: unknown) {
+        const cause = error instanceof Error ? error.message : String(error);
+        return commandRefusal("SOURCE_INCOMPLETE", `Restore a readable complete tracker; run pm list --all --full --strict-read --output-limit unbounded --output-budget unbounded, then retry. Cause: ${cause}`);
       }
       const graph = project(snapshot.items, root);
       const result = minimalBlockerCuts(graph, positionals[0], options);

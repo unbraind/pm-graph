@@ -32,6 +32,18 @@ function run(args: string[], noGit = false) {
   });
 }
 
+/** Register injected command boundaries while retaining the real tracker SDK reads. */
+function customHandler(resolveRoot: Parameters<typeof registerBlockerCuts>[1], project: Parameters<typeof registerBlockerCuts>[2]): typeof handler {
+  let registered: typeof handler = handler;
+  const api = {
+    registerCommand: (command) => { registered = command.run; },
+    registerExporter: () => {},
+    registerService: () => {},
+  } satisfies ExtensionApi;
+  registerBlockerCuts(api, resolveRoot, project);
+  return registered;
+}
+
 before(async () => {
   mkdirSync(emptyPath);
   const initialized = run(["--no-extensions", "init", "--defaults", "--agent-guidance", "skip", "--prefix", "cuts"]);
@@ -50,15 +62,7 @@ after(() => rmSync(workspace, { recursive: true, force: true }));
 test("projection defects propagate instead of becoming source refusals", async () => {
   const failure = new Error("projection defect");
   let projectCalls = 0;
-  let projectedHandler: typeof handler = handler;
-  const api = {
-    registerCommand: (command) => {
-      projectedHandler = command.run;
-    },
-    registerExporter: () => {},
-    registerService: () => {},
-  } satisfies ExtensionApi;
-  registerBlockerCuts(api, (context) => context.pm_root!, (items, root) => {
+  const projectedHandler = customHandler((context) => context.pm_root!, (items, root) => {
     projectCalls++;
     assert.equal(root, pmRoot);
     assert.equal(items.length, 3);
@@ -70,6 +74,23 @@ test("projection defects propagate instead of becoming source refusals", async (
   assert.equal(unreadable.code, "SOURCE_INCOMPLETE");
   assert.equal(projectCalls, 1);
 });
+
+for (const [label, cause, message] of [
+  ["Error", new Error("tracker root lookup failed"), "tracker root lookup failed"],
+  ["non-Error", "tracker lookup refused", "tracker lookup refused"],
+] as const) {
+  test(`source refusals preserve ${label} causes`, async () => {
+    const sourceHandler = customHandler(() => { throw cause; }, () => { throw new Error("projection must not run"); });
+    const result = await sourceHandler({ pm_root: pmRoot, args: [goal] }) as BlockerCutCommandRefusal;
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "SOURCE_INCOMPLETE");
+    assert.equal(result.exit_code, 2);
+    assert.deepEqual(result.cuts, []);
+    assert.ok(result.refusal.remedy.endsWith(`Cause: ${message}`), result.refusal.remedy);
+    assert.equal(result.remediation, result.refusal.remedy);
+    assert.match(result.remediation, /pm list --all --full --strict-read/);
+  });
+}
 
 test("real CLI returns JSON and TOON from a non-git tracker with no git executable", () => {
   const json = run(["--json", "pm-graph", "blocker-cuts", goal], true);
@@ -106,6 +127,7 @@ test("CLI flags, usage and source failures retain typed actionable refusals", as
   assert.ok(await handler({ args: ["-h"] }));
   const sourceFailure = await handler({ pm_root: join(workspace, "absent"), args: [goal] }) as BlockerCutCommandRefusal;
   assert.equal(sourceFailure.code, "SOURCE_INCOMPLETE");
+  assert.ok(sourceFailure.refusal.remedy.endsWith(`Cause: No pm tracker at ${join(workspace, "absent")}`));
   const missing = run(["--json", "pm-graph", "blocker-cuts", "absent"], true);
   assert.equal(missing.status, 3, missing.stderr || missing.stdout);
   assert.match(missing.stderr + missing.stdout, /UNKNOWN_GOAL/);
