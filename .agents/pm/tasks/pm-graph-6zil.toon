@@ -2,14 +2,19 @@ id: pm-graph-6zil
 title: Bring pm-graph to real 100% line/branch/function coverage and raise the gate to 100
 description: "The coverage gate currently sits at lines 81 / branches 77 / functions 88. Drive every uncovered line and branch through real behavioural tests (harness commands, exported functions, local Neo4j error paths), remove genuinely dead code, and raise coverageGate.thresholds to 100/100/100."
 type: Task
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-09-18T03:27:32.221Z"
-updated_at: "2026-10-16T07:35:05.622Z"
+updated_at: "2026-10-21T19:12:31.211Z"
+closed_at: "2026-10-21T19:12:22.913Z"
+completed_at: "2026-10-21T19:12:22.913Z"
 author: pi-agent
 acceptance_criteria: "Every source file reports 100.00 line/branch/function coverage; coverageGate.thresholds in package.json set to 100/100/100; npm run release:check exits 0; no gate weakened"
-comments[45]{created_at,author,text}:
+resolution: duplicate of pm-graph-fjfn
+dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
+  pm-graph-fjfn,related,"2026-10-21T19:11:41.378Z",codex-agent,"cli:update:dep",detected
+comments[46]{created_at,author,text}:
   "2026-09-18T03:27:36.644Z",pi-agent,"Baseline coverage: lines 85.49% / branches 80.17% / functions 90.43%. Source file src/index.ts: lines 84.22% / branches 78.54% / functions 89.66%. Scripts already at 100%. Uncovered lines concentrated in: Neo4j internal functions (toPlain/toNumber/neo4jFriendlyError/loadNeo4j), command help texts and error paths in activate(), graph analysis branches, and utility function edge cases."
   "2026-09-18T04:02:25.951Z",pi-agent,"Coverage milestone: added behavioral tests in test/coverage-gaps.test.ts and test/neo4j-install-fallback.test.ts with real SDK harness workspaces and a loader-routed Neo4j driver surface. The first full run passes 287/287 tests and reports src/index.ts at L98.61% / B89.12% / F98.86%; scripts remain 100%. Export widenings parseNeo4jMs and workspaceFromPmRoot are justified because their return branches are not observably distinguishable through the command surface (invalid timeout parsing only changes driver config; custom-root workspace derivation requires direct path cases), and both retain production behavior. toPlain/toNumber/neo4jFriendlyError were covered through the actual query/status/neighbors/sync handlers with a loader-routed driver and were not widened."
   "2026-09-18T04:21:23.759Z",pi-agent,"Second coverage milestone: exercised tracker-root discovery (typed and generic errors), unreadable tracker SDK failures, unexpected export/sync/impact error wrapping via real registered handlers, malformed/externally-targeted dependency records, case-insensitive ambiguity and capped id suggestions, and direct Neo4j-friendly default URI/error branches. Targeted tests pass; source exports now include only the documented helpers needed for otherwise unreachable direct branch assertions (parseNeo4jMs, workspaceFromPmRoot, neo4jFriendlyError, resolveItemIdOrThrow, runPmGraph)."
@@ -55,6 +60,7 @@ comments[45]{created_at,author,text}:
   "2026-10-16T07:22:18.800Z",codex-agent,"The initial Node 22 CI job also passes all assertions but reports src/index.ts:1027 (analytics help flags) uncovered, again below the exact 99.7 floor. Added direct parser assertions for --help and -h alongside the deterministic ranking case. Both cases are behavioral assertions, not registration probes. The first local matrix rerun was interrupted to include both CI-specific cases; no failed or interrupted run is counted as gate approval. Thresholds remain 99.7/94.9/100."
   "2026-10-16T07:35:01.802Z",codex-agent,"Updated full gate after deterministic CI fixtures: npm run release:check on Node 26.12.0 passes 344/344, zero fail/skip/cancel/TODO, all 10 runtime modules present. Per-file exact counters: scripts/completion-reporter.ts 11/11 lines, 6/6 branches, 1/1 functions; scripts/coverage-gate.ts 197/197 lines, 100/101 branches, 20/20 functions; scripts/docstring-gate.ts 122/122 lines, 11/11 branches, 4/4 functions; scripts/duplication-gate.ts 6/6 lines, 1/1 branches, 0/0 functions; scripts/lint.ts 6/6 lines, 1/1 branches, 0/0 functions; scripts/main-invocation.ts 51/51 lines, 4/4 branches, 1/1 functions; scripts/prepare-merge-driver.ts 74/74 lines, 2/2 branches, 1/1 functions; scripts/verify-release-changelog-date.ts 415/415 lines, 82/82 branches, 21/21 functions; scripts/verify-release-publish-attestation.ts 58/58 lines, 6/6 branches, 3/3 functions; src/index.ts 3842/3856 lines, 910/967 branches, 185/185 functions; uncovered lines 475,476,2385,2386,3632,3633,3634,3635,3636,3744,3745,3746,3747,3748. All thresholds remain 99.7/94.9/100. Full 100 percent remains open; no runtime behavior removed or coverage ignores added."
   "2026-10-16T07:35:02.873Z",codex-agent,"Updated full gate after deterministic CI fixtures: bun run release:check on Node 22.23.1 passes 344/344, zero fail/skip/cancel/TODO, all 10 runtime modules present. Per-file exact counters: scripts/completion-reporter.ts 11/11 lines, 6/6 branches, 1/1 functions; scripts/coverage-gate.ts 197/197 lines, 100/101 branches, 20/20 functions; scripts/docstring-gate.ts 122/122 lines, 11/11 branches, 4/4 functions; scripts/duplication-gate.ts 6/6 lines, 1/1 branches, 0/0 functions; scripts/lint.ts 6/6 lines, 1/1 branches, 0/0 functions; scripts/main-invocation.ts 51/51 lines, 4/4 branches, 1/1 functions; scripts/prepare-merge-driver.ts 74/74 lines, 2/2 branches, 1/1 functions; scripts/verify-release-changelog-date.ts 415/415 lines, 82/82 branches, 21/21 functions; scripts/verify-release-publish-attestation.ts 58/58 lines, 6/6 branches, 3/3 functions; src/index.ts 3842/3856 lines, 909/966 branches, 185/185 functions; uncovered lines 475,476,2385,2386,3632,3633,3634,3635,3636,3744,3745,3746,3747,3748. All thresholds remain 99.7/94.9/100. Full 100 percent remains open; no runtime behavior removed or coverage ignores added."
+  "2026-10-21T19:11:14.634Z",codex-agent,"Duplicate of pm-graph-fjfn. Reverified main f46704ef4083 (unchanged since audit): Canonical id: pm-graph-fjfn. Both require exact 100% runtime coverage; fjfn additionally owns the fail-closed repo-wide inventory/gates. Current non-100 floors prove the shared remaining gap. Retained evidence: package.json."
 files[7]{path,scope}:
   package.json,project
   scripts/coverage-gate.ts,project
@@ -67,4 +73,5 @@ tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   "npm run release:check",project,pi-agent,"2026-09-18T09:14:43.823Z",local_mutation,test/cover-pm-graph-to-full-coverage
   node --test test/coverage-gate.test.ts,project,codex-agent,"2026-10-16T06:45:01.298Z",local_mutation,fix/gates-and-backlog
   "node --test --test-name-pattern=\"rank substring\" test/id-resolution.test.ts",project,codex-agent,"2026-10-16T07:16:11.714Z",local_mutation,fix/gates-and-backlog
+close_reason: duplicate of pm-graph-fjfn
 body: ""

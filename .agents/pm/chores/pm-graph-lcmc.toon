@@ -2,13 +2,15 @@ id: pm-graph-lcmc
 title: Certify pm-graph on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates
 description: "Consolidate Dependabot updates, exact tool pins, canonical launcher and npm/Bun real-tracker acceptance; orchestrator verifies and merges."
 type: Chore
-status: in_progress
+status: closed
 priority: 1
 tags: []
 created_at: "2026-10-04T10:53:39.576Z"
-updated_at: "2026-10-04T13:39:03.523Z"
+updated_at: "2026-10-22T10:56:27.673Z"
+closed_at: "2026-10-21T19:04:25.253Z"
+completed_at: "2026-10-21T19:04:25.253Z"
 author: codex-sol
-blocked_by: pm-graph-g8uc
+resolution: "Reverified main f46704ef4083 (unchanged since audit): [PR #124](https://github.com/unbraind/pm-graph/pull/124) (0e905e0) delivered the dated certification. Current package.json/lockfile have subsequent toolchain updates; historical certification is not a claim of current exact-head acceptance. Retained evidence: docs/certification-2026.10.4.md, scripts/docstring-gate.ts, scripts/prepare-merge-driver.ts, test/analytics.test.ts."
 actual_result: "Node24 and Node22/npm10 full release:check 301/301, zero skips; zero duplication; Node22 coverage99.63/93.98/100 over4 configured files. Test-first npm10 pack parser fix. Repeated packed real-tracker npm/nativeBun parity185nodes330edges; scratch deleted. Strict health0, prod audit0; full dev audit4high blocked by g8uc. Bot replies recorded, zero unresolved threads, some reviews unavailable/pending."
 dependencies[1]{id,kind,created_at,author,source_kind,author_source}:
   pm-graph-g8uc,blocked_by,"2026-10-04T11:40:30.561Z",codex-sol,"cli:update:blocked_by",detected
@@ -58,4 +60,5 @@ tests[1]{command,scope,timeout_seconds,pm_context_mode,workspace_context_mode,pr
 docs[2]{path,scope}:
   docs/certification-2026.10.4.md,project
   README.md,project
+close_reason: "Reverified main f46704ef4083 (unchanged since audit): [PR #124](https://github.com/unbraind/pm-graph/pull/124) (0e905e0) delivered the dated certification. Current package.json/lockfile have subsequent toolchain updates; historical certification is not a claim of current exact-head acceptance. Retained evidence: docs/certification-2026.10.4.md, scripts/docstring-gate.ts, scripts/prepare-merge-driver.ts, test/analytics.test.ts."
 body: ""
