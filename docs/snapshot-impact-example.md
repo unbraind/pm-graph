@@ -90,6 +90,12 @@ receipts can further constrain the selected page.
 
 An incomplete cut search returns `CUT_SEARCH_INCOMPLETE` without change rows.
 Its remedy names the exhausted cut budget. Increase that budget within its hard
-cap, or obtain a smaller complete goal cone. Do not treat truncated cut lists as
-proof of removed alternatives. `CUT_REFUSED` retains the underlying `cutCode`
+cap, or obtain a smaller complete goal cone. Completion requires
+`--cut-max-size` (default 8, hard cap 64) to be at least the number of unresolved
+prerequisites in the active cone, excluding the goal. A chain of 9 unresolved
+prerequisites therefore needs `--cut-max-size 9`; more than 64 cannot complete
+under the current search. Other cut budgets can stop even smaller searches.
+The preflight cap of 512 unresolved items includes the goal and does not
+guarantee completion. Do not treat truncated cut lists as proof of removed alternatives.
+`CUT_REFUSED` retains the underlying `cutCode`
 (such as `CYCLE` or `INCOMPLETE_GRAPH`) and remedy.

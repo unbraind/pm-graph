@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { compareGraphSnapshots } from "../src/index.ts";
 import type { Graph } from "../src/index.ts";
 import type { SnapshotImpactOptions, SnapshotImpactRefusalCode } from "../src/snapshot-impact.ts";
@@ -195,4 +196,32 @@ test("untrusted JSON graphs reject malformed shape, duplicate ids and size overf
   const external = graph();
   external.nodes[1].labels = ["ExternalPmItem"];
   refused(external, external, "INCOMPLETE_GRAPH");
+});
+
+test("documented cut-size completion bounds match executed snapshot comparisons", () => {
+  for (const path of ["../README.md", "../docs/snapshot-impact-example.md"]) {
+    const documentation = readFileSync(new URL(path, import.meta.url), "utf8").replace(/\s+/g, " ");
+    const bounds = /Completion requires `--cut-max-size` \(default (\d+), hard cap (\d+)\) to be at least the number of unresolved prerequisites in the active cone, excluding the goal\./.exec(documentation);
+    assert.ok(bounds, `${path} must distinguish exhaustive completion from the preflight cone cap`);
+    const defaultSize = Number(bounds[1]);
+    const hardCap = Number(bounds[2]);
+    assert.equal(compare(graph(), graph()).receipt.cuts.before?.limits.maxSize, defaultSize);
+    const ids = ["goal", ...Array.from({ length: defaultSize + 1 }, (_, index) => `prerequisite-${index}`)];
+    const chain = graph(ids, ids.slice(1).map((id, index) => [ids[index], id]));
+    for (const side of ["before", "after"] as const) {
+      const result = side === "before"
+        ? refused(chain, graph(), "CUT_SEARCH_INCOMPLETE")
+        : refused(graph(), chain, "CUT_SEARCH_INCOMPLETE");
+      assert.equal(result.refusal.side, side);
+      assert.match(result.refusal.remedy, /--cut-max-size/);
+    }
+    const complete = compare(chain, chain, { cutOptions: { maxSize: defaultSize + 1 } });
+    assert.equal(complete.changed, false);
+    assert.equal(complete.receipt.cuts.before?.complete, true);
+    assert.equal(complete.receipt.cuts.after?.complete, true);
+    assert.equal(complete.receipt.cuts.before?.limits.maxSize, defaultSize + 1);
+    compare(graph(), graph(), { cutOptions: { maxSize: hardCap } });
+    const overCap = refused(graph(), graph(), "CUT_REFUSED", { cutOptions: { maxSize: hardCap + 1 } });
+    assert.equal(overCap.refusal.cutCode, "INVALID_OPTIONS");
+  }
 });

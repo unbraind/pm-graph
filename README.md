@@ -588,7 +588,13 @@ Defaults are 32 rows and 2,000,000 traversal work units; `--limit` accepts
 `--cut-max-states`, `--cut-max-work`, `--cut-max-cuts` and `--cut-max-size` flags
 (defaults: 20,000 / 2,000,000 / 32 / 8). Each snapshot is limited to 10,000 nodes,
 50,000 relationships and, for CLI files, 16 MiB. The active blocker cone is
-limited to 512 unresolved items. Explanation titles/statuses are clipped to
+limited to 512 unresolved items including the goal; this is a preflight cap,
+not a completion guarantee. Completion requires `--cut-max-size` (default 8,
+hard cap 64) to be at least the number of unresolved prerequisites in the
+active cone, excluding the goal. A chain of 9 unresolved prerequisites therefore
+returns `CUT_SEARCH_INCOMPLETE` with defaults; more than 64 cannot complete
+under the current search. Other cut budgets can stop even smaller searches.
+Explanation titles/statuses are clipped to
 160/64 Unicode code points with `textClipped: true`; ids are limited to 256
 characters. The host's JSON/TOON projection and token budgets also apply to the
 declared `changes` rows. Refusals exit 2 (unknown goal: 3) and preserve
