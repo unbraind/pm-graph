@@ -6,11 +6,11 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-08-10T15:27:56.081Z"
-updated_at: "2026-10-21T19:14:40.731Z"
+updated_at: "2026-10-22T10:56:38.546Z"
 closed_at: "2026-10-21T19:14:36.436Z"
 completed_at: "2026-10-21T19:14:36.436Z"
 author: pi-agent
-resolution: "Reverified main f46704ef4083 (unchanged since audit): [PR #60](https://github.com/unbraind/pm-graph/pull/60) fixes protected-main publication ordering; #140 verifies it. Current release.yml merges metadata before registry publication. Retained evidence: scripts/completion-reporter.ts, scripts/coverage-gate.ts, test/coverage-gate.test.ts."
+resolution: "Reverified main f46704ef4083: PR #60 (55ad7e4) delivered protected-main publication ordering; PR #140 (ef2caae) later verified the existing workflow. Current release.yml merges the protected metadata PR, verifies the merged release, publishes, then pushes the release tag. Retained evidence: .github/workflows/release.yml. The release-workflow tests cover npm/OIDC guards and do not establish the full protected-PR/verification/publication/tag sequence."
 comments[1]{created_at,author,text}:
   "2026-10-16T06:34:39.513Z",codex-agent,"Fixed on current main by 55ad7e4 (#60), first contained by v2026.08.10. .github/workflows/release.yml:330 merges release metadata through a protected PR; :556 checks out and verifies the exact merged main commit before :602 publication, and :778 only pushes the release tag afterwards. No HEAD:main push remains on the publish path. Existing release-workflow tests will run; no release or publication is performed by this task."
 notes[8]{created_at,author,text}:
@@ -27,5 +27,5 @@ files[2]{path,scope}:
   test/release-workflow.test.ts,project
 tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   node --test test/release-workflow.test.ts,project,codex-agent,"2026-10-16T06:44:34.303Z",local_mutation,fix/gates-and-backlog
-close_reason: "Reverified main f46704ef4083 (unchanged since audit): [PR #60](https://github.com/unbraind/pm-graph/pull/60) fixes protected-main publication ordering; #140 verifies it. Current release.yml merges metadata before registry publication. Retained evidence: scripts/completion-reporter.ts, scripts/coverage-gate.ts, test/coverage-gate.test.ts."
+close_reason: "Reverified main f46704ef4083: PR #60 (55ad7e4) delivered protected-main publication ordering; PR #140 (ef2caae) later verified the existing workflow. Current release.yml merges the protected metadata PR, verifies the merged release, publishes, then pushes the release tag. Retained evidence: .github/workflows/release.yml. The release-workflow tests cover npm/OIDC guards and do not establish the full protected-PR/verification/publication/tag sequence."
 body: ""

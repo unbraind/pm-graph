@@ -6,11 +6,11 @@ status: closed
 priority: 1
 tags[1]: changed
 created_at: "2026-10-14T09:49:43.707Z"
-updated_at: "2026-10-21T19:03:42.952Z"
+updated_at: "2026-10-22T10:56:45.533Z"
 closed_at: "2026-10-21T19:03:38.218Z"
 completed_at: "2026-10-21T19:03:38.218Z"
 author: codex-agent
-resolution: "Reverified main f46704ef4083 (unchanged since audit): The SHA-pinned .github/workflows/pm-github-sync.yml caller is present on main; current package.json also records the adopted toolchain. Runtime workflow failures are a separate concern. Retained evidence: .github/workflows/pm-github-sync.yml, package.json."
+resolution: "Reverified main f46704ef4083 (unchanged since audit): The SHA-pinned .github/workflows/pm-github-sync.yml caller is present on main; current package.json also records the adopted toolchain. Runtime workflow failures are a separate concern. Retained evidence: .github/workflows/pm-github-sync.yml, package.json, package-lock.json."
 comments[6]{created_at,author,text}:
   "2026-10-14T09:49:52.694Z",codex-agent,"Plan: author this package own thin caller, pin workflow SHA and pm-github to 2026.10.13, and verify isolated npm/Bun release gates without changing thresholds. Remove fast-glob and any jscpd4 alias; pin pm-ops 2026.10.14. Published changelog reviewed: attestation alias/function rejection, read-only pack prepare, release repair and Windows proof support. Duplication now uses Node glob with jscpd 5. No workflow dispatch, bot requests, merges, or source function changes."
   "2026-10-14T09:50:54.042Z",codex-agent,"Audit before: full 4 vulnerabilities (4 high), production 0. After: full 0, production 0; npm ls braces is empty. The caller runs at 17 2 * * * UTC. It validates access, previews the complete plan, imports with --gate, verifies repeat-import idempotency and privacy, then checks strict health before commit/push/PR. SHA pin matches published pm-github 2026.10.13. Actionlint skipped: binary missing and offline npx registry metadata unavailable. GitHub Actions PR-creation setting verified enabled. No direct fast-glob imports in authored scripts; no runtime function change or behavioural revert test applies."
@@ -30,5 +30,5 @@ tests[2]{command,scope,timeout_seconds,pm_context_mode,provenance{author,created
   "env -u PM_PATH -u PM_AUTHOR HOME=$(mktemp -d) GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 bun run release:check",project,3600,tracker,codex-agent,"2026-10-14T09:51:23.589Z",local_mutation,chore/gated-issue-sync-and-braces-free-gates
 docs[1]{path,scope}:
   CHANGELOG.md,project
-close_reason: "Reverified main f46704ef4083 (unchanged since audit): The SHA-pinned .github/workflows/pm-github-sync.yml caller is present on main; current package.json also records the adopted toolchain. Runtime workflow failures are a separate concern. Retained evidence: .github/workflows/pm-github-sync.yml, package.json."
+close_reason: "Reverified main f46704ef4083 (unchanged since audit): The SHA-pinned .github/workflows/pm-github-sync.yml caller is present on main; current package.json also records the adopted toolchain. Runtime workflow failures are a separate concern. Retained evidence: .github/workflows/pm-github-sync.yml, package.json, package-lock.json."
 body: ""
