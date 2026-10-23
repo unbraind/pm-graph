@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Enumerate minimal blocker frontiers for a goal with bounded completeness receipts ([pm-graph-8z44](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-8z44.toon))
+- Compare snapshot graph impact for resuming agents ([pm-graph-snapshot-impact](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-snapshot-impact.toon))
+
+### Other
+
+- Correct review evidence in tracker reconciliation PR 155 ([pm-graph-review155](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-review155.toon))
+
 ## 2026.10.23 - 2026-10-23
 
 ### Changed

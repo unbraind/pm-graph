@@ -2,16 +2,19 @@ id: pm-graph-review155
 title: Correct review evidence in tracker reconciliation PR 155
 description: "Verify six review threads against main, correct both closeout evidence fields without changing terminal status, append history corrections, and self-review all reconciliation records. Tracker-only validation uses mainline artifacts and ancestry, changelog regeneration, npm ci and pm health."
 type: Chore
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-10-22T10:55:22.155Z"
-updated_at: "2026-10-22T11:00:34.689Z"
+updated_at: "2026-10-23T15:21:09.904Z"
+closed_at: "2026-10-23T15:21:09.471Z"
+completed_at: "2026-10-23T15:21:09.471Z"
 author: codex-agent
-comments[3]{created_at,author,text}:
+comments[4]{created_at,author,text}:
   "2026-10-22T10:55:35.861Z",codex-agent,"Oriented context, keyword search and open inventory; no existing item owns PR #155 review evidence corrections. All six threads are valid; latest CodeRabbit review has no outside-diff findings. Main f46704ef4083287ba54766a8a03e6e09df7ec7d6 is contained and unchanged. Verified PR #39 delivers the output-format SDK regression; #140 later verifies it. PR #60 changes release.yml; #79 changes the former shell scanner and attestation regression, now represented by the canonical consumer; #138 changes package.json and package-lock.json for dependency removal; #124 includes the dated certification document. Plan: correct five affected closeouts and append CLI update events; never rewrite original close events. Self-review will also add direct verifier evidence to the deterministic-date closeout and lockfile evidence to the combined dependency-maintenance closeout. Preserve every terminal status and completion timestamp; run tracker-only gates."
   "2026-10-22T10:59:28.442Z",codex-agent,"Tracker-only verification: 7/7 paired resolution and close_reason corrections match the verified main evidence; all unrelated snapshot fields, statuses and completion timestamps are unchanged. Each corrected history preserves the complete PR-head byte prefix and appends exactly one update event; all 15 original history streams preserve their main prefixes. Verified 7/7 cited delivery/verification/canonicalization commits are ancestors of main and all 11/11 retained main artifacts exist. PM-linked ancestry/artifact commands passed 8/8. These mainline checks are the tracker-only substitute for behavioral revert proofs. Proposed additions pass privacy and whitespace checks. Initial health reported an ignored local pm-github host-version mismatch; ran the existing CI installer to align only the local project extension, with managed registry restored. No dependency pin, source, workflow or dist changed; original history events remain untouched."
   "2026-10-22T11:00:32.734Z",codex-agent,"Tracker-only gates complete: npm ci passed (0 vulnerabilities); npm run changelog:full and npm run changelog:check passed; pm health --check-only --json reports ok=true, exit 0, no gate-failing findings, with only 2 inherited stale-in-progress advisories after the existing CI extension installer aligned local runtime state. Linked evidence checks passed 8/8; mainline verification passed 7/7 commit ancestry checks and 11/11 artifact checks. Seven paired evidence corrections preserve all other fields and append exactly one correction event apiece; all 15 original histories retain main and prior-PR byte prefixes. Six threads addressed with no evidence-backed refusals, plus two self-review evidence improvements. No behavioral revert applies to tracker-only metadata; the mainline proofs and append-only checks are recorded instead. Full PR self-review retained accurate release credential/preflight claims separately from protected-PR ordering and found no other mismatched evidence. No new PM CLI/SDK bug, no history repair, no new close operation. Item remains in_progress for orchestrator verification."
+  "2026-10-23T15:21:01.298Z",codex-agent,"DELIVERED: merged PR #155 (32ab3dfb661adae43c86fdfd0bfbc67068315868) is an ancestor of audited main 13c51065d436e643cab250137dc6b43be4fa645b. Inspected on main: .agents/pm/chores/pm-graph-lcmc.toon, .agents/pm/issues/pm-graph-g8uc.toon. Merged tracker correction preserves terminal lifecycle and original append-only histories while replacing mismatched evidence with inspected mainline workflow/certification artifacts; its retained receipts prove 7 paired corrections, 8 linked checks and local tracker gates. This tracker audit inspected existing tests/files; it does not claim a new full product test run."
 files[14]{path,scope}:
   .agents/pm/chores/pm-graph-lcmc.toon,project
   .agents/pm/history/pm-graph-lcmc.jsonl,project
@@ -39,4 +42,5 @@ tests[8]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
 docs[2]{path,scope}:
   CHANGELOG.md,project
   docs/certification-2026.10.4.md,project
+close_reason: "DELIVERED: merged PR #155 (32ab3dfb661adae43c86fdfd0bfbc67068315868) is an ancestor of audited main 13c51065d436e643cab250137dc6b43be4fa645b. Inspected on main: .agents/pm/chores/pm-graph-lcmc.toon, .agents/pm/issues/pm-graph-g8uc.toon. Merged tracker correction preserves terminal lifecycle and original append-only histories while replacing mismatched evidence with inspected mainline workflow/certification artifacts; its retained receipts prove 7 paired corrections, 8 linked checks and local tracker gates. This tracker audit inspected existing tests/files; it does not claim a new full product test run."
 body: ""

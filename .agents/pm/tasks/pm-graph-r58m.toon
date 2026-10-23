@@ -2,16 +2,17 @@ id: pm-graph-r58m
 title: Investigate isolated package installation timeout with runtime dependencies
 description: "The packaged-host regression setup repeatedly exceeded its 180-second timeout during pm package install, including offline mode. Determine whether dependency installation, archive staging or runtime verification is responsible; retain synthetic fixtures and report the exact cause without weakening read-output tests."
 type: Task
-status: in_progress
+status: open
 priority: 2
 tags: []
 created_at: "2026-10-13T13:36:32.154Z"
-updated_at: "2026-10-16T07:09:11.682Z"
+updated_at: "2026-10-23T15:21:50.501Z"
 author: codex-agent
-comments[3]{created_at,author,text}:
+comments[4]{created_at,author,text}:
   "2026-10-13T18:51:46.257Z",codex-agent,The adoption release gates now pass their existing packed-extension installer tests under both npm and Bun launchers. The output-contract regression isolates its purpose by extracting the actual archive and reusing the pinned dependency graph. The earlier 180-second setup timeout has not been independently explained; retain this separate investigation.
   "2026-10-13T22:23:11.477Z",claude-hub,"Reopened: this item was linked in the merged PR body as an open follow-up or risk, not as delivered work. The automated close-out closed it in error; it remains open."
   "2026-10-16T06:41:53.166Z",codex-agent,"Current-main reproduction with the pinned PM CLI 2026.10.13 and an actual npm pack archive, clean HOME, shared registry cache and npm offline mode: pack 2.00s, init 1.96s, pm package install --project 29.77s, all exit 0. Installer reports activation ok, 15 commands, module_graph_verification=fresh_in_topology_snapshot and zero blocking health failures. A separate traced run also succeeds; tracing follows a detached flush helper and its elapsed wall time is not a reliable installer-only timing. The historical 180-second timeout is not reproduced and its original cause remains unproven; keep this investigation open rather than changing package behavior without a failing case."
+  "2026-10-23T15:21:41.884Z",codex-agent,"STALE-CLAIM: audited main 13c51065d436e643cab250137dc6b43be4fa645b; no open PR or recently pushed live branch references this record. Inspected: test/export-and-contract.test.ts, test/read-output-host.test.ts. Remaining: The historical 180-second runtime-dependency install timeout no longer reproduces in the retained current-main probe; its original cause is still unproven. Keep root-cause investigation open without a speculative code change. Release historical contention and retain real work as open; no delivery/cancellation is claimed."
 files[2]{path,scope}:
   test/export-and-contract.test.ts,project
   test/read-output-host.test.ts,project
