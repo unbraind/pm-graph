@@ -1,3 +1,5 @@
+import { registerCrossWorkspace } from "./cross-workspace-command.js";
+export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.js";
 import { spawnSync } from "node:child_process";
 import { registerSnapshotImpact } from "./snapshot-impact-command.js";
 export { compareGraphSnapshots } from "./snapshot-impact.js";
@@ -386,7 +388,7 @@ function toNumber(value) {
  * @param pmRoot Candidate tracker root.
  * @returns The same path, once validated, so callers can wrap in place.
  */
-function assertPmTracker(pmRoot) {
+export function assertPmTracker(pmRoot) {
     if (!existsSync(pmRoot)) {
         throw new CommandError(`No pm tracker at ${pmRoot}`, EXIT_CODE.USAGE);
     }
@@ -2399,6 +2401,7 @@ async function loadShapedAnalytics(context) {
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api) {
+    registerCrossWorkspace(api);
     registerSnapshotImpact(api);
     registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
     // The `pm-graph export --format <fmt>` handler renders the graph into a

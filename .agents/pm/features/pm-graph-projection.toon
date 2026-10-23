@@ -1,0 +1,26 @@
+id: pm-graph-projection
+title: Project consented workspaces into a qualified read-only graph
+description: "Acceptance: synthetic directory and database scopes preserve qualified IDs; denied workspaces leak neither node existence nor labels; incompleteness remains explicit. Provide typed SDK and CLI, bounded JSON/TOON, typed refusals with remedies, README and example, public tracker copy measurements, and full npm/Bun CI release-gate evidence. Overlap rechecked: core SDK graph offers single-tracker traversal and analytics; pm-graph graphFromItems projects a single source; pm-web project-graph uses a certified single-project read; pm-vcs tracker lenses version/project tracker history. None supplies consent-scoped federation with controlled evidence edges. Reuse SDK listAllComplete, certifyCompleteListResult, existing graphFromItems and host read_output; delegate authorization to existing host policy and readers."
+type: Feature
+status: in_progress
+priority: 2
+tags: []
+created_at: "2026-10-23T15:33:12.453Z"
+updated_at: "2026-10-23T15:38:33.313Z"
+author: codex-agent
+comments[2]{created_at,author,text}:
+  "2026-10-23T15:33:37.179Z",codex-agent,"Plan and implementation: authorize every scope before invoking any reader, require explicit source and evidence consent, qualify tuple IDs, suppress external placeholders and raw dependency properties, report boundaries by input slot. Database adapters return SDK-certified complete snapshots, independently revalidated. Output pages have separate omission receipts; source failures publish no partial source nodes. npm install initially hit host EALLOWSCRIPTS; retry uses isolated npm user configuration. Repo SDK pin remains unchanged."
+  "2026-10-23T15:38:26.959Z",codex-agent,"Focused linked test passed 3/3 with no git executable on PATH. Behavioral revert proof: reverting only qualification to local IDs failed the same regression (2 IDs instead of 4); bypassing only authorization also failed the explicit boundary assertion. Restored both functions. Public main tracker copy: 102 certified items, 2 readable aliases, 204 qualified nodes, 26 relationships, 230 rows, 1 unreadable boundary, zero denied reads, 43900 JSON bytes, 1670 ms, every source file byte-identical. Local typecheck/lint/docstrings/zero-duplication passed. Full release gates will run in CI to avoid saturated-host full-suite work."
+files[5]{path,scope}:
+  scripts/validate-cross-workspace.ts,project
+  src/cross-workspace-command.ts,project
+  src/cross-workspace.ts,project
+  src/index.ts,project
+  test/cross-workspace.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/cross-workspace.test.ts,project,codex-agent,"2026-10-23T15:35:05.898Z",local_mutation,feat/cross-workspace-projection
+docs[3]{path,scope}:
+  docs/cross-workspace-example.md,project
+  docs/cross-workspace-validation.md,project
+  README.md,project
+body: ""

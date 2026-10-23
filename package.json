@@ -50,6 +50,7 @@
     "manifest.json",
     "README.md",
     "docs/blocker-cuts-example.md",
+    "docs/cross-workspace-example.md",
     "CHANGELOG.md"
   ],
   "repository": {
@@ -103,11 +104,13 @@
     "docs": [
       "README.md",
       "docs/blocker-cuts-example.md",
-      "CHANGELOG.md"
+      "CHANGELOG.md",
+      "docs/cross-workspace-example.md"
     ],
     "examples": [
       "README.md",
-      "docs/blocker-cuts-example.md"
+      "docs/blocker-cuts-example.md",
+      "docs/cross-workspace-example.md"
     ]
   },
   "publishConfig": {
