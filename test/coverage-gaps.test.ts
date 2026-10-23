@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import { EXIT_CODE, isPmCliExpectedError } from "@unbrained/pm-cli/sdk";
 import { runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
 
 import {
@@ -481,7 +482,7 @@ test("export and sync wrap unexpected graph-loading errors", { skip: !pmAvailabl
   }
 });
 
-test("impact wraps a failure while resolving the canonical graph engine", { skip: !pmAvailable }, async () => {
+test("impact preserves the canonical graph engine missing-tracker refusal", { skip: !pmAvailable }, async () => {
   const ws = freshWorkspace();
   try {
     pm(ws, ["init"]);
@@ -504,8 +505,9 @@ test("impact wraps a failure while resolving the canonical graph engine", { skip
     await assert.rejects(
       async () => impactHandler.run(brokenAfterLoad),
       (err: CommandError) => {
-        assert.equal(err.exitCode, 1);
-        assert.match(err.message, /Failed to run pm graph impact: Tracker is not initialized/);
+        assert.ok(isPmCliExpectedError(err));
+        assert.equal(err.exitCode, EXIT_CODE.NOT_FOUND);
+        assert.match(err.message, /Tracker is not initialized/);
         return true;
       },
     );
@@ -621,13 +623,14 @@ test("cypher, neighbors, query, and explain remaining error surfaces", { skip: !
       },
     );
 
-    const cypherMissing = (await harness.runCommand({
-      command: "pm-graph cypher",
-      pmRoot: path.join(ws, "missing-tracker"),
-    })) as CmdResult;
-    assert.match(
-      String(cypherMissing.errorMessage ?? ""),
-      /Cypher generation failed|No pm tracker/,
+    await assert.rejects(
+      harness.runCommand({ command: "pm-graph cypher", pmRoot: path.join(ws, "missing-tracker") }),
+      (error: unknown) => {
+        assert.ok(isPmCliExpectedError(error));
+        assert.equal(error.exitCode, EXIT_CODE.USAGE);
+        assert.match(error.message, /No pm tracker/);
+        return true;
+      },
     );
 
     await assert.rejects(
@@ -1069,7 +1072,7 @@ test("registered handlers support omitted optional context fields", { skip: !pmA
         pm_root: tracker,
       } as unknown as Parameters<typeof entry.run>[0];
       await Promise.resolve(entry.run(context)).catch((err: unknown) => {
-        if (!(err instanceof Error) || err.name !== "CommandError") throw err;
+        if (!isPmCliExpectedError(err)) throw err;
       });
     }
 

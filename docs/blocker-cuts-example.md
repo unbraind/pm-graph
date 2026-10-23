@@ -45,6 +45,12 @@ If `docs` references an absent prerequisite, the result is a typed
 the result is a `CYCLE` refusal with a closed witness. Resolve the data gap or
 cycle and request a fresh snapshot before relying on an explanation.
 
+The host advertises `--max-states`, `--max-work`, `--max-cuts` and
+`--max-size` as numeric options in `pm contracts`. Each budget must be a
+positive safe integer; malformed values refuse before reading or searching the
+graph. Both `--max-states 100` and `--max-states=100` use the same host
+normalization. Run `pm pm-graph blocker-cuts --help` for the full option list.
+
 Against an initialized tracker the equivalent command is:
 
 ```bash

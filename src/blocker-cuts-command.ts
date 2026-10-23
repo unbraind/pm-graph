@@ -1,4 +1,4 @@
-import { listAllComplete, readSettings, resolveRuntimeStatusRegistry } from "@unbrained/pm-cli/sdk";
+import { defineCommand, defineFlag, listAllComplete, readSettings, resolveRuntimeStatusRegistry } from "@unbrained/pm-cli/sdk";
 import type { PmCompleteListCertificate } from "@unbrained/pm-cli/sdk";
 import { minimalBlockerCuts } from "./blocker-cuts.ts";
 import type { BlockerCutOptions, BlockerCutReceipt, BlockerCutRefusalCode } from "./blocker-cuts.ts";
@@ -29,39 +29,29 @@ export function registerBlockerCuts(
   resolveRoot: (context: CommandContext) => string,
   project: (items: Awaited<ReturnType<typeof listAllComplete>>["items"], root: string) => Graph,
 ): void {
-  api.registerCommand({
+  api.registerCommand(defineCommand({
     name: "pm-graph blocker-cuts",
     description: "Enumerate alternative minimal blocker frontiers for a goal with bounded completeness receipts.",
     read_output: { row_keys: ["cuts"] },
     arguments: [{ name: "goal", required: true, description: "Exact goal item id" }],
+    flags: [
+      defineFlag({ long: "--max-states", value_name: "integer", value_type: "number", description: "Positive integer search-state budget (default 20000)." }),
+      defineFlag({ long: "--max-work", value_name: "integer", value_type: "number", description: "Positive integer work budget (default 2000000)." }),
+      defineFlag({ long: "--max-cuts", value_name: "integer", value_type: "number", description: "Positive integer cut limit (default 32)." }),
+      defineFlag({ long: "--max-size", value_name: "integer", value_type: "number", description: "Positive integer frontier size limit (default 8)." }),
+    ],
     examples: ["pm pm-graph blocker-cuts goal-id --max-cuts 16 --json"],
     failure_hints: ["Reload the full tracker for missing nodes; break cycles; increase search limits only when the receipt is partial."],
-    run: async (context) => {
-      const args = context.args ?? [];
-      if (args.includes("--help") || args.includes("-h")) {
-        return {
-          cuts: [],
-          usage: "pm pm-graph blocker-cuts <goal> [--max-states 20000] [--max-work 2000000] [--max-cuts 32] [--max-size 8] [--json]",
-          semantics: "All upstream prerequisite paths must intersect a cut. Intermediate tasks still require completion; immediatelyUnblocked reports direct eligibility.",
-          completeness: "Graph/source and search receipts are separate. Partial cuts are minimal; a partial list is not exhaustive.",
-        };
-      }
+    run: async (context: CommandContext) => {
+      const positionals = context.args ?? [];
       const options: BlockerCutOptions = {};
-      const positionals: string[] = [];
-      const flags = new Map<string, "maxStates" | "maxWork" | "maxCuts" | "maxSize">([
-        ["--max-states", "maxStates"], ["--max-work", "maxWork"], ["--max-cuts", "maxCuts"], ["--max-size", "maxSize"],
-      ]);
-      for (let i = 0; i < args.length; i++) {
-        const arg = args[i];
-        if (arg === "--json") continue;
-        const key = flags.get(arg);
-        if (key) {
-          const value = args[++i];
-          if (!value || !/^\d+$/.test(value)) return commandRefusal("INVALID_OPTIONS", `Supply a positive integer after ${arg}.`);
-          options[key] = Number(value);
-        } else if (arg.startsWith("-")) {
-          return commandRefusal("INVALID_OPTIONS", `Remove unsupported flag ${arg}; use blocker-cuts --help.`);
-        } else positionals.push(arg);
+      for (const key of ["maxStates", "maxWork", "maxCuts", "maxSize"] as const) {
+        const value = context.options?.[key];
+        if (value === undefined) continue;
+        if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+          return commandRefusal("INVALID_OPTIONS", `Supply a positive integer for ${key}.`);
+        }
+        options[key] = value;
       }
       if (positionals.length !== 1) return commandRefusal("INVALID_OPTIONS", "Use pm pm-graph blocker-cuts <exact-goal-id>; see --help for budgets.");
       let source: PmCompleteListCertificate;
@@ -83,5 +73,5 @@ export function registerBlockerCuts(
       if (!result.ok) return { ...commandRefusal(result.refusal.code, result.refusal.remedy, result.receipt, source), goal: result.goal };
       return { ...result, source };
     },
-  });
+  }));
 }

@@ -7,7 +7,8 @@
   "capabilities": [
     "commands",
     "importers",
-    "services"
+    "services",
+    "schema"
   ],
   "author": "@unbraind",
   "priority": 50

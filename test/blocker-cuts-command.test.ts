@@ -4,7 +4,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writ
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
-import { PmClient } from "@unbrained/pm-cli/sdk";
+import { PmClient, type ContractsResult } from "@unbrained/pm-cli/sdk";
 import { registerBlockerCuts } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutCommandRefusal } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutResult } from "../src/blocker-cuts.ts";
@@ -115,29 +115,63 @@ test("real CLI returns JSON and TOON from a non-git tracker with no git executab
 });
 
 test("CLI flags, usage and source failures retain typed actionable refusals", async () => {
-  for (const args of [[], [goal, "extra"], [goal, "--bogus"], [goal, "--max-states"], [goal, "--max-work", "-1"], [goal, "--max-size", "0"], [goal, "--max-cuts", "99999"]]) {
+  for (const args of [[], [goal, "extra"]]) {
     const result = await handler({ pm_root: pmRoot, args }) as BlockerCutCommandRefusal;
     assert.equal(result.code, "INVALID_OPTIONS");
     assert.equal(result.exit_code, 2);
-    assert.equal(result.ok, false);
+  }
+  for (const value of ["abc", -1, 0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    const result = await handler({ pm_root: pmRoot, args: [goal], options: { maxStates: value } }) as BlockerCutCommandRefusal;
+    assert.equal(result.code, "INVALID_OPTIONS");
+    assert.equal(result.exit_code, 2);
+    assert.deepEqual(result.cuts, []);
     assert.ok(result.refusal.remedy);
   }
-  const help = await handler({ args: ["--help"] }) as { usage: string };
-  assert.match(help.usage, /blocker-cuts/);
-  assert.ok(await handler({ args: ["-h"] }));
+  const help = run(["pm-graph", "blocker-cuts", "--help"], true);
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--max-states/);
   const sourceFailure = await handler({ pm_root: join(workspace, "absent"), args: [goal] }) as BlockerCutCommandRefusal;
   assert.equal(sourceFailure.code, "SOURCE_INCOMPLETE");
   assert.ok(sourceFailure.refusal.remedy.endsWith(`Cause: No pm tracker at ${join(workspace, "absent")}`));
   const missing = run(["--json", "pm-graph", "blocker-cuts", "absent"], true);
   assert.equal(missing.status, 3, missing.stderr || missing.stdout);
   assert.match(missing.stderr + missing.stdout, /UNKNOWN_GOAL/);
-  const bounded = await handler({ pm_root: pmRoot, args: [goal, "--max-states", "1", "--max-work", "500", "--max-cuts", "8", "--max-size", "2", "--json"] }) as BlockerCutResult;
+  const bounded = await handler({ pm_root: pmRoot, args: [goal], options: { maxStates: 1, maxWork: 500, maxCuts: 8, maxSize: 2 } }) as BlockerCutResult;
   assert.equal(bounded.receipt.search.reason, "maxStates");
   const cliBounded = run(["--json", "pm-graph", "blocker-cuts", goal, "--max-states", "1"], true);
   assert.equal(cliBounded.status, 0, cliBounded.stdout + cliBounded.stderr);
   const limited = JSON.parse(cliBounded.stdout) as BlockerCutResult;
   assert.equal(limited.receipt.search.reason, "maxStates");
   assert.equal(limited.receipt.search.complete, false);
+});
+
+test("host contracts advertise numeric cut budgets and normalize both CLI spellings without git", () => {
+  const contracts = run(["contracts", "--command", "pm-graph blocker-cuts", "--json"], true);
+  assert.equal(contracts.status, 0, contracts.stderr);
+  const inventory = JSON.parse(contracts.stdout) as ContractsResult;
+  const command = inventory.command_flags?.find((entry) => entry.command === "pm-graph blocker-cuts");
+  assert.ok(command, "blocker-cuts has a workspace flag contract");
+  for (const flag of ["--max-states", "--max-work", "--max-cuts", "--max-size"]) {
+    assert.equal(command.flags.find((entry) => entry.flag === flag)?.value_type, "number", flag);
+  }
+  const budgets = ["max-states", "1", "max-work", "500", "max-cuts", "8", "max-size", "2"];
+  const separated = run(["--json", "pm-graph", "blocker-cuts", goal, ...budgets.flatMap((value, index) => index % 2 === 0 ? [`--${value}`] : [value])], true);
+  const equals = run(["--json", "pm-graph", "blocker-cuts", goal, ...budgets.flatMap((value, index) => index % 2 === 0 ? [`--${value}=${budgets[index + 1]}`] : [])], true);
+  assert.equal(separated.status, 0, separated.stderr);
+  assert.equal(equals.status, 0, equals.stderr || equals.stdout);
+  const left = JSON.parse(separated.stdout) as BlockerCutResult;
+  const right = JSON.parse(equals.stdout) as BlockerCutResult;
+  assert.ok(left.ok);
+  assert.ok(right.ok);
+  assert.deepEqual(right.cuts, left.cuts);
+  assert.deepEqual(right.receipt, left.receipt);
+  assert.equal(right.receipt.search.reason, "maxStates");
+  for (const value of ["abc", "-1", "0", "1.5"]) {
+    const malformed = run(["--json", "pm-graph", "blocker-cuts", goal, `--max-states=${value}`], true);
+    assert.equal(malformed.status, 2, malformed.stderr || malformed.stdout);
+    assert.match(malformed.stderr + malformed.stdout, /INVALID_OPTIONS|positive integer/);
+    assert.doesNotMatch(malformed.stdout, /"search"/);
+  }
 });
 
 test("cycles and missing references use the same source and graph receipts", async () => {
