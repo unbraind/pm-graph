@@ -36,13 +36,13 @@
     "@babel/eslint-parser": "8.0.7",
     "@babel/plugin-syntax-typescript": "8.0.3",
     "@types/node": "26.6.5",
-    "@unbrained/pm-cli": "2026.10.15",
+    "@unbrained/pm-cli": "2026.10.20",
     "@viz-js/viz": "3.31.0",
     "eslint": "10.13.0",
     "jscpd": "5.4.1",
     "pm-brand": "github:unbraind/pm-brand#7ad0970d96a20c24b8dbd9e0dcd1efeb8b4d5cc1",
-    "pm-changelog": "2026.10.16",
-    "pm-ops": "2026.10.16",
+    "pm-changelog": "2026.10.20",
+    "pm-ops": "2026.10.20",
     "typescript": "7.0.2"
   },
   "files": [
