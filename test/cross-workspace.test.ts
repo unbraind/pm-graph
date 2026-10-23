@@ -160,3 +160,75 @@ test("command validates bounded manifests and flag syntax without reading source
     assert.match(JSON.stringify(await command({ args: ["-h"] })), /manifest/);
   } finally { rmSync(ws, { recursive: true, force: true }); }
 });
+
+test("facet-shaped missing blockers keep projection incomplete", async () => {
+  const workspace = mkdtempSync(join(tmpdir(), "pmg-facet-boundary-"));
+  const ceiling = process.env.GIT_CEILING_DIRECTORIES;
+  process.env.GIT_CEILING_DIRECTORIES = dirname(workspace);
+  try {
+    const tracker = join(workspace, ".agents", "pm");
+    const client = new PmClient({ pmRoot: tracker, cwd: workspace, noExtensions: true, author: "projection-test" });
+    await client.init("facet", { defaults: true, agentGuidance: "skip", mergeFence: false });
+    const first = await client.create({ type: "Task", title: "First task", priority: 0, createMode: "progressive" });
+    const second = await client.create({ type: "Task", title: "Second task", priority: 4, createMode: "progressive" });
+    const scopes: ProjectionScope[] = [{ key: "tasks", source: { kind: "directory", pmRoot: tracker } }];
+    const options: ProjectionOptions = { consent: ["tasks"], authorize: () => true };
+    const complete = await projectWorkspaces(scopes, options);
+    assert.equal(complete.complete, true, "ordinary type/status facets must not count as missing items");
+    assert.equal(complete.receipt.edges, 0);
+    for (const target of ["type:task", "status:open"]) {
+      await client.update(second.item.id, { blockedBy: target });
+      const projected = await projectWorkspaces(scopes, options);
+      assert.equal(projected.ok, true);
+      assert.equal(projected.complete, false, `missing blocker ${target} must remain an explicit boundary`);
+      assert.deepEqual(projected.boundaries.map(({ code }) => code), ["DANGLING_RELATION"]);
+      assert.equal(projected.receipt.nodes, 2);
+      assert.equal(projected.receipt.edges, 0);
+      assert.doesNotMatch(JSON.stringify(projected), /type:task|status:open|PmFacet|ExternalPmItem/);
+    }
+    await client.update(second.item.id, { blockedBy: first.item.id });
+    const resolved = await projectWorkspaces(scopes, options);
+    assert.equal(resolved.complete, true);
+    assert.equal(resolved.receipt.edges, 1);
+  } finally {
+    if (ceiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
+    else process.env.GIT_CEILING_DIRECTORIES = ceiling;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("lone-surrogate evidence identities return typed refusals", async () => {
+  const workspace = mkdtempSync(join(tmpdir(), "pmg-unicode-boundary-"));
+  try {
+    const tracker = join(workspace, ".agents", "pm");
+    const client = new PmClient({ pmRoot: tracker, cwd: workspace, noExtensions: true, author: "projection-test" });
+    await client.init("unicode", { defaults: true, agentGuidance: "skip", mergeFence: false });
+    const created = await client.create({ type: "Task", title: "Unicode identity", createMode: "progressive" });
+    const scope: ProjectionScope = { key: "scope😀", source: { kind: "directory", pmRoot: tracker } };
+    const endpoint = { workspace: scope.key, item: created.item.id };
+    const evidence: ProjectionEvidence = { from: endpoint, to: endpoint, type: "EVIDENCE_FOR", consent: true };
+    let authorizationCalls = 0;
+    const authorize = (): boolean => { authorizationCalls++; return true; };
+    for (const invalid of ["\ud800", "\udfff", "prefix\ud800suffix"]) {
+      for (const side of ["from", "to"] as const) {
+        for (const field of ["workspace", "item"] as const) {
+          const malformed = { ...evidence, [side]: { ...endpoint, [field]: invalid } };
+          const result = await projectWorkspaces([scope], { consent: [scope.key], authorize, evidence: [malformed] });
+          assert.equal(result.ok, false);
+          assert.equal(result.refusal?.code, "INVALID_OPTIONS");
+          assert.equal(result.exit_code, 2);
+          assert.match(result.refusal?.remedy ?? "", /Unicode/);
+          assert.deepEqual(result.rows, []);
+        }
+      }
+      const invalidAlias = await projectWorkspaces([{ ...scope, key: invalid }], { consent: [invalid], authorize });
+      assert.equal(invalidAlias.refusal?.code, "INVALID_OPTIONS");
+    }
+    assert.equal(authorizationCalls, 0, "malformed identities must refuse before authorization or source reads");
+    const accepted = await projectWorkspaces([scope], { consent: [scope.key], authorize, evidence: [evidence] });
+    assert.equal(accepted.ok, true);
+    assert.equal(accepted.complete, true);
+    assert.equal(accepted.receipt.edges, 1);
+    assert.ok(accepted.rows.some((row) => row.kind === "node" && row.id === qualifyProjectionId(scope.key, created.item.id)));
+  } finally { rmSync(workspace, { recursive: true, force: true }); }
+});

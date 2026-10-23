@@ -728,12 +728,14 @@ function facetNodeId(kind: string, value: string): string {
  * @param items - pm item metadata to project.
  * @param workspace - Workspace path, recorded on the returned graph.
  * @param depsByItem - Extra dependency records keyed by item id.
+ * @param options - Set includeFacets to false for an item-only graph with unambiguous missing-item endpoints.
  * @returns The shaped graph with project metadata.
  */
 export function graphFromItems(
   items: readonly ItemMetadata[],
   workspace: string,
   depsByItem: Map<string, Array<Record<string, unknown>>>,
+  options: { includeFacets?: boolean } = {},
 ): Graph {
   const nodesById = new Map<string, GraphNode>();
   const itemIds = new Set(items.map((item) => item.id));
@@ -809,6 +811,8 @@ export function graphFromItems(
       seenDeps.add(key);
       addRelationship(item.id, target, type, { ...dep });
     }
+
+    if (options.includeFacets === false) continue;
 
     const facets: Array<{ kind: string; value?: unknown; label: string; rel: string }> = [
       { kind: "type", value: item.type, label: "ItemType", rel: "HAS_TYPE" },

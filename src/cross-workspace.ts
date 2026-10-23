@@ -47,14 +47,19 @@ export function qualifyProjectionId(workspace: string, item: string): string {
 export function projectionRefusal(): ProjectionResult {
   return { ok: false, exit_code: 2, rows: [], boundaries: [], complete: false,
     receipt: { scopes: 0, readable: 0, nodes: 0, edges: 0, total: 0, offset: 0, returned: 0, omitted: 0, nextOffset: null },
-    refusal: { code: "INVALID_OPTIONS", remedy: "Supply 1-32 unique nonempty scope aliases, explicit consent and an authorization function; limit 1-1000, offset 0 or greater, and at most 10000 typed evidence edges. See project --help." } };
+    refusal: { code: "INVALID_OPTIONS", remedy: "Supply 1-32 unique nonempty scope aliases and well-formed Unicode identity components, explicit consent and an authorization function; limit 1-1000, offset 0 or greater, and at most 10000 typed evidence edges. See project --help." } };
+}
+
+/** Accept nonempty UTF-16 identities only when every surrogate belongs to a valid pair. */
+function validIdentityComponent(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && !/[\uD800-\uDFFF]/u.test(value);
 }
 
 /** Check caller-controlled edge shapes without inspecting any source or echoing invalid identities. */
 function validEvidence(edge: ProjectionEvidence): boolean {
   return edge !== null && typeof edge === "object" && ["SUPPORTS", "EVIDENCE_FOR"].includes(edge.type)
     && typeof edge.consent === "boolean" && [edge.from, edge.to].every((end) => end !== null && typeof end === "object"
-      && typeof end.workspace === "string" && typeof end.item === "string" && end.workspace.length > 0 && end.item.length > 0);
+      && validIdentityComponent(end.workspace) && validIdentityComponent(end.item));
 }
 
 /**
@@ -70,7 +75,7 @@ export async function projectWorkspaces(scopes: readonly ProjectionScope[], opti
   if (!Array.isArray(scopes) || scopes.length === 0 || scopes.length > 32 || !Array.isArray(options.consent)
     || typeof options.authorize !== "function" || !Number.isSafeInteger(limit) || limit < 1 || limit > 1000
     || !Number.isSafeInteger(offset) || offset < 0 || !Array.isArray(evidence) || evidence.length > 10000
-    || !evidence.every(validEvidence) || !scopes.every((scope) => scope && typeof scope.key === "string" && scope.key.length > 0 && scope.key.length <= 128
+    || !evidence.every(validEvidence) || !scopes.every((scope) => scope && validIdentityComponent(scope.key) && scope.key.length <= 128
       && scope.source && (scope.source.kind === "directory" ? typeof scope.source.pmRoot === "string" && scope.source.pmRoot.length > 0 : scope.source.kind === "database" && typeof scope.source.read === "function"))
     || new Set(scopes.map((scope) => scope.key)).size !== scopes.length
     || options.consent.some((key) => !scopes.some((scope) => scope.key === key))) return projectionRefusal();
@@ -102,18 +107,17 @@ export async function projectWorkspaces(scopes: readonly ProjectionScope[], opti
       boundaries.push({ slot, kind: "scope", code: "SOURCE_LIMIT", remedy: "Project a separately authorized tracker containing at most 100000 items." });
       continue;
     }
-    const graph = graphFromItems(snapshot.items, scope.key, new Map());
+    const graph = graphFromItems(snapshot.items, scope.key, new Map(), { includeFacets: false });
     const local = new Set(snapshot.items.map((item) => item.id));
     for (const item of snapshot.items) {
       const id = qualifyProjectionId(scope.key, item.id);
       visible.add(id);
       rows.push({ kind: "node", id, workspace: scope.key, item: item.id, title: item.title, type: item.type, status: item.status });
     }
-    const external = new Set(graph.nodes.filter((node) => node.labels.includes("ExternalPmItem")).map((node) => node.id));
     let dangling = false;
     for (const edge of graph.relationships) {
       if (!local.has(edge.from) || !local.has(edge.to)) {
-        if (external.has(edge.to)) dangling = true;
+        dangling = true;
         continue;
       }
       const from = qualifyProjectionId(scope.key, edge.from);

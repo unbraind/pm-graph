@@ -114,9 +114,12 @@ export declare function assertPmTracker(pmRoot: string): string;
  * @param items - pm item metadata to project.
  * @param workspace - Workspace path, recorded on the returned graph.
  * @param depsByItem - Extra dependency records keyed by item id.
+ * @param options - Set includeFacets to false for an item-only graph with unambiguous missing-item endpoints.
  * @returns The shaped graph with project metadata.
  */
-export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>): Graph;
+export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>, options?: {
+    includeFacets?: boolean;
+}): Graph;
 type AnalyticsFlags = {
     json: boolean;
     includeClosed: boolean;

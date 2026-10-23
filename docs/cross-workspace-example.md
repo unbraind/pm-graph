@@ -34,7 +34,8 @@ pm pm-graph project projection.json --limit 100 --offset 100
 Rows are discriminated nodes or edges. IDs encode both components, e.g.
 `delivery::ship-1`; an identical `ship-1` in research has a different identity.
 Facets and external placeholders are excluded. Missing local targets produce
-opaque `DANGLING_RELATION` boundaries instead of invented nodes. Only consented
+opaque `DANGLING_RELATION` boundaries instead of invented nodes, including when
+a target uses a facet-shaped name such as `type:task`. Only consented
 `SUPPORTS` and `EVIDENCE_FOR` edges may cross scopes, and both endpoints must
 already be visible. Duplicate edges are collapsed.
 
@@ -43,7 +44,9 @@ already be visible. Duplicate edges are collapsed.
 tracker is readable; an unreadable tracker is not proof of an empty tracker.
 Boundaries reference input slots only, never hidden IDs, titles, counts or source
 exception text. No readable source yields `NO_READABLE_SCOPE` and exit 2.
-Malformed input yields `INVALID_OPTIONS` and exit 2, each with a remedy.
+Malformed input, including lone Unicode surrogates in scope aliases or evidence
+identity components, yields `INVALID_OPTIONS` and exit 2 with a remedy before
+authorization or source reads. Valid Unicode surrogate pairs remain supported.
 
 The default page is 100 rows (maximum 1000), with at most 32 sources, 10000
 explicit evidence edges and 100000 items per source. Source reads are complete
