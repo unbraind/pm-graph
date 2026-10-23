@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { isPmCliExpectedError } from "@unbrained/pm-cli/sdk";
 
 import {
   type CmdResult,
@@ -697,11 +698,7 @@ test("an invalid explicit tracker root fails with a USAGE exit rather than an em
       await assert.rejects(
         () => harness.runCommand({ command: "pm-graph analyze", pmRoot: badRoot }),
         (err: CommandError) => {
-          assert.strictEqual(
-            err.name,
-            "CommandError",
-            `${label}: must be a CommandError so the exit code survives to the host`,
-          );
+          assert.ok(isPmCliExpectedError(err), `${label}: the host must recognize the expected usage refusal`);
           assert.strictEqual(
             err.exitCode,
             2,

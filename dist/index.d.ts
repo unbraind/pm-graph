@@ -3,7 +3,7 @@ export type { ProjectionSource, ProjectionScope, ProjectionOptions, ProjectionEv
 export { compareGraphSnapshots } from "./snapshot-impact.ts";
 export type { SnapshotImpactOptions, SnapshotNodeContext, SnapshotImpactChange, SnapshotImpactRefusalCode, SnapshotImpactRefusal, SnapshotImpactResult } from "./snapshot-impact.ts";
 import type { BrandTheme } from "./brand.ts";
-import { type Exporter, type ItemMetadata } from "@unbrained/pm-cli/sdk";
+import { type FlagDefinition, type Exporter, type GlobalOptions, type ItemMetadata } from "@unbrained/pm-cli/sdk";
 import type { ExtensionCommandReadOutput } from "@unbrained/pm-cli/sdk/authoring";
 export { minimalBlockerCuts } from "./blocker-cuts.ts";
 export type { BlockerCut, BlockerCutOptions, BlockerCutReceipt, BlockerCutRefusalCode, BlockerCutResult } from "./blocker-cuts.ts";
@@ -17,7 +17,7 @@ export type CommandContext = {
     /** Resolved tracker storage path the CLI passes to extension commands (honours --pm-path/--path). */
     pm_root?: string;
     options?: Record<string, unknown>;
-    global?: Record<string, unknown>;
+    global?: Partial<GlobalOptions> | Record<string, unknown>;
 };
 /** Definition of a positional argument accepted by an extension command. */
 export type ExtensionCommandArgumentDefinition = {
@@ -33,6 +33,7 @@ export type RegisterCommand = {
     read_output?: ExtensionCommandReadOutput;
     run: (context: CommandContext) => Promise<unknown>;
     arguments?: ExtensionCommandArgumentDefinition[];
+    flags?: FlagDefinition[];
     intent?: string;
     examples?: string[];
     failure_hints?: string[];
@@ -76,7 +77,7 @@ export type Graph = {
 };
 /**
  * Verify that a path is a usable pm tracker root, throwing a `USAGE`
- * {@link CommandError} when it is not.
+ * {@link PmCliExpectedError} when it is not.
  *
  * This exists because the SDK reader is tolerant where the shell-out it replaced
  * was strict. `listAllItemMetadata` resolves with an empty array for a path that
@@ -136,7 +137,7 @@ type AnalyticsFlags = {
 /**
  * Parse the shared analytics flags (--json, --include-closed, --root, --depth,
  * --format, --filter) and collect remaining positional arguments. Throws a USAGE
- * CommandError on a malformed --depth, an invalid --format, a malformed
+ * An expected error on a malformed --depth, an invalid --format, a malformed
  * --filter, or a value-less --root/--depth/--format/--filter.
  */
 export declare function parseAnalyticsFlags(args: string[]): AnalyticsFlags;
@@ -153,7 +154,7 @@ export type NodeFilterEntry = {
 export type NodeFilter = NodeFilterEntry[];
 /**
  * Parse one or more `key=value[,value]` filter terms into a NodeFilter.
- * Throws a USAGE CommandError on a missing `=`, an unsupported key, or an
+ * Throws a USAGE expected error on a missing `=`, an unsupported key, or an
  * empty value list. Values are matched case-insensitively.
  */
 export declare function parseNodeFilter(raw: string[]): NodeFilter;
@@ -289,7 +290,7 @@ export declare function cyclesSubgraph(graph: Graph, cycles: string[][]): Graph;
  * `--direction` value. The canonical engine uses edge-orientation terms:
  * `incoming` = downstream dependents (items that break if <id> changes —
  * exactly the legacy `reverseReachable` semantics), `outgoing` = upstream
- * prerequisites/blockers, `both` = union. Throws a USAGE `CommandError` on an
+ * prerequisites/blockers, `both` = union. Throws a USAGE `PmCliExpectedError` on an
  * unknown logical direction.
  */
 export declare function mapImpactDirection(logical: string): "incoming" | "outgoing" | "both";

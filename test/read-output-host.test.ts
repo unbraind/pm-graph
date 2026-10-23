@@ -198,7 +198,7 @@ test("diagram variants cannot emit unbudgeted stdout alongside structured output
 
 /** Exercise the source handlers with per-call SDK options and CLI globals. */
 test("SDK controls select structured exports and suppress diagram side output", async () => {
-  const harness = await createExtensionTestHarness(extension, { name: "pm-graph", capabilities: ["commands", "importers", "services"] });
+  const harness = await createExtensionTestHarness(extension, { name: "pm-graph", capabilities: ["commands", "importers", "services", "schema"] });
   try {
     for (const transport of ["options", "global"] as const) {
       for (const args of [["--format", "mermaid"], ["--format", "json"]]) {

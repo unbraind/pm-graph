@@ -198,7 +198,7 @@ export function collectHandlers(): Map<string, Handler> {
 export async function makeHarness(): Promise<ExtensionTestHarness> {
   return createExtensionTestHarness(extension, {
     name: "pm-graph",
-    capabilities: ["commands", "importers", "services"],
+    capabilities: ["commands", "importers", "services", "schema"],
   });
 }
 

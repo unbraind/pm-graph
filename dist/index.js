@@ -8,7 +8,7 @@ import { existsSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
+import { createPmCliExpectedError, isPmCliExpectedError, EXIT_CODE, listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph } from "@unbrained/pm-cli/sdk/graph";
 import { registerBlockerCuts } from "./blocker-cuts-command.js";
 export { minimalBlockerCuts } from "./blocker-cuts.js";
@@ -16,38 +16,18 @@ const EXTENSION_VERSION = "2026.10.23";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
-// pm's extension command runtime only treats a thrown error as a cleanly
-// handled non-zero exit when the error carries a numeric `exitCode` property
-// (see @unbrained/pm-cli runCommandHandler). A plain `Error` makes the runtime
-// fall through to its "unhandled" path, which RE-INVOKES the command handler a
-// second time and exits with a generic code. We mirror the SDK's EXIT_CODE
-// contract here rather than importing it: standalone-installed extensions load
-// only their own `dist/`, so `@unbrained/pm-cli` is not resolvable at runtime.
-const EXIT_CODE = {
-    GENERIC_FAILURE: 1,
-    USAGE: 2,
-    NOT_FOUND: 3,
-};
-class CommandError extends Error {
-    exitCode;
-    constructor(message, exitCode = EXIT_CODE.GENERIC_FAILURE) {
-        super(message);
-        this.name = "CommandError";
-        this.exitCode = exitCode;
-    }
+/** Construct a host-recognized expected failure with the package's default exit code. */
+function commandError(message, exitCode = EXIT_CODE.GENERIC_FAILURE, cause) {
+    return createPmCliExpectedError(message, { exitCode, cause });
 }
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
-/**
- * Re-throw a `CommandError` as-is, or wrap any other error in a
- * `CommandError` with the given prefix and exit code. Prevents losing the
- * original typed exit code when a handler already threw a `CommandError`.
- */
+/** Preserve host refusal identity and recovery, or add package context and the original cause. */
 function wrapCommandError(err, prefix, exitCode = EXIT_CODE.GENERIC_FAILURE) {
-    if (err instanceof CommandError)
+    if (isPmCliExpectedError(err))
         return err;
     const msg = err instanceof Error ? err.message : String(err);
-    return new CommandError(`${prefix}: ${msg}`, exitCode);
+    return commandError(`${prefix}: ${msg}`, exitCode, err);
 }
 // Exact flag tokens the `pm-graph query`/`neighbors` handlers strip from their
 // variadic positional args (these commands read `--json` manually, so the host
@@ -227,7 +207,7 @@ function parseNeo4jMs(envVar) {
 /**
  * Build a connected Neo4j driver from the environment.
  *
- * Throws a usage {@link CommandError} up front when the credentials are not all
+ * Throws a usage {@link PmCliExpectedError} up front when the credentials are not all
  * set, so the operator gets the actionable missing-variable list rather than a
  * driver-layer auth error. The connection pool is tuned for a CLI workload
  * (bounded lifetime, ten-second acquisition, pool of ten), and two timeouts
@@ -237,14 +217,14 @@ function parseNeo4jMs(envVar) {
  * how CI fails fast without changing production behaviour.
  *
  * @returns An authenticated, configured Neo4j driver.
- * @throws {CommandError} When Neo4j credentials are missing.
+ * @throws {PmCliExpectedError} When Neo4j credentials are missing.
  */
 async function createDriver() {
     const uri = process.env.NEO4J_URI;
     const user = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME;
     const password = process.env.NEO4J_PASSWORD;
     if (!uri || !user || !password) {
-        throw new CommandError(neo4jMissingMessage(), EXIT_CODE.USAGE);
+        throw commandError(neo4jMissingMessage(), EXIT_CODE.USAGE);
     }
     const neo4j = await loadNeo4j();
     const config = {
@@ -366,7 +346,7 @@ function toNumber(value) {
 // ---------------------------------------------------------------------------
 /**
  * Verify that a path is a usable pm tracker root, throwing a `USAGE`
- * {@link CommandError} when it is not.
+ * {@link PmCliExpectedError} when it is not.
  *
  * This exists because the SDK reader is tolerant where the shell-out it replaced
  * was strict. `listAllItemMetadata` resolves with an empty array for a path that
@@ -390,10 +370,10 @@ function toNumber(value) {
  */
 export function assertPmTracker(pmRoot) {
     if (!existsSync(pmRoot)) {
-        throw new CommandError(`No pm tracker at ${pmRoot}`, EXIT_CODE.USAGE);
+        throw commandError(`No pm tracker at ${pmRoot}`, EXIT_CODE.USAGE);
     }
     if (!statSync(pmRoot).isDirectory()) {
-        throw new CommandError(`pm tracker path is not a directory: ${pmRoot}`, EXIT_CODE.USAGE);
+        throw commandError(`pm tracker path is not a directory: ${pmRoot}`, EXIT_CODE.USAGE);
     }
     // Check the marker TYPES, not merely their existence. A directory that happens
     // to contain a file named `schema` or a directory named `settings.json` is not
@@ -403,7 +383,7 @@ export function assertPmTracker(pmRoot) {
     const hasSettingsFile = isEntry(path.join(pmRoot, "settings.json"), "file");
     const hasSchemaDir = isEntry(path.join(pmRoot, "schema"), "directory");
     if (!hasSettingsFile && !hasSchemaDir) {
-        throw new CommandError(`${pmRoot} is not a pm tracker (no settings.json file or schema/ directory present)`, EXIT_CODE.USAGE);
+        throw commandError(`${pmRoot} is not a pm tracker (no settings.json file or schema/ directory present)`, EXIT_CODE.USAGE);
     }
     return pmRoot;
 }
@@ -430,14 +410,14 @@ function isEntry(target, kind) {
  * `pm_root` and falling back to {@link resolveImplicitPmRoot} over the
  * workspace directory.
  *
- * Throws a {@link CommandError} carrying `EXIT_CODE.USAGE` when no tracker is
+ * Throws a {@link PmCliExpectedError} carrying `EXIT_CODE.USAGE` when no tracker is
  * discoverable: running a graph command outside a pm workspace is a usage
  * mistake, not an internal failure, and the typed error keeps the single-clean
  * -exit contract that the replaced shell-out provided. A bare `Error` here would
  * leave the host to re-invoke the handler and exit with a generic code.
  *
  * Callers that treat a missing tracker as non-fatal (the `status` command)
- * catch it, which still works because `CommandError` extends `Error`.
+ * catch it, which still works because `PmCliExpectedError` extends `Error`.
  */
 function resolvePmRootForContext(context) {
     if (context.pm_root)
@@ -446,10 +426,9 @@ function resolvePmRootForContext(context) {
         return assertPmTracker(resolveImplicitPmRoot(getWorkspace(context)));
     }
     catch (err) {
-        if (err instanceof CommandError)
+        if (isPmCliExpectedError(err))
             throw err;
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new CommandError(`Could not locate a pm tracker: ${msg}`, EXIT_CODE.USAGE);
+        throw wrapCommandError(err, "Could not locate a pm tracker", EXIT_CODE.USAGE);
     }
 }
 /**
@@ -496,7 +475,7 @@ async function runPmGraph(subcommand, id, flags, context) {
         //
         // Resolution happens inside the try because `resolveImplicitPmRoot` can throw
         // for a workspace with no discoverable tracker; outside it, that throw would
-        // escape as a raw Error and bypass the CommandError exit-code contract every
+        // escape as a raw Error and bypass the expected-error exit-code contract every
         // other failure path here maintains.
         const globalOptions = {
             json: true,
@@ -505,8 +484,7 @@ async function runPmGraph(subcommand, id, flags, context) {
         return await runGraph(subcommand, id ?? undefined, undefined, options, globalOptions);
     }
     catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new CommandError(`Failed to run pm graph ${subcommand}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+        throw wrapCommandError(err, `Failed to run pm graph ${subcommand}`);
     }
 }
 // ---------------------------------------------------------------------------
@@ -686,15 +664,12 @@ async function fetchItemsViaSdk(pmRoot) {
         return await listAllItemMetadata(pmRoot);
     }
     catch (err) {
-        // The shell-out this replaced threw CommandError, so its failures carried an
+        // The shell-out this replaced threw expected errors, so its failures carried an
         // exitCode. A plain Error escaping here would bypass that contract: the host
         // re-invokes the handler and exits with a generic code instead of one clean
-        // non-zero exit. Preserve an already-typed CommandError (an unreadable item
+        // non-zero exit. Preserve an already-typed expected error (an unreadable item
         // or a malformed tracker may raise one) and wrap anything else.
-        if (err instanceof CommandError)
-            throw err;
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new CommandError(`Failed to read pm items from ${pmRoot}: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+        throw wrapCommandError(err, `Failed to read pm items from ${pmRoot}`);
     }
 }
 /**
@@ -753,12 +728,12 @@ function parseAnalysisFormat(value) {
         normalized === "dot") {
         return normalized;
     }
-    throw new CommandError(`Invalid --format "${value}" (expected: text | json | mermaid | graphml | dot).`, EXIT_CODE.USAGE);
+    throw commandError(`Invalid --format "${value}" (expected: text | json | mermaid | graphml | dot).`, EXIT_CODE.USAGE);
 }
 /**
  * Parse the shared analytics flags (--json, --include-closed, --root, --depth,
  * --format, --filter) and collect remaining positional arguments. Throws a USAGE
- * CommandError on a malformed --depth, an invalid --format, a malformed
+ * An expected error on a malformed --depth, an invalid --format, a malformed
  * --filter, or a value-less --root/--depth/--format/--filter.
  */
 export function parseAnalyticsFlags(args) {
@@ -779,7 +754,7 @@ export function parseAnalyticsFlags(args) {
         else if (arg === "--root") {
             const value = args[++i];
             if (value === undefined)
-                throw new CommandError("--root requires an item id.", EXIT_CODE.USAGE);
+                throw commandError("--root requires an item id.", EXIT_CODE.USAGE);
             flags.root = value;
         }
         else if (arg.startsWith("--root=")) {
@@ -788,10 +763,10 @@ export function parseAnalyticsFlags(args) {
         else if (arg === "--depth") {
             const value = args[++i];
             if (value === undefined)
-                throw new CommandError("--depth requires an integer.", EXIT_CODE.USAGE);
+                throw commandError("--depth requires an integer.", EXIT_CODE.USAGE);
             const parsed = parseNonNegativeInt(value);
             if (parsed === undefined) {
-                throw new CommandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+                throw commandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
             flags.depth = parsed;
         }
@@ -799,14 +774,14 @@ export function parseAnalyticsFlags(args) {
             const value = arg.slice("--depth=".length);
             const parsed = parseNonNegativeInt(value);
             if (parsed === undefined) {
-                throw new CommandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+                throw commandError(`Invalid --depth "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
             flags.depth = parsed;
         }
         else if (arg === "--format") {
             const value = args[++i];
             if (value === undefined)
-                throw new CommandError("--format requires a value (text | json | mermaid | graphml | dot).", EXIT_CODE.USAGE);
+                throw commandError("--format requires a value (text | json | mermaid | graphml | dot).", EXIT_CODE.USAGE);
             flags.format = parseAnalysisFormat(value);
         }
         else if (arg.startsWith("--format=")) {
@@ -815,7 +790,7 @@ export function parseAnalyticsFlags(args) {
         else if (arg === "--direction") {
             const value = args[++i];
             if (value === undefined)
-                throw new CommandError("--direction requires a value (downstream | upstream | both).", EXIT_CODE.USAGE);
+                throw commandError("--direction requires a value (downstream | upstream | both).", EXIT_CODE.USAGE);
             flags.direction = value;
         }
         else if (arg.startsWith("--direction=")) {
@@ -824,10 +799,10 @@ export function parseAnalyticsFlags(args) {
         else if (arg === "--limit") {
             const value = args[++i];
             if (value === undefined)
-                throw new CommandError("--limit requires a non-negative integer.", EXIT_CODE.USAGE);
+                throw commandError("--limit requires a non-negative integer.", EXIT_CODE.USAGE);
             const parsed = parseNonNegativeInt(value);
             if (parsed === undefined) {
-                throw new CommandError(`Invalid --limit "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+                throw commandError(`Invalid --limit "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
             flags.limit = parsed;
         }
@@ -835,14 +810,14 @@ export function parseAnalyticsFlags(args) {
             const value = arg.slice("--limit=".length);
             const parsed = parseNonNegativeInt(value);
             if (parsed === undefined) {
-                throw new CommandError(`Invalid --limit "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+                throw commandError(`Invalid --limit "${value}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
             flags.limit = parsed;
         }
         else if (arg === "--filter") {
             const value = args[++i];
             if (value === undefined)
-                throw new CommandError("--filter requires a value (type=... | status=...).", EXIT_CODE.USAGE);
+                throw commandError("--filter requires a value (type=... | status=...).", EXIT_CODE.USAGE);
             filterTerms.push(value);
         }
         else if (arg.startsWith("--filter=")) {
@@ -928,7 +903,7 @@ function cypherStatements(graph) {
 const NODE_FILTER_KEYS = new Set(["type", "status"]);
 /**
  * Parse one or more `key=value[,value]` filter terms into a NodeFilter.
- * Throws a USAGE CommandError on a missing `=`, an unsupported key, or an
+ * Throws a USAGE expected error on a missing `=`, an unsupported key, or an
  * empty value list. Values are matched case-insensitively.
  */
 export function parseNodeFilter(raw) {
@@ -936,19 +911,19 @@ export function parseNodeFilter(raw) {
     for (const term of raw) {
         const eq = term.indexOf("=");
         if (eq <= 0) {
-            throw new CommandError(`Invalid --filter "${term}" (expected key=value, e.g. type=Task or status=open,done).`, EXIT_CODE.USAGE);
+            throw commandError(`Invalid --filter "${term}" (expected key=value, e.g. type=Task or status=open,done).`, EXIT_CODE.USAGE);
         }
         const key = term.slice(0, eq).trim().toLowerCase();
         const valuePart = term.slice(eq + 1).trim();
         if (!NODE_FILTER_KEYS.has(key)) {
-            throw new CommandError(`Invalid --filter key "${key}" (supported keys: type, status).`, EXIT_CODE.USAGE);
+            throw commandError(`Invalid --filter key "${key}" (supported keys: type, status).`, EXIT_CODE.USAGE);
         }
         const values = valuePart
             .split(",")
             .map((v) => v.trim().toLowerCase())
             .filter((v) => v.length > 0);
         if (values.length === 0) {
-            throw new CommandError(`Invalid --filter "${term}" (expected at least one value after "=").`, EXIT_CODE.USAGE);
+            throw commandError(`Invalid --filter "${term}" (expected at least one value after "=").`, EXIT_CODE.USAGE);
         }
         const typedKey = key;
         const merged = byKey.get(typedKey) ?? new Set();
@@ -1798,7 +1773,7 @@ export function cyclesSubgraph(graph, cycles) {
  * `--direction` value. The canonical engine uses edge-orientation terms:
  * `incoming` = downstream dependents (items that break if <id> changes —
  * exactly the legacy `reverseReachable` semantics), `outgoing` = upstream
- * prerequisites/blockers, `both` = union. Throws a USAGE `CommandError` on an
+ * prerequisites/blockers, `both` = union. Throws a USAGE `PmCliExpectedError` on an
  * unknown logical direction.
  */
 export function mapImpactDirection(logical) {
@@ -1809,7 +1784,7 @@ export function mapImpactDirection(logical) {
         return "outgoing";
     if (normalized === "both")
         return "both";
-    throw new CommandError(`Invalid --direction "${logical}" (expected: downstream | upstream | both).`, EXIT_CODE.USAGE);
+    throw commandError(`Invalid --direction "${logical}" (expected: downstream | upstream | both).`, EXIT_CODE.USAGE);
 }
 /**
  * Build the impact subgraph for the canonical `pm graph impact` result: the
@@ -2057,7 +2032,7 @@ function suggestItemIds(itemIds, input, limit = 5) {
 function ambiguousItemIdError(label, input, matches) {
     const shown = matches.slice(0, 5);
     const more = matches.length > shown.length ? ` (+${matches.length - shown.length} more)` : "";
-    return new CommandError(`${label} "${input}" is ambiguous in the workspace graph. Matches: ${shown.join(", ")}${more}. Use a longer prefix or the full id.`, EXIT_CODE.NOT_FOUND);
+    return commandError(`${label} "${input}" is ambiguous in the workspace graph. Matches: ${shown.join(", ")}${more}. Use a longer prefix or the full id.`, EXIT_CODE.NOT_FOUND);
 }
 /**
  * Resolve an operator's item-id input to exactly one workspace id.
@@ -2069,7 +2044,7 @@ function ambiguousItemIdError(label, input, matches) {
  * sorted first so resolution and ambiguity ordering are deterministic.
  *
  * @returns The resolved id and the strategy that matched it.
- * @throws {CommandError} On ambiguity or no match.
+ * @throws {PmCliExpectedError} On ambiguity or no match.
  */
 function resolveItemIdOrThrow(itemIds, input, label) {
     const requested = input.trim();
@@ -2094,7 +2069,7 @@ function resolveItemIdOrThrow(itemIds, input, label) {
     }
     const candidates = suggestItemIds(ids, requested);
     const hint = candidates.length > 0 ? ` Did you mean: ${candidates.join(", ")}?` : "";
-    throw new CommandError(`${label} "${requested}" was not found in the workspace graph.${hint}`, EXIT_CODE.NOT_FOUND);
+    throw commandError(`${label} "${requested}" was not found in the workspace graph.${hint}`, EXIT_CODE.NOT_FOUND);
 }
 /**
  * Compute a comprehensive offline graph-health report from a shaped graph.
@@ -2465,7 +2440,7 @@ export function activate(api) {
             const args = context.args ?? [];
             const rawFormat = readFlagStringValue(args, "--format");
             if (readOutputRequested(context) && args.some((arg) => arg === "--output" || arg.startsWith("--output="))) {
-                throw new CommandError("Universal output controls cannot be combined with --output; request structured stdout instead.", EXIT_CODE.USAGE);
+                throw commandError("Universal output controls cannot be combined with --output; request structured stdout instead.", EXIT_CODE.USAGE);
             }
             if (hasHelpFlag(context)) {
                 return {
@@ -2507,40 +2482,40 @@ export function activate(api) {
             if (rawEdges !== undefined) {
                 const normalized = String(rawEdges ?? "").toLowerCase();
                 if (!["deps", "tags", "all"].includes(normalized)) {
-                    throw new CommandError(`Unknown --edges "${rawEdges}". Valid: deps | tags | all.`, EXIT_CODE.USAGE);
+                    throw commandError(`Unknown --edges "${rawEdges}". Valid: deps | tags | all.`, EXIT_CODE.USAGE);
                 }
                 edges = normalized;
             }
             const root = typeof rawRoot === "string" && rawRoot.trim().length > 0 ? rawRoot.trim() : undefined;
             if (rawRoot !== undefined && !root) {
-                throw new CommandError("--root requires an item id.", EXIT_CODE.USAGE);
+                throw commandError("--root requires an item id.", EXIT_CODE.USAGE);
             }
             let depth;
             if (rawDepth !== undefined) {
                 if (rawRoot === undefined) {
-                    throw new CommandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
+                    throw commandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
                 }
                 depth = parseNonNegativeInt(rawDepth);
                 if (depth === undefined) {
-                    throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+                    throw commandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
                 }
             }
             if (filterTerms.some((t) => t === null)) {
-                throw new CommandError("--filter requires a value (key=value[,value]).", EXIT_CODE.USAGE);
+                throw commandError("--filter requires a value (key=value[,value]).", EXIT_CODE.USAGE);
             }
             const filter = parseNodeFilter(filterTerms);
             if (outputPath !== undefined && (outputPath === null || outputPath.trim().length === 0)) {
-                throw new CommandError("--output requires a file path.", EXIT_CODE.USAGE);
+                throw commandError("--output requires a file path.", EXIT_CODE.USAGE);
             }
             if (outputPath && rawFormat === undefined) {
-                throw new CommandError("--output requires --format (the graph-object output is written by the host).", EXIT_CODE.USAGE);
+                throw commandError("--output requires --format (the graph-object output is written by the host).", EXIT_CODE.USAGE);
             }
             const buildGraph = async () => {
                 const fullGraph = await loadGraphForContext(context);
                 if (!shapingRequested)
                     return fullGraph;
                 if (root && !fullGraph.nodes.some((n) => n.id === root)) {
-                    throw new CommandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+                    throw commandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
                 }
                 return shapeGraph(fullGraph, { edges, includeClosed, rootId: root, depth, filter });
             };
@@ -2558,11 +2533,11 @@ export function activate(api) {
                 }
             }
             if (rawFormat === null || rawFormat.trim().length === 0) {
-                throw new CommandError("--format requires a value (cypher | mermaid | dot | json | graphml | plantuml).", EXIT_CODE.USAGE);
+                throw commandError("--format requires a value (cypher | mermaid | dot | json | graphml | plantuml).", EXIT_CODE.USAGE);
             }
             const format = rawFormat.trim().toLowerCase();
             if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(format)) {
-                throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);
+                throw commandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);
             }
             try {
                 const graph = await buildGraph();
@@ -2633,8 +2608,7 @@ export function activate(api) {
                 };
             }
             catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                throw new Error(`Cypher generation failed: ${msg}`);
+                throw wrapCommandError(err, "Cypher generation failed");
             }
         },
     });
@@ -2666,12 +2640,9 @@ export function activate(api) {
                 graph = await loadGraphForContext(context);
             }
             catch (err) {
-                // Preserve an already-typed CommandError (and its exitCode) rather than
+                // Preserve an already-typed expected error (and its exitCode) rather than
                 // re-wrapping it and flattening the code to GENERIC_FAILURE.
-                if (err instanceof CommandError)
-                    throw err;
-                const msg = err instanceof Error ? err.message : String(err);
-                throw new CommandError(`Failed to load workspace graph: ${msg}`, EXIT_CODE.GENERIC_FAILURE);
+                throw wrapCommandError(err, "Failed to load workspace graph");
             }
             const result = await syncNeo4j(graph, { fullSync });
             return {
@@ -2801,11 +2772,11 @@ export function activate(api) {
             // and `-1` for negative literals — so we match flags exactly.
             const query = (context.args ?? []).filter((arg) => !QUERY_FLAG_TOKENS.has(arg)).join(" ").trim();
             if (!query) {
-                throw new CommandError('Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"', EXIT_CODE.USAGE);
+                throw commandError('Usage: pm pm-graph query "<cypher-query>"\nExample: pm pm-graph query "MATCH (n:PmGraphNode) RETURN n.id LIMIT 5"', EXIT_CODE.USAGE);
             }
             const destructive = findDestructiveKeyword(query);
             if (destructive) {
-                throw new CommandError(`Blocked destructive Cypher keyword "${destructive}". Only read-only queries (MATCH / RETURN / WITH / ORDER BY / LIMIT / SKIP / WHERE) are allowed.`, EXIT_CODE.USAGE);
+                throw commandError(`Blocked destructive Cypher keyword "${destructive}". Only read-only queries (MATCH / RETURN / WITH / ORDER BY / LIMIT / SKIP / WHERE) are allowed.`, EXIT_CODE.USAGE);
             }
             const driver = await createDriver();
             const session = driver.session({ database: process.env.NEO4J_DATABASE });
@@ -2857,7 +2828,7 @@ export function activate(api) {
             // never a flag. (A node id never equals one of these literals.)
             const nodeId = (context.args ?? []).find((arg) => !QUERY_FLAG_TOKENS.has(arg));
             if (!nodeId) {
-                throw new CommandError("Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42", EXIT_CODE.USAGE);
+                throw commandError("Usage: pm pm-graph neighbors <node-id>\nExample: pm pm-graph neighbors TASK-42", EXIT_CODE.USAGE);
             }
             const projectKey = projectKeyForWorkspace(getWorkspace(context));
             const driver = await createDriver();
@@ -2969,7 +2940,7 @@ export function activate(api) {
                         console.log(renderAnalysisDiagram(flags.format, cyclesSubgraph(graph, cycles)));
                 }
                 const detail = cycles.map((c) => c.join(" -> ")).join("; ");
-                throw new CommandError(`Found ${cycles.length} dependency cycle(s): ${detail}`, EXIT_CODE.GENERIC_FAILURE);
+                throw commandError(`Found ${cycles.length} dependency cycle(s): ${detail}`, EXIT_CODE.GENERIC_FAILURE);
             }
             // No cycles: an empty diagram is meaningless, so the format flag is a
             // no-op here and the text/JSON result is returned unchanged.
@@ -3004,7 +2975,7 @@ export function activate(api) {
             const flags = parseAnalyticsFlags(context.args ?? []);
             const [from, to] = flags.positionals;
             if (!from || !to) {
-                throw new CommandError("Usage: pm pm-graph path <from> <to>\nExample: pm pm-graph path pm-ep18 pm-hd71", EXIT_CODE.USAGE);
+                throw commandError("Usage: pm pm-graph path <from> <to>\nExample: pm pm-graph path pm-ep18 pm-hd71", EXIT_CODE.USAGE);
             }
             const graph = await shapedAnalyticsGraph(context, flags);
             const itemIds = [...itemNodeIds(graph)].sort();
@@ -3089,7 +3060,7 @@ export function activate(api) {
                 const detail = cycles.length > 0
                     ? cycles.map((c) => c.join(" -> ")).join("; ")
                     : cycleNodes.join(", ");
-                throw new CommandError(`Cannot produce a topological order: ${cycleNodes.length} item(s) are involved in a dependency cycle (${detail}). Resolved prefix: ${order.length} item(s).`, EXIT_CODE.GENERIC_FAILURE);
+                throw commandError(`Cannot produce a topological order: ${cycleNodes.length} item(s) are involved in a dependency cycle (${detail}). Resolved prefix: ${order.length} item(s).`, EXIT_CODE.GENERIC_FAILURE);
             }
             return { ok: true, count: order.length, cyclic: false, order };
         },
@@ -3129,7 +3100,7 @@ export function activate(api) {
             const flags = parseAnalyticsFlags(context.args ?? []);
             const [id] = flags.positionals;
             if (!id) {
-                throw new CommandError("Usage: pm pm-graph impact <id>\nExample: pm pm-graph impact pm-ep18", EXIT_CODE.USAGE);
+                throw commandError("Usage: pm pm-graph impact <id>\nExample: pm pm-graph impact pm-ep18", EXIT_CODE.USAGE);
             }
             const rawDirection = flags.direction ?? "downstream";
             const canonicalDirection = mapImpactDirection(rawDirection);
@@ -3157,7 +3128,7 @@ export function activate(api) {
                 // with no cast at all; any other envelope means the engine drifted
                 // from its contract, which is a generic failure here, not a usage one.
                 if (result.subcommand !== "impact") {
-                    throw new CommandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
+                    throw commandError(`pm graph impact returned a "${result.subcommand}" result envelope`, EXIT_CODE.GENERIC_FAILURE);
                 }
                 // The canonical engine traverses the FULL workspace graph and never
                 // sees pm-graph's presentation flags. Post-filter the returned rows to
@@ -3209,7 +3180,7 @@ export function activate(api) {
             // engine is a static import, so it can no longer be unavailable. Only
             // downstream is expressible here.
             if (logicalDirection !== "downstream") {
-                throw new CommandError("--include-closed is only supported with --direction downstream (the canonical pm graph engine, which handles upstream/both, cannot include closed items in traversal).", EXIT_CODE.USAGE);
+                throw commandError("--include-closed is only supported with --direction downstream (the canonical pm graph engine, which handles upstream/both, cannot include closed items in traversal).", EXIT_CODE.USAGE);
             }
             const impacted = reverseReachable(edges, resolvedId);
             const base = { ok: true, id: resolvedId, count: impacted.length, impacted, engine: "fallback" };
@@ -3251,7 +3222,7 @@ export function activate(api) {
             const flags = parseAnalyticsFlags(context.args ?? []);
             const [id] = flags.positionals;
             if (!id) {
-                throw new CommandError("Usage: pm pm-graph explain <id>\nExample: pm pm-graph explain pm-ep18", EXIT_CODE.USAGE);
+                throw commandError("Usage: pm pm-graph explain <id>\nExample: pm pm-graph explain pm-ep18", EXIT_CODE.USAGE);
             }
             const graph = shapeGraph(await loadGraphForContext(context), {
                 edges: "deps",
@@ -3261,7 +3232,7 @@ export function activate(api) {
             const resolvedId = resolveItemIdOrThrow([...itemNodeIds(graph)].sort(), id, "Item").resolved;
             const report = explainItem(graph, resolvedId);
             if (!report) {
-                throw new CommandError(`Item "${resolvedId}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+                throw commandError(`Item "${resolvedId}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
             }
             return { ok: true, ...report };
         },
@@ -3280,12 +3251,12 @@ export function activate(api) {
         const options = ctx.options ?? {};
         const rawFormat = String(readExportOption(options, "format") ?? "json").toLowerCase();
         if (!["cypher", "mermaid", "dot", "json", "graphml", "plantuml"].includes(rawFormat)) {
-            throw new CommandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);
+            throw commandError(`Unknown --format "${rawFormat}". Valid: cypher | mermaid | dot | json | graphml | plantuml.`, EXIT_CODE.USAGE);
         }
         const format = rawFormat;
         const rawEdges = String(readExportOption(options, "edges") ?? "all").toLowerCase();
         if (!["deps", "tags", "all"].includes(rawEdges)) {
-            throw new CommandError(`Unknown --edges "${rawEdges}". Valid: deps | tags | all.`, EXIT_CODE.USAGE);
+            throw commandError(`Unknown --edges "${rawEdges}". Valid: deps | tags | all.`, EXIT_CODE.USAGE);
         }
         const edges = rawEdges;
         const includeClosed = Boolean(readExportOption(options, "include-closed", "includeClosed"));
@@ -3295,18 +3266,18 @@ export function activate(api) {
         let depth;
         if (rawDepth !== undefined) {
             if (!root) {
-                throw new CommandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
+                throw commandError("--depth requires --root (depth bounds the neighborhood around the root item).", EXIT_CODE.USAGE);
             }
             depth = parseNonNegativeInt(rawDepth);
             if (depth === undefined) {
-                throw new CommandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
+                throw commandError(`Invalid --depth "${rawDepth}" (expected a non-negative integer).`, EXIT_CODE.USAGE);
             }
         }
         // The export pipeline provides pm_root; fall back to the in-process SDK
         // reader over the workspace cwd if a host ever omits it.
         const fullGraph = await (ctx.pm_root ? loadGraphFromPath(ctx.pm_root) : loadGraphForContext({}));
         if (root && !fullGraph.nodes.some((n) => n.id === root)) {
-            throw new CommandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
+            throw commandError(`--root node "${root}" was not found in the workspace graph.`, EXIT_CODE.NOT_FOUND);
         }
         const rawFilter = readExportOption(options, "filter");
         const filterTerms = Array.isArray(rawFilter)
@@ -3320,7 +3291,7 @@ export function activate(api) {
         const rawOutput = readExportOption(options, "output");
         const outputPath = typeof rawOutput === "string" && rawOutput.trim().length > 0 ? rawOutput.trim() : undefined;
         if (rawOutput !== undefined && outputPath === undefined) {
-            throw new CommandError("--output requires a file path.", EXIT_CODE.USAGE);
+            throw commandError("--output requires a file path.", EXIT_CODE.USAGE);
         }
         if (outputPath) {
             const absolutePath = path.resolve(outputPath);
