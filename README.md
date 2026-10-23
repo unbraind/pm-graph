@@ -613,7 +613,7 @@ See the [SDK and CLI example](docs/snapshot-impact-example.md) and the
 
 ## Without git
 
-Graph projection, export, offline analysis, path/impact/explain and snapshot
+Graph projection, consent-scoped `project`, export, offline analysis, path/impact/explain and snapshot
 comparison work in plain trackers. Snapshot comparison reads only the two
 explicit JSON files and also works without a tracker. Neo4j operations require
 their configured database connection. None of these graph operations needs a
@@ -720,3 +720,15 @@ form paper, carbon ink, ruled item sheets and explicit status fills. Portable fo
 stacks put Archivo, Public Sans and Martian Mono first and fetch no external fonts.
 [Design, themes, token parity and reproducible review renders](docs/triplicate-visuals.md).
 The README banner embeds pm-brand's committed output at an immutable SHA.
+
+## Consent-scoped cross-workspace projection
+
+`pm pm-graph project projection.json --limit 100 --json` reads only explicitly
+consented trackers into a read-only item graph. The typed `projectWorkspaces`
+SDK also accepts database readers bound to existing core authorization. Qualified
+IDs preserve workspace identity; cross-workspace evidence needs separate consent
+and two visible endpoints. Denied or incomplete sources yield opaque boundaries,
+with no hidden node IDs, labels or source exception text. Source completeness
+and output omission receipts remain separate. JSON and compact TOON use the
+host's standard output controls. See the [manifest and SDK example](docs/cross-workspace-example.md)
+for scope, authorization, pagination, refusal remedies and limits.

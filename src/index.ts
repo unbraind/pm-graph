@@ -1,3 +1,6 @@
+import { registerCrossWorkspace } from "./cross-workspace-command.ts";
+export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.ts";
+export type { ProjectionSource, ProjectionScope, ProjectionOptions, ProjectionEvidence, ProjectionRow, ProjectionBoundary, ProjectionResult } from "./cross-workspace.ts";
 import { spawnSync } from "node:child_process";
 import { registerSnapshotImpact } from "./snapshot-impact-command.ts";
 export { compareGraphSnapshots } from "./snapshot-impact.ts";
@@ -538,7 +541,7 @@ function toNumber(value: unknown): number {
  * @param pmRoot Candidate tracker root.
  * @returns The same path, once validated, so callers can wrap in place.
  */
-function assertPmTracker(pmRoot: string): string {
+export function assertPmTracker(pmRoot: string): string {
   if (!existsSync(pmRoot)) {
     throw new CommandError(`No pm tracker at ${pmRoot}`, EXIT_CODE.USAGE);
   }
@@ -725,12 +728,14 @@ function facetNodeId(kind: string, value: string): string {
  * @param items - pm item metadata to project.
  * @param workspace - Workspace path, recorded on the returned graph.
  * @param depsByItem - Extra dependency records keyed by item id.
+ * @param options - Set includeFacets to false for an item-only graph with unambiguous missing-item endpoints.
  * @returns The shaped graph with project metadata.
  */
 export function graphFromItems(
   items: readonly ItemMetadata[],
   workspace: string,
   depsByItem: Map<string, Array<Record<string, unknown>>>,
+  options: { includeFacets?: boolean } = {},
 ): Graph {
   const nodesById = new Map<string, GraphNode>();
   const itemIds = new Set(items.map((item) => item.id));
@@ -806,6 +811,8 @@ export function graphFromItems(
       seenDeps.add(key);
       addRelationship(item.id, target, type, { ...dep });
     }
+
+    if (options.includeFacets === false) continue;
 
     const facets: Array<{ kind: string; value?: unknown; label: string; rel: string }> = [
       { kind: "type", value: item.type, label: "ItemType", rel: "HAS_TYPE" },
@@ -2857,6 +2864,7 @@ async function loadShapedAnalytics(context: CommandContext): Promise<{
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api: ExtensionApi): void {
+  registerCrossWorkspace(api);
   registerSnapshotImpact(api);
   registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
   // The `pm-graph export --format <fmt>` handler renders the graph into a

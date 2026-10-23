@@ -1,3 +1,5 @@
+import { registerCrossWorkspace } from "./cross-workspace-command.js";
+export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.js";
 import { spawnSync } from "node:child_process";
 import { registerSnapshotImpact } from "./snapshot-impact-command.js";
 export { compareGraphSnapshots } from "./snapshot-impact.js";
@@ -386,7 +388,7 @@ function toNumber(value) {
  * @param pmRoot Candidate tracker root.
  * @returns The same path, once validated, so callers can wrap in place.
  */
-function assertPmTracker(pmRoot) {
+export function assertPmTracker(pmRoot) {
     if (!existsSync(pmRoot)) {
         throw new CommandError(`No pm tracker at ${pmRoot}`, EXIT_CODE.USAGE);
     }
@@ -549,9 +551,10 @@ function facetNodeId(kind, value) {
  * @param items - pm item metadata to project.
  * @param workspace - Workspace path, recorded on the returned graph.
  * @param depsByItem - Extra dependency records keyed by item id.
+ * @param options - Set includeFacets to false for an item-only graph with unambiguous missing-item endpoints.
  * @returns The shaped graph with project metadata.
  */
-export function graphFromItems(items, workspace, depsByItem) {
+export function graphFromItems(items, workspace, depsByItem, options = {}) {
     const nodesById = new Map();
     const itemIds = new Set(items.map((item) => item.id));
     const relationships = [];
@@ -624,6 +627,8 @@ export function graphFromItems(items, workspace, depsByItem) {
             seenDeps.add(key);
             addRelationship(item.id, target, type, { ...dep });
         }
+        if (options.includeFacets === false)
+            continue;
         const facets = [
             { kind: "type", value: item.type, label: "ItemType", rel: "HAS_TYPE" },
             { kind: "status", value: item.status, label: "Status", rel: "HAS_STATUS" },
@@ -2399,6 +2404,7 @@ async function loadShapedAnalytics(context) {
  * pm CLI host. Called once at extension load time.
  */
 export function activate(api) {
+    registerCrossWorkspace(api);
     registerSnapshotImpact(api);
     registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
     // The `pm-graph export --format <fmt>` handler renders the graph into a

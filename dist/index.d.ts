@@ -1,3 +1,5 @@
+export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.ts";
+export type { ProjectionSource, ProjectionScope, ProjectionOptions, ProjectionEvidence, ProjectionRow, ProjectionBoundary, ProjectionResult } from "./cross-workspace.ts";
 export { compareGraphSnapshots } from "./snapshot-impact.ts";
 export type { SnapshotImpactOptions, SnapshotNodeContext, SnapshotImpactChange, SnapshotImpactRefusalCode, SnapshotImpactRefusal, SnapshotImpactResult } from "./snapshot-impact.ts";
 import type { BrandTheme } from "./brand.ts";
@@ -73,6 +75,31 @@ export type Graph = {
     relationships: GraphRelationship[];
 };
 /**
+ * Verify that a path is a usable pm tracker root, throwing a `USAGE`
+ * {@link CommandError} when it is not.
+ *
+ * This exists because the SDK reader is tolerant where the shell-out it replaced
+ * was strict. `listAllItemMetadata` resolves with an empty array for a path that
+ * does not exist, for a path that is a regular file (swallowing `ENOTDIR`), and
+ * for a directory that is not a tracker — all indistinguishable from a tracker
+ * that legitimately has no items. Without this check a mistyped `--path` /
+ * `--pm-path` would make `analyze`, `cycles`, `critical-path`, `cypher` and the
+ * exporters report a confident empty graph and exit 0, where the previous
+ * `pm list-all` invocation exited non-zero. Reporting an empty answer for a bad
+ * input is worse than failing, because nothing downstream can detect it.
+ *
+ * A tracker is identified by the artefacts `pm init` always writes: `settings.json`
+ * and the `schema/` directory. Requiring either (rather than both) keeps older
+ * trackers readable while still rejecting an arbitrary directory.
+ *
+ * Filed upstream as unbraind/pm-cli#814; this guard restores the previous failure
+ * semantics locally and independently of that fix.
+ *
+ * @param pmRoot Candidate tracker root.
+ * @returns The same path, once validated, so callers can wrap in place.
+ */
+export declare function assertPmTracker(pmRoot: string): string;
+/**
  * Build a workspace graph (nodes + relationships) from pm item metadata.
  *
  * Emits one `PmItem` node per item, then derives edges from the item's
@@ -87,9 +114,12 @@ export type Graph = {
  * @param items - pm item metadata to project.
  * @param workspace - Workspace path, recorded on the returned graph.
  * @param depsByItem - Extra dependency records keyed by item id.
+ * @param options - Set includeFacets to false for an item-only graph with unambiguous missing-item endpoints.
  * @returns The shaped graph with project metadata.
  */
-export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>): Graph;
+export declare function graphFromItems(items: readonly ItemMetadata[], workspace: string, depsByItem: Map<string, Array<Record<string, unknown>>>, options?: {
+    includeFacets?: boolean;
+}): Graph;
 type AnalyticsFlags = {
     json: boolean;
     includeClosed: boolean;
