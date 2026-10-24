@@ -6,9 +6,9 @@ status: closed
 priority: 2
 tags: []
 created_at: "2026-10-23T15:33:12.453Z"
-updated_at: "2026-10-24T21:45:54.784Z"
+updated_at: "2026-10-24T23:11:10.878Z"
 closed_at: "2026-10-24T21:45:54.774Z"
-completed_at: "2026-10-24T21:45:54.774Z"
+completed_at: "2026-10-23T16:38:47.000Z"
 author: codex-agent
 resolution: "Consented workspace projection uses qualified identities and read-only graph views with explicit refusals, preserving source trackers."
 expected_result: "Acceptance: synthetic directory and database scopes preserve qualified IDs; denied workspaces leak neither node existence nor labels; incompleteness remains explicit. Provide typed SDK and CLI, bounded JSON/TOON, typed refusals with remedies, README and example, public tracker copy measurements, and full npm/Bun CI release-gate evidence. Overlap rechecked: core SDK graph offers single-tracker traversal and analytics; pm-graph graphFromItems projects a single source; pm-web project-graph uses a certified single-project read; pm-vcs tracker lenses version/project tracker history. None supplies consent-scoped federation with controlled evidence edges. Reuse SDK listAllComplete, certifyCompleteListResult, existing graphFromItems and host read_output; delegate authorization to existing host policy and readers."

@@ -8,8 +8,8 @@
 
 ### Other
 
-- Reconcile stale in-progress tracker records (2026-10-23) ([pm-graph-reconcile-1023](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-reconcile-1023.toon))
 - Preserve host refusal recovery and normalize blocker-cut budget flags ([pm-graph-sdk-host-flags](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-sdk-host-flags.toon))
+- Reconcile stale in-progress tracker records (2026-10-23) ([pm-graph-reconcile-1023](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-reconcile-1023.toon))
 
 ## 2026.10.24 - 2026-10-24
 
