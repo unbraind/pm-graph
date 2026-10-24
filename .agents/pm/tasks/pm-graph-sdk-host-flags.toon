@@ -2,13 +2,18 @@ id: pm-graph-sdk-host-flags
 title: Preserve host refusal recovery and normalize blocker-cut budget flags
 description: Adopt the SDK expected-error and typed command contracts for audit findings F10 and F11.
 type: Task
-status: in_progress
+status: closed
 priority: 2
 tags: []
 created_at: "2026-10-23T20:28:02.212Z"
-updated_at: "2026-10-23T21:15:49.881Z"
+updated_at: "2026-10-24T21:45:54.624Z"
+closed_at: "2026-10-24T21:45:54.583Z"
+completed_at: "2026-10-24T21:45:54.583Z"
 author: codex-agent
 acceptance_criteria: "F10: preserve host conflict identity, exit 4 and recovery through graph commands; package usage errors satisfy the SDK expected-error predicate, with a failing behavioural revert proof.; F11: declare all four positive integer blocker-cut budgets in workspace contracts, consume normalized options, preserve receipts and no-git operation, and prove registration/parser reversion fails."
+resolution: "Graph commands retain native conflict identity, exit/recovery metadata and SDK expected errors; four positive blocker budgets are declared/normalized with revert-failing no-git regressions."
+expected_result: "F10: preserve host conflict identity, exit 4 and recovery through graph commands; package usage errors satisfy the SDK expected-error predicate, with a failing behavioural revert proof.; F11: declare all four positive integer blocker-cut budgets in workspace contracts, consume normalized options, preserve receipts and no-git operation, and prove registration/parser reversion fails."
+actual_result: "https://github.com/unbraind/pm-graph/pull/161, merged 2026-10-23T21:24:42Z, merge 15df12d4f81a6049c376526864a28fcf4e750cca: Graph commands retain native conflict identity, exit/recovery metadata and SDK expected errors; four positive blocker budgets are declared/normalized with revert-failing no-git regressions."
 comments[7]{created_at,author,text}:
   "2026-10-23T20:28:06.351Z",codex-agent,"Verified F10 and F11 against origin/main 8b8d693ea0808c8d49d1291ad94e9faeb1139ce5. F10 is valid: CommandError lacks the SDK discriminator and wrapCommandError preserves only local instances. F11 is valid: blocker-cuts manually scans numeric flags that are absent from registration. Plan: SDK factory/predicate/constants, typed command flags and normalized options; real no-git tracker, host harness, behavioural reverts, unchanged coverage gates. The pinned SDK already exposes the named exports; no dependency bump planned."
   "2026-10-23T20:32:20.108Z",codex-agent,"The host requires schema capability for registerCommand flags, so manifest.json and public harness capability declarations include it. Focused regressions and the linked pm test run passed 10/10 with no skips. F10 behavioural revert: restored only legacy error construction/wrapping, then node --test test/sdk-host-refusals.test.ts failed 3/3: conflict became CommandError exit 1 instead of the original PmCliError exit 4, usage failed isPmCliExpectedError, and the unexpected-error cause contract failed. Restored the implementation afterward."
@@ -31,4 +36,5 @@ tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
   npm run build && node --test test/sdk-host-refusals.test.ts test/blocker-cuts-command.test.ts,project,codex-agent,"2026-10-23T20:29:31.856Z",local_mutation,refactor/sdk-host-refusals-and-flags
 docs[1]{path,scope}:
   docs/blocker-cuts-example.md,project
+close_reason: "https://github.com/unbraind/pm-graph/pull/161, merged 2026-10-23T21:24:42Z, merge 15df12d4f81a6049c376526864a28fcf4e750cca: Graph commands retain native conflict identity, exit/recovery metadata and SDK expected errors; four positive blocker budgets are declared/normalized with revert-failing no-git regressions."
 body: ""
