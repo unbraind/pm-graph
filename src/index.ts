@@ -31,7 +31,7 @@ export { minimalBlockerCuts } from "./blocker-cuts.ts";
 export type { BlockerCut, BlockerCutOptions, BlockerCutReceipt, BlockerCutRefusalCode, BlockerCutResult } from "./blocker-cuts.ts";
 export type { BlockerCutCommandRefusal } from "./blocker-cuts-command.ts";
 
-const EXTENSION_VERSION = "2026.10.23";
+const EXTENSION_VERSION = "2026.10.24";
 
 // ---------------------------------------------------------------------------
 // Error contract
