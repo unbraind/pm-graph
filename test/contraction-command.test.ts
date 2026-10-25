@@ -120,5 +120,15 @@ test("public-copy validation emits finite aggregate evidence and preserves track
     await assert.rejects(() => validateContraction(join(blank, ".agents", "pm")), /nonempty/);
     await blankClient.create({ type: "Task", title: "Isolated node" });
     assert.equal((await validateContraction(join(blank, ".agents", "pm"))).boundaryPairsChecked, 1);
+    // A complete associative graph forces >1000 summary rows and exercises the
+    // validator's page collection against real SDK state, with no SDK doubles.
+    const ids = (await blankClient.listAllComplete()).items.map((item) => item.id);
+    for (let i = 1; i < 34; i++) ids.push((await blankClient.create({ type: "Task", title: `Pagination node ${i}` })).item.id);
+    for (const id of ids) await blankClient.update(id, { dep: ids.filter((target) => target !== id).map((target) => `type=related,id=${target}`) });
+    const paginated = await validateContraction(join(blank, ".agents", "pm"));
+    assert.equal(paginated.nodes, 34);
+    assert.ok(Number(paginated.summaryEdges) > 1000);
+    assert.equal(paginated.boundaryPairsChecked, 64);
+    assert.equal(paginated.inputUnchanged, true);
   } finally { rmSync(blank, { recursive: true, force: true }); }
 });
