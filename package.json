@@ -50,6 +50,7 @@
     "manifest.json",
     "README.md",
     "docs/blocker-cuts-example.md",
+    "docs/contraction-example.md",
     "docs/cross-workspace-example.md",
     "CHANGELOG.md"
   ],
@@ -104,12 +105,14 @@
     "docs": [
       "README.md",
       "docs/blocker-cuts-example.md",
+      "docs/contraction-example.md",
       "CHANGELOG.md",
       "docs/cross-workspace-example.md"
     ],
     "examples": [
       "README.md",
       "docs/blocker-cuts-example.md",
+      "docs/contraction-example.md",
       "docs/cross-workspace-example.md"
     ]
   },

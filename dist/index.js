@@ -1,3 +1,5 @@
+import { registerContraction } from "./contraction-command.js";
+export { contractGraph, contractionInputFromGraph } from "./contraction.js";
 import { registerCrossWorkspace } from "./cross-workspace-command.js";
 export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.js";
 import { spawnSync } from "node:child_process";
@@ -2381,6 +2383,7 @@ async function loadShapedAnalytics(context) {
 export function activate(api) {
     registerCrossWorkspace(api);
     registerSnapshotImpact(api);
+    registerContraction(api, resolvePmRootForContext);
     registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
     // The `pm-graph export --format <fmt>` handler renders the graph into a
     // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)

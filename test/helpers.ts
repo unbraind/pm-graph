@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -424,4 +424,12 @@ export async function withNeo4jQueryTest(
     for (const dir of fakeNpmDirs) rmSync(dir, { recursive: true, force: true });
     rmSync(ws, { recursive: true, force: true });
   }
+}
+/** Install the committed build into an isolated tracker while retaining its locked runtime dependencies. */
+export function installBuiltGraphExtension(pmRoot: string): void {
+  const root = path.resolve(import.meta.dirname, "..");
+  const extensionRoot = path.join(pmRoot, "extensions", "pm-graph");
+  mkdirSync(extensionRoot, { recursive: true });
+  for (const file of ["dist", "manifest.json", "package.json"]) cpSync(path.join(root, file), path.join(extensionRoot, file), { recursive: true });
+  symlinkSync(path.join(root, "node_modules"), path.join(extensionRoot, "node_modules"), process.platform === "win32" ? "junction" : "dir");
 }

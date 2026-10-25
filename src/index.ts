@@ -1,3 +1,6 @@
+import { registerContraction } from "./contraction-command.ts";
+export { contractGraph, contractionInputFromGraph } from "./contraction.ts";
+export type { ContractionInput, ContractionRow, ContractionResult, ContractionReceipt, ContractionRefusalCode } from "./contraction.ts";
 import { registerCrossWorkspace } from "./cross-workspace-command.ts";
 export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.ts";
 export type { ProjectionSource, ProjectionScope, ProjectionOptions, ProjectionEvidence, ProjectionRow, ProjectionBoundary, ProjectionResult } from "./cross-workspace.ts";
@@ -2847,6 +2850,7 @@ async function loadShapedAnalytics(context: CommandContext): Promise<{
 export function activate(api: ExtensionApi): void {
   registerCrossWorkspace(api);
   registerSnapshotImpact(api);
+  registerContraction(api, resolvePmRootForContext);
   registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
   // The `pm-graph export --format <fmt>` handler renders the graph into a
   // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)

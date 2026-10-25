@@ -306,12 +306,62 @@ Example output:
 
 ## Without git
 
-All offline graph commands, including `blocker-cuts`, and the graph exporter
+All offline graph commands, including `contract` and `blocker-cuts`, and the graph exporter
 work in plain initialized trackers without Git. Neo4j commands need their
 documented database configuration and connectivity; they also do not need a
 Git repository.
 
 ## Offline Analytics
+
+### `pm pm-graph contract <boundary...>`
+
+Collapse nodes with identical declared boundary behavior into summary groups, retaining
+all member item IDs and original witness paths. This read-only projection complements
+core traversal/topology and existing export shaping: it preserves reachability for
+**every ordered pair** of explicit boundaries, including self pairs. It creates no
+tracker records, external store, sync plan, or replay journal.
+
+```bash
+pm pm-graph contract goal-id prerequisite-id --edges BLOCKED_BY,CHILD_OF --json
+pm pm-graph contract goal-id prerequisite-id --edges BLOCKED_BY,CHILD_OF --expand g2 --limit 32
+```
+
+The CLI reads a certified complete SDK snapshot with extensions disabled. It retains
+all statuses, including custom active and terminal statuses. `--edges` is required:
+types select **stored directed arrows**, without reversing dependency kinds or applying
+status semantics. Missing selected edge endpoints become visible unknown singletons;
+unknown boundary IDs absent from the entire selected view produce a typed refusal.
+Boundary and cyclic nodes stay singleton. Cycle rows describe original SCCs; summary
+arrows describe existential member-to-member links and may contain additional loops.
+
+Group rows include exact member IDs, inbound/outbound boundary signatures and unknown/
+cycle flags. Edge rows include counts and an original endpoint witness; answer rows
+include a shortest original node path and matching selected edge types. The SDK checks
+all boundary pairs on the quotient before reporting success. Equality of a group's
+inbound signature ensures any boundary reaching one member can reach every member;
+this invariant propagates across each summary arrow. No removed or invented boundary
+path can pass the quotient check. Other questions (metadata, arbitrary member pairs,
+edge multiplicity, ontology execution order) require expanding IDs against the source.
+
+JSON and default TOON use the host renderer and output controls. `--limit` (default
+100, max 1000) and `--offset` page rows with explicit counts and `nextOffset`;
+`--expand <group>` pages membership IDs. A group row keeps its full member list, so
+row limits are not a token limit. Use membership pages for large groups. Group IDs
+are local to the current snapshot; rerun the same boundaries/edge selection against
+an unchanged source when following pages. The projection never claims an atomic
+snapshot across separate CLI invocations or a lossless tracker export.
+
+`contractGraph` and `contractionInputFromGraph` are typed SDK exports. One strict
+schema rejects unknown fields, sparse arrays, non-finite/fractional/out-of-domain
+numeric controls, duplicate node/boundary/type identities and oversized input. Limits:
+20000 nodes including missing endpoints, 50000 input edges, 32 boundaries, 64 selected
+types, 256 characters per identity, offset <=1000000 and conservative work <=50000000.
+Every emitted number is checked before success. Refusals return `ok: false`, empty
+rows, exit code 2 and `{code, remedy}`: `INVALID_INPUT`, `WORK_LIMIT`,
+`UNKNOWN_BOUNDARY`, `UNKNOWN_GROUP`, `SOURCE_INCOMPLETE`, or `CONTRACT_VIOLATION`.
+
+See the [SDK and CLI example](docs/contraction-example.md) for membership expansion,
+contract limits, seeded validation and public-copy reproduction.
 
 ### `pm pm-graph blocker-cuts <goal>`
 
