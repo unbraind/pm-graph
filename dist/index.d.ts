@@ -1,3 +1,5 @@
+export { contractGraph, contractionInputFromGraph } from "./contraction.ts";
+export type { ContractionInput, ContractionRow, ContractionResult, ContractionReceipt, ContractionRefusalCode } from "./contraction.ts";
 export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.ts";
 export type { ProjectionSource, ProjectionScope, ProjectionOptions, ProjectionEvidence, ProjectionRow, ProjectionBoundary, ProjectionResult } from "./cross-workspace.ts";
 export { compareGraphSnapshots } from "./snapshot-impact.ts";

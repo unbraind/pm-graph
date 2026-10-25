@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
@@ -9,7 +9,7 @@ import { registerBlockerCuts } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutCommandRefusal } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutResult } from "../src/blocker-cuts.ts";
 import type { ExtensionApi } from "../src/index.ts";
-import { captureStdout, collectHandlers } from "./helpers.ts";
+import { installBuiltGraphExtension, captureStdout, collectHandlers } from "./helpers.ts";
 import { main as replayMain, validateBlockerCuts } from "../scripts/validate-blocker-cuts.ts";
 
 const root = resolve(import.meta.dirname, "..");
@@ -52,10 +52,7 @@ before(async () => {
   blocker = (await client.create({ type: "Task", title: "Intermediate", blockedBy: upstream })).item.id;
   goal = (await client.create({ type: "Task", title: "Goal", blockedBy: blocker })).item.id;
   // Load the built package through the real host, retaining its exact dependencies.
-  const extensionRoot = join(pmRoot, "extensions", "pm-graph");
-  mkdirSync(extensionRoot, { recursive: true });
-  for (const file of ["dist", "manifest.json", "package.json"]) cpSync(join(root, file), join(extensionRoot, file), { recursive: true });
-  symlinkSync(join(root, "node_modules"), join(extensionRoot, "node_modules"), process.platform === "win32" ? "junction" : "dir");
+  installBuiltGraphExtension(pmRoot);
 });
 after(() => rmSync(workspace, { recursive: true, force: true }));
 

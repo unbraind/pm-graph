@@ -10,7 +10,7 @@ import type { BlockerCutOptions } from "../src/index.ts";
 import { isMainInvocation } from "./main-invocation.ts";
 
 /** Fingerprint input records and settings without including mutable SDK caches. */
-function fingerprint(root: string): string {
+export function fingerprint(root: string): string {
   const hash = createHash("sha256");
   const walk = (relative: string): void => {
     for (const entry of readdirSync(join(root, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
