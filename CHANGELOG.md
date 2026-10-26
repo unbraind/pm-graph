@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Collapse equivalent graph nodes while preserving boundary explanations ([pm-graph-cif6](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-cif6.toon))
+
 ## 2026.10.25 - 2026-10-25
 
 ### Added
