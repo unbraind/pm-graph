@@ -1,6 +1,6 @@
 {
   "name": "pm-graph",
-  "version": "2026.10.25",
+  "version": "2026.10.26",
   "description": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
   "type": "module",
   "scripts": {
@@ -61,7 +61,7 @@
   "bugs": {
     "url": "https://github.com/unbraind/pm-graph/issues"
   },
-  "homepage": "https://github.com/unbraind/pm-graph#readme",
+  "homepage": "https://pm-cli.unbrained.dev/packages/pm-graph",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "peerDependencies": {
@@ -70,7 +70,10 @@
   "engines": {
     "node": ">=22.18.0"
   },
-  "author": "@unbraind",
+  "author": {
+    "name": "unbrained",
+    "url": "https://unbrained.dev/about"
+  },
   "license": "MIT",
   "keywords": [
     "graph",
