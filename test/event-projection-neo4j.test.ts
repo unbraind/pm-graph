@@ -30,7 +30,7 @@ test("Neo4j sparse transaction locks before revision read, replaces properties, 
     setFakeNeo4jWrite((query, params) => {
       if (query.includes("RETURN m.revision")) return { records: [fakeRecord({ revision })] };
       if (query.includes("SET m.revision")) revision = params?.revision;
-      return { records: [] };
+      return { records: [fakeRecord({ foreign: 0, written: 1 })] };
     });
     const run = handlers.get("pm-graph refresh")!;
     const invoke = async (): Promise<EventProjectionReceipt> => await run({ cwd: f.ws, pm_root: f.pmRoot, args: ["projection.json", "--neo4j"] }) as EventProjectionReceipt;
@@ -46,6 +46,7 @@ test("Neo4j sparse transaction locks before revision read, replaces properties, 
     assert.ok(getFakeNeo4jCalls().some((call) => call.query.includes("DELETE r")));
     assert.ok(getFakeNeo4jCalls().some((call) => call.query.includes("SET n = $properties")));
     assert.ok(getFakeNeo4jCalls().some((call) => call.query.includes("SET r = $properties")));
+    assert.ok(getFakeNeo4jCalls().every((call) => !call.query.includes("DETACH DELETE")), "all sink paths preserve relationships they do not own");
     const noop = await invoke(); assert.equal(noop.ok, true, JSON.stringify(noop));
     await f.client.update(a, { title: "driver retry" });
     let markerReads = 0;

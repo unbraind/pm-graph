@@ -2,13 +2,14 @@ id: pm-graph-event-sparse
 title: Refresh projections from mutation events with sparse work receipts
 description: "Acceptance: after initial admission, one update among 10000 items avoids a complete successful refresh scan; cursor gaps force a disclosed rebuild or refusal; incremental and full projections are equal. Deliver typed SDK and CLI, compact receipts and remedies, seeded state and concurrency tests, non-git public-corpus validation, and npm plus Bun CI release gates."
 type: Feature
+pm_format_version: 2
 status: in_progress
 priority: 2
 tags[1]: "gh:unbraind/pm-graph#175"
 created_at: "2026-10-27T07:16:00.488Z"
-updated_at: "2026-10-27T11:02:04.095Z"
+updated_at: "2026-10-27T14:46:24.248Z"
 author: codex-agent
-comments[17]{created_at,author,text}:
+comments[22]{created_at,author,text}:
   "2026-10-27T07:16:04.720Z",codex-agent,"Overlap rechecked against current CLI and sibling sources: SDK mutation-events owns cursors and history reads; graph snapshot impact compares complete graphs; syncNeo4j in src/index.ts still upserts every input node and relationship. pm-web consumes event pages for resume and history delivery, and pm-rust complete-projection receipts certify reads rather than update a persisted graph. This feature owns only derived projection state, sparse work receipts and sink reconciliation. No upstream or sibling changes planned."
   "2026-10-27T07:24:18.943Z",codex-agent,"Implementation now uses lazy supported SDK package exports, certified complete admission, opaque mutation cursors, SDK point reads, anchor/stream continuity checks, owned checkpoint locking, finite/dense boundary validation, and exact recoverable receipt pages. Explicit rebuild is required after continuity or workspace-schema changes. Cached graph materialization and checkpoint encoding still visit cached rows; receipts separately disclose full source scans and SDK event-page source. Neo4j reconciliation uses a revision CAS inside one write transaction and a separate owned namespace. Seeded model and real-host regressions are being validated."
   "2026-10-27T07:41:59.200Z",codex-agent,"Evidence: seeded model seed 0x261027 passed 500 random sequences through real SDK reads and mutations. The 10000-item non-git case read one updated item with zero complete refresh item scans, evaluated 3 nodes and 2 edges, emitted 814 JSON bytes and equaled both certified full output and an explicit rebuild. Public main corpus at 4b5e7a1: 108 items, 203 nodes, 372 edges, 1138 admission events; caught-up reads/scans/events all zero, 538 JSON bytes, derived_index, 1108 ms admission plus catch-up. Source copy was read-only, authoritative bytes unchanged. Public data exposed omitted legacy dependency metadata; producer JSON normalization and a regression now cover it. Behavioral revert proof: replacing only refreshEventProjection catch-up admission decision with unconditional rebuild makes the sparse regression fail (fullScans 1 versus required 0); implementation restored. All 12 competing-refresher transition boundaries pass, and interrupted-sink retry checks current target revisions."
@@ -26,14 +27,27 @@ comments[17]{created_at,author,text}:
   "2026-10-27T10:29:27.887Z",codex-agent,"All three linked test commands passed: 8 existing targeted tests, 3 prior recovery tests and 3 current provenance/Neo4j tests (14 reported checks; no failures/skips/cancellations). The final CLI test also independently passed with native graph-export SDK adapter read-back, canonical file exports, JSON/TOON and no git executable. Merged newly advanced main before finishing; incoming tracker histories remain intact. Changelog generation/check, privacy, history-prefix, lint and zero-percent duplication checks passed. The registry reports pm CLI 2026.10.27; the package SDK pin remains unchanged."
   "2026-10-27T10:31:19.078Z",codex-agent,"Packed acceptance passed 6/6 actual hosts: npm global, Bun global, npx, bunx, npm local and Bun local. Every host preserved authoritative ExternalPmItem fields under a later referencing item, passed JSON/TOON contraction unknown counts, sparse 1-read/0-scan refresh, 16 foreign-payload refusals and both empty-history rebuild formats. Command: node test/event-projection-packed.validation.ts. Round 2 is ready for exact-head CI npm run release:check and bun run release:check (two workers; unchanged thresholds). CI results and run URL will be reported on PR 175; no live Neo4j service was accessed."
   "2026-10-27T11:02:04.092Z",codex-agent,"Bounded CI handoff: after 30 minutes, https://github.com/unbraind/pm-graph/actions/runs/40489166315 at runtime commit 3ddcf79132b1a4c0df549f3d87748d291f323e05 still has all three jobs queued: test (22), test (26), and windows-prepare-lifecycle. Current npm run release:check and bun run release:check counts are unavailable; no current full-gate pass is claimed. Focused linked checks passed 14/14, native exporter adapter equivalence passed, packed hosts passed 6/6, and all three isolated behavioral reverts failed as required. This final evidence-only commit changes tracker receipts, with runtime/tests unchanged. Claim remains released; the item remains unclosed. The queue rule requires stopping after this bounded wait; the orchestrator pipeline can await the pending gates."
-files[14]{path,scope}:
+  "2026-10-27T11:40:18.987Z",codex-agent,"Round 3 review: worktree started clean and main is already contained. Fixing two classes: ownership predicates must be protected by every lock needed by later destructive writes, and source-preservation fingerprints must include every authoritative input. Auditing sparse and legacy Neo4j sync, tracker/checkpoint CAS paths, generated Cypher, validators and output consumers. Will add competing-session transition tests and independent behavioral revert proofs for locking and schema fingerprints."
+  "2026-10-27T12:05:50.340Z",codex-agent,"Class audit: all src Neo4j writes now use lock-protected ownership checks and plain DELETE; sparse, legacy full/incremental sync and generated Cypher share guarded statement producers. Legacy sync is now one transaction. Node/relationship MERGE collisions recheck ownership after acquiring their write lock; native deletion/constraint conflicts map to SINK_CONFLICT and roll back. Tracker checkpoint reads/CAS already occur inside their SDK lease. Consolidated source fingerprints include schema JSON, Markdown and all non-derived regular inputs, with derived-directory exclusions restricted to the tracker root. Four new guard/fingerprint tests and the existing sparse transaction test pass; lint and duplication pass. Real two-session database validation is in progress against an isolated fixture."
+  "2026-10-27T13:34:02.402Z",codex-agent,"Fresh read-only public main validation with the corrected complete fingerprint passed: 109 items, 205 nodes, 376 edges, 1160 admission events, one admission scan; catch-up 0 reads/0 scans/0 events, 559-byte JSON, derived_index, 5802 ms measured validation, equal to full and all authoritative source bytes unchanged. SDK createWorkspaceSnapshot supplies the independent authoritative-file oracle in the 500-sequence fingerprint test. Reverting only fingerprint file selection to the former TOON/history/settings filter fails on SDK authoritative schema/fields.json, exit 1; restored. Five focused guard/fingerprint/sparse-transaction tests pass. The isolated real database already passed the focused 18 sparse transition boundaries; the final all-path and packed-host run is in progress."
+  "2026-10-27T14:38:10.676Z",codex-agent,"Round 3 class closure: ownership is a transaction invariant, never an unlocked preflight promise. Audited all src Neo4j writes: sparse refresh, legacy incremental/full sync and exported Cypher now use one guarded statement producer and one data transaction; node/relationship write locks precede ownership reads, MERGE rechecks its current target, cleanup deletes only owned relationships then plain nodes, and any foreign/corrupt guard aborts dependents with SINK_CONFLICT. Tracker checkpoint read/modify/publish already holds its SDK lease through publication. No DETACH DELETE remains in src. Source immutability now hashes every authoritative filename and byte across all validators, including schemas; SDK snapshot manifest files are the oracle. Four isolated behavioral reverts exit 1: old syncProjectionDelta loses the real foreign edge at boundary 7; removing the node MERGE predicate admits a late foreign node; removing the edge predicate overwrites a foreign relationship; the old extension filter misses schema/fields.json. Every function/guard was restored. Positive real Neo4j 5.26.27 evidence: 140 query boundaries across sparse, legacy incremental/full and generated Cypher, ordinary/dense nodes, 96 observed server lock waits, five late collision cases; all preserved foreign records/checkpoints. Six actual packed npm/Bun hosts on SDK 2026.10.20 pass 48 JSON/TOON incremental/rebuild refusals and sparse retries. All four linked commands pass 18 reported tests, no skips/failures. Main advanced during validation; merged fc2410b in 2e296a7, installed its SDK/toolchain 2026.10.23, and the packed validator now derives that pin for CI. Final focused checks against the merged pin follow; full npm/Bun gates remain CI evidence."
+  "2026-10-27T14:46:16.656Z",codex-agent,"Final local round-3 evidence after the main merge and SDK 2026.10.23 install: guard/fingerprint tests pass 4/4; Cypher export/command and legacy incremental/full/empty sync tests pass 4/4. Their initial schema-context run rerouted fixture initialization and failed before product execution; the supported linked-test snapshot workspace plus none PM context now passes without changing assertions. Standard pinned pm-github installer cleared clone-local host-version skew; strict pm health now exits 0 with zero warnings and valid append-only history. Typecheck, test typecheck, lint, 0-percent duplication, build and 193/193 docstrings pass. The read-only non-git public copy at 42e20bb revalidated with SDK 2026.10.23: 109 items, 205 nodes, 376 edges, 1160 admission events, one admission scan; caught-up reads/scans/events all zero, 559 JSON bytes, derived_index, equal to full, all authoritative bytes including schemas unchanged, 4617 ms. Prior four linked commands passed 18 reported tests; merged-pin focused commands pass another 8 reported checks. Real-server interleavings/collisions and six SDK-2026.10.20 packed compatibility hosts remain the measured evidence in the previous comment; CI uses the merged pin for the full npm/Bun gates and live packed fixture. Releasing the claim without closing; ready PR 175 will receive the exact-head CI run link and counts or the required bounded pending receipt."
+files[29]{path,scope}:
+  .github/workflows/ci.yml,project
   package.json,project
   scripts/coverage-gate.ts,project
+  scripts/tracker-fingerprint.ts,project
+  scripts/validate-blocker-cuts.ts,project
+  scripts/validate-cross-workspace.ts,project
   scripts/validate-event-projection.ts,project
   src/contraction.ts,project
   src/event-projection-command.ts,project
   src/event-projection.ts,project
   src/index.ts,project
+  src/neo4j-ownership.ts,project
+  test/command-surface.test.ts,project
+  test/coverage-gaps.test.ts,project
+  test/event-projection-neo4j-live.validation.ts,project
   test/event-projection-neo4j.test.ts,project
   test/event-projection-packed.validation.ts,project
   test/event-projection-provenance.test.ts,project
@@ -41,10 +55,53 @@ files[14]{path,scope}:
   test/event-projection-recovery.test.ts,project
   test/event-projection.test.ts,project
   test/fixtures/event-projection-v1.json,project
-tests[3]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
-  node --test --test-concurrency=2 --test-name-pattern='admission|foreign|lost anchors|source churn|storage transition|sink crash|legacy optional|Neo4j sparse' test/event-projection.test.ts test/event-projection-neo4j.test.ts,project,codex-agent,"2026-10-27T07:42:04.744Z",local_mutation,feat/event-sparse-projection-receipts
-  node --test --test-concurrency=2 --test-name-pattern='storage presence|rebuild resets|previous producer' test/event-projection-recovery.test.ts,project,codex-agent,"2026-10-27T08:26:36.531Z",local_mutation,feat/event-sparse-projection-receipts
-  node --test --test-concurrency=2 test/event-projection-provenance.test.ts test/event-projection-neo4j.test.ts,project,codex-agent,"2026-10-27T10:15:04.443Z",local_mutation,feat/event-sparse-projection-receipts
+  test/fixtures/neo4j-fake.ts,project
+  test/fixtures/neo4j-live-loader.ts,project
+  test/fixtures/neo4j-live-proxy.ts,project
+  test/fixtures/neo4j-server.ts,project
+  test/neo4j-ownership.test.ts,project
+  test/snapshot-impact-public.validation.ts,project
+  test/tracker-fingerprint.test.ts,project
+tests[5]:
+  - command: node --test --test-concurrency=2 --test-name-pattern='admission|foreign|lost anchors|source churn|storage transition|sink crash|legacy optional|Neo4j sparse' test/event-projection.test.ts test/event-projection-neo4j.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T07:42:04.744Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
+  - command: node --test --test-concurrency=2 --test-name-pattern='storage presence|rebuild resets|previous producer' test/event-projection-recovery.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T08:26:36.531Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
+  - command: node --test --test-concurrency=2 test/event-projection-provenance.test.ts test/event-projection-neo4j.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T10:15:04.443Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
+  - command: node --test --test-concurrency=2 test/neo4j-ownership.test.ts test/tracker-fingerprint.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T13:34:26.230Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
+  - command: node --test --test-concurrency=2 --test-name-pattern='export --format cypher|cypher command|sync incremental|sync on an empty' test/command-surface.test.ts test/coverage-gaps.test.ts
+    scope: project
+    pm_context_mode: none
+    workspace_context_mode: snapshot
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T14:38:18.605Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
+    updated_by: codex-agent
+    updated_at: "2026-10-27T14:43:29.512Z"
 docs[3]{path,scope}:
   docs/event-projection-example.md,project
   docs/event-projection-validation.md,project

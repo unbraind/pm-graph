@@ -1,20 +1,12 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { listAllComplete } from "@unbrained/pm-cli/sdk";
 import { graphFromItems, refreshEventProjection, readEventProjection } from "../src/index.ts";
 import { isMainInvocation } from "./main-invocation.ts";
 
-/** Hash authoritative tracker documents, history and settings; SDK accelerators are derived state. */
-function fingerprint(root: string): string {
-  const digest = createHash("sha256");
-  for (const file of readdirSync(root, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
-    .map((entry) => relative(root, join(entry.parentPath, entry.name))).filter((file) => /\.toon$|\.jsonl$|^settings\.json$/.test(file)).sort()) {
-    digest.update(file).update(readFileSync(join(root, file)));
-  }
-  return digest.digest("hex");
-}
+import { fingerprint } from "./tracker-fingerprint.ts";
+export { fingerprint } from "./tracker-fingerprint.ts";
+
 /** Read-only public-corpus validation with separate writable projection storage and aggregate-only reporting. */
 export async function validateEventProjectionCorpus(pmRoot: string, stateFile: string): Promise<Record<string, number | boolean | string>> {
   const before = fingerprint(pmRoot);

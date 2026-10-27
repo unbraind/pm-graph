@@ -160,6 +160,11 @@ pm pm-graph export --format dot --filter type=Task --filter status=open,in_progr
 
 Render parameterized Cypher statements for importing the current workspace graph into Neo4j. Returns the statements without executing them. **Does not require Neo4j.**
 
+Run the returned `prerequisites` before opening the data transaction. Execute all
+`statements` in one transaction and compare each result with its `expect` guard;
+roll back the entire batch on a mismatch. This is the same guarded plan used by
+`sync`, including ownership checks and explicit deletion of owned relationships.
+
 ```bash
 pm pm-graph cypher --json
 ```
@@ -199,7 +204,13 @@ graph TD
 Sync the current workspace graph into Neo4j using the `NEO4J_*` environment variables.
 
 - **Default (incremental):** Upserts all nodes and relationships, then deletes stale nodes that are no longer present in the workspace.
-- **`--full`:** Performs a complete wipe-and-resync — deletes all `PmGraphNode` entries for the project before re-importing.
+- **`--full`:** Replaces the project's owned `PmGraphNode` entries in one transaction. Foreign nodes or relationships refuse the complete sync with `SINK_CONFLICT`.
+
+Sync takes write locks before checking ownership, deletes only owned
+relationships, and uses plain node deletion so a concurrent foreign edge causes
+rollback. Existing unmarked Neo4j records remain readable; writing over them
+requires explicit ownership reconciliation or an empty destination. No record is
+automatically adopted from its label alone.
 
 After every sync, a `lastSyncedAt` timestamp is stored in a `PmGraphSync` metadata node in Neo4j.
 

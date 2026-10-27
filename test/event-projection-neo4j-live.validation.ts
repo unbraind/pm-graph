@@ -1,0 +1,212 @@
+/** Real two-session interleavings against an explicitly supplied isolated Neo4j distribution. */
+import { registerHooks } from "node:module";
+import { spawn } from "node:child_process";
+import { resolve } from "./fixtures/neo4j-live-loader.ts";
+registerHooks({ resolve });
+import assert from "node:assert/strict";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { join, resolve as absolute } from "node:path";
+import neo4j from "neo4j-driver";
+import { deleteItem } from "@unbrained/pm-cli/sdk";
+import { startNeo4j } from "./fixtures/neo4j-server.ts";
+import { observeLiveQueries, runLiveObserved } from "./fixtures/neo4j-live-proxy.ts";
+import { fixture, seed } from "./event-projection-helpers.ts";
+import { applyEnv, collectHandlers, restoreEnv } from "./helpers.ts";
+import type { OwnedStatement } from "../src/neo4j-ownership.ts";
+import { readEventProjection, refreshEventProjection } from "../src/index.ts";
+import type { EventProjectionReceipt } from "../src/index.ts";
+
+const home = process.argv[2];
+assert.ok(home, "Supply an unpacked isolated Neo4j fixture distribution");
+const variant = process.argv[3];
+assert.ok(process.argv.length <= 4 && (variant === undefined || ["--sparse-only", "--preservation-only", "--packed-only", "--collision-only"].includes(variant)), "Use only a fixture home and an optional focused variant");
+const server = await startNeo4j(absolute(home));
+console.log(JSON.stringify({ fixtureReady: true, maxProcessors: 2, maxHeapMiB: 512 }));
+const actual = neo4j.driver(server.uri, neo4j.auth.basic("fixture", "synthetic"), { maxTransactionRetryTime: 0 });
+const originalEnv = applyEnv({ NEO4J_URI: server.uri, NEO4J_USER: "fixture", NEO4J_PASSWORD: "synthetic", NEO4J_DATABASE: "neo4j", NEO4J_MAX_RETRY_MS: "0" });
+const f = fixture();
+const handlers = collectHandlers();
+const a = await seed(f.client, "victim");
+const b = await seed(f.client, "retained");
+await f.client.update(a, { blockedBy: b, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_reason"], clearDeps: true });
+let cases = 0;
+let blocked = 0;
+let nextToken = 0;
+const query = async (text: string, params: Record<string, unknown> = {}) => {
+  const session = actual.session();
+  try { return await session.run(text, params); } finally { await session.close(); }
+};
+
+/** Execute the actual producer's guarded plan in one transaction, as required by its receipt. */
+async function executePlan(): Promise<EventProjectionReceipt> {
+  const result = await handlers.get("pm-graph cypher")!({ pm_root: f.pmRoot, cwd: f.ws }) as { prerequisites: { statement: string }[]; statements: OwnedStatement[] };
+  const session = actual.session();
+  try {
+    for (const step of result.prerequisites) await session.run(step.statement);
+    await session.executeWrite(async (tx) => {
+      for (const step of result.statements) {
+        const response = await runLiveObserved(tx, step.statement, step.parameters);
+        assert.equal(response.records.length, 1);
+        if (Number(response.records[0].get(step.expect.key)) !== step.expect.value)
+          throw Object.assign(new Error("Owned plan refused"), { code: "Neo.ClientError.Schema.ConstraintValidationFailed" });
+      }
+    });
+    return { ok: true, work: [] };
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && String(error.code).startsWith("Neo.ClientError."))
+      return { ok: false, refusal: { code: "SINK_CONFLICT", remedy: "Reconcile current sink ownership" }, work: [] };
+    throw error;
+  } finally { await session.close(); }
+}
+
+/** Both sparse and legacy paths use the normal command host over the same non-git tracker. */
+async function invoke(mode: string): Promise<EventProjectionReceipt> {
+  if (mode === "cypher") return executePlan();
+  const handler = handlers.get(mode === "sparse" ? "pm-graph refresh" : "pm-graph sync")!;
+  return await handler({ pm_root: f.pmRoot, cwd: f.ws, args: mode === "sparse" ? ["projection.json", "--neo4j"] : mode === "full" ? ["--full"] : [] }) as EventProjectionReceipt;
+}
+
+/** Late node collisions and preexisting same-kind foreign edges exercise the shared MERGE guards. */
+async function collisionCases(): Promise<void> {
+  observeLiveQueries(undefined);
+  const identityFile = join(f.ws, "identity.json");
+  assert.equal((await refreshEventProjection({ pmRoot: f.pmRoot, stateFile: identityFile })).ok, true);
+  const identity = await readEventProjection(identityFile); assert.ok(identity);
+  const exported = await handlers.get("pm-graph cypher")!({ pm_root: f.pmRoot, cwd: f.ws }) as { statements: OwnedStatement[] };
+  const legacyKey = String(exported.statements[0].parameters.projectKey);
+  for (const mode of ["sparse", "legacy", "full", "cypher"]) {
+    await query("MATCH (n) DETACH DELETE n");
+    await f.client.restore(a, "2"); rmSync(f.stateFile, { force: true });
+    await query("CREATE (:FixtureForeign {id:'peer'})");
+    const label = mode === "sparse" ? "PmGraphProjectionNode" : "PmGraphNode";
+    const key = mode === "sparse" ? identity.source : legacyKey;
+    let injected = false;
+    observeLiveQueries(async (phase, text, parameters) => {
+      if (injected || phase !== "before" || !text.startsWith(`MERGE (n:${label}`) || parameters?.id !== a) return;
+      injected = true;
+      await query(`MATCH (p:FixtureForeign {id:'peer'}) CREATE (n:${label} {projectKey:$key,id:$id,pmGraphOwner:'peer',title:'foreign original',__pmLock:false}) CREATE (n)-[:FOREIGN {pmGraphOwner:'peer'}]->(p)`, { key, id: a });
+    });
+    const result = await invoke(mode); observeLiveQueries(undefined);
+    assert.ok(injected, `${mode}: late node collision injected`);
+    assert.equal(result.refusal?.code, "SINK_CONFLICT", `${mode}: late foreign node must refuse`);
+    const node = await query(`MATCH (n:${label} {projectKey:$key,id:$id}) RETURN n.pmGraphOwner AS owner,n.title AS title,n.__pmLock AS lock`, { key, id: a });
+    assert.equal(node.records[0].get("owner"), "peer"); assert.equal(node.records[0].get("title"), "foreign original");
+    assert.equal(node.records[0].get("lock"), false);
+    if (mode === "sparse") assert.equal(existsSync(f.stateFile), false);
+  }
+  await query("MATCH (n) DETACH DELETE n");
+  await f.client.restore(a, "1"); rmSync(f.stateFile, { force: true });
+  assert.equal((await invoke("sparse")).ok, true);
+  const before = readFileSync(f.stateFile, "utf8");
+  await query("MATCH (a:PmGraphProjectionNode {projectKey:$key,id:$from}),(b:PmGraphProjectionNode {projectKey:$key,id:$to}) CREATE (a)-[:BLOCKED_BY {pmGraphOwner:'peer',source:'foreign original',__pmLock:false}]->(b)", { key: identity.source, from: a, to: b });
+  await f.client.update(a, { blockedBy: b, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_reason"], clearDeps: true });
+  const result = await invoke("sparse");
+  assert.equal(result.refusal?.code, "SINK_CONFLICT", "a matching foreign relationship must never be overwritten");
+  assert.equal(readFileSync(f.stateFile, "utf8"), before);
+  const edge = await query("MATCH (:PmGraphProjectionNode {projectKey:$key,id:$from})-[r:BLOCKED_BY]->(:PmGraphProjectionNode {projectKey:$key,id:$to}) RETURN r.pmGraphOwner AS owner,r.source AS source,r.__pmLock AS lock", { key: identity.source, from: a, to: b });
+  assert.equal(edge.records[0].get("owner"), "peer"); assert.equal(edge.records[0].get("source"), "foreign original");
+  assert.equal(edge.records[0].get("lock"), false);
+  console.log(JSON.stringify({ lateNodeCollisions: 4, foreignRelationshipCollisions: 1, preserved: true }));
+}
+
+try {
+  for (const mode of variant === "--packed-only" || variant === "--collision-only" ? [] : variant ? ["sparse"] : ["sparse", "legacy", "full", "cypher"]) for (const dense of variant ? [false] : [false, true]) {
+    console.log(JSON.stringify({ mode, dense, preparing: true }));
+    const label = mode === "sparse" ? "PmGraphProjectionNode" : "PmGraphNode";
+    const baseline: string[] = [];
+    const prepare = async (): Promise<void> => {
+      observeLiveQueries(undefined);
+      // The database was created by this fixture; it contains no outside records.
+      await query("MATCH (n) DETACH DELETE n");
+      await f.client.restore(a, "2");
+      rmSync(f.stateFile, { force: true });
+      assert.equal((await invoke(mode)).ok, true);
+      if (dense) {
+        await query(`MATCH (n:${label} {id: $id}) UNWIND range(1,65) AS i CREATE (p:FixtureDensity {i:i}) CREATE (n)-[:DENSITY]->(p)`, { id: a });
+        await query("MATCH (p:FixtureDensity) DETACH DELETE p");
+      }
+      await query("CREATE (:FixtureForeign {id: 'peer'})");
+      await deleteItem(a, { force: true }, { pmRoot: f.pmRoot, noExtensions: true, author: "graph-test" });
+    };
+    await prepare();
+    observeLiveQueries(async (phase, text) => { if (phase === "before") baseline.push(text); });
+    assert.equal((await invoke(mode)).ok, true);
+    observeLiveQueries(undefined);
+    for (let boundary = 0; boundary < baseline.length * 2; boundary++) {
+      await prepare();
+      const checkpoint = existsSync(f.stateFile) ? readFileSync(f.stateFile, "utf8") : undefined;
+      let step = 0;
+      let injected = false;
+      let missingRequiredLock = false;
+      let injection = "";
+      let lastStatuses: string[] = [];
+      let peer: Promise<number> | undefined;
+      const token = `peer-${++nextToken}`;
+      observeLiveQueries(async (phase, text) => {
+        if (step++ !== boundary) return;
+        injected = true;
+        injection = `${phase} ${text.slice(0, 100)}`;
+        let settled = false;
+        const session = actual.session();
+        peer = (async () => {
+          const tx = session.beginTransaction({ metadata: { fixtureToken: token } });
+          try {
+            // The probe explicitly needs NODE write access, including on dense nodes;
+            // it proves the claimed node lock independently of commit-stage locks.
+            const result = await tx.run(`MATCH (n:${label} {id: $id}), (p:FixtureForeign {id:'peer'})
+SET n.__peerProbe = $token
+CREATE (n)-[r:FOREIGN {pmGraphOwner:'peer', token:$token}]->(p) RETURN count(r) AS created`, { id: a, token });
+            await tx.commit(); return Number(result.records[0].get("created"));
+          } catch (error) { await tx.rollback(); throw error; }
+          finally { settled = true; await session.close(); }
+        })();
+        void peer.catch(() => {}); // The assertion below awaits and reports peer failures after rollback.
+        // Observe the real server's lock wait, rather than assuming a scheduled promise ran.
+        for (let attempt = 0; attempt < 150; attempt++) {
+          if (settled) break;
+          const transactions = await query("SHOW TRANSACTIONS YIELD metaData, status WHERE metaData.fixtureToken = $token RETURN status", { token });
+          lastStatuses = transactions.records.map((record) => String(record.get("status")));
+          if (transactions.records.some((record) => String(record.get("status")).startsWith("Blocked"))) {
+            blocked++;
+            throw Object.assign(new Error("Fixture requests rollback while peer waits"), { code: "Neo.ClientError.Schema.ConstraintValidationFailed" });
+          }
+          await new Promise((resolve) => { setTimeout(resolve, 10); });
+        }
+        assert.equal(settled, true, "peer must commit or demonstrably wait on the transaction lock");
+        if (variant !== "--preservation-only" && mode === "sparse" && !dense && phase === "after" && text.includes("WITH collect(n) AS ns") && text.endsWith("RETURN foreign")) {
+          missingRequiredLock = true;
+          assert.fail("the ownership check must hold the sparse victim's write lock until commit");
+        }
+      });
+      const result = await invoke(mode);
+      observeLiveQueries(undefined);
+      assert.equal(missingRequiredLock, false, "ownership read did not retain the sparse-node write lock");
+      assert.ok(injected, `${mode} dense=${dense} boundary=${boundary}`);
+      const created = await peer;
+      assert.equal(created, 1, "fixture peer must create an actual foreign edge");
+      const remaining = await query("MATCH ()-[r:FOREIGN {token:$token}]->() RETURN count(r) AS count", { token });
+      assert.equal(Number(remaining.records[0].get("count")), 1, `${mode} dense=${dense} boundary=${boundary}: foreign edge was lost`);
+      const probe = await query(`MATCH (n:${label} {id:$id}) RETURN n.__peerProbe AS token`, { id: a });
+      assert.equal(probe.records[0].get("token"), token);
+      assert.equal(result.ok, false, `${mode} boundary ${boundary} must refuse the competing write`);
+      assert.equal(result.refusal?.code, "SINK_CONFLICT", JSON.stringify({ mode, dense, boundary, injection, lastStatuses, result }));
+      if (checkpoint !== undefined) assert.equal(readFileSync(f.stateFile, "utf8"), checkpoint);
+      cases++;
+      if (cases % 8 === 0) console.log(JSON.stringify({ passedTransitions: cases, blockedPeerTransitions: blocked }));
+    }
+    console.log(JSON.stringify({ mode, dense, boundaries: baseline.length * 2, foreignEdgesPreserved: true }));
+  }
+  console.log(JSON.stringify({ cases, blockedPeerTransitions: blocked, realNeo4j: true, nonGitTracker: true }));
+  if (variant === undefined || variant === "--collision-only") await collisionCases();
+  if (variant === undefined || variant === "--packed-only") {
+    const packed = spawn(process.execPath, [join(import.meta.dirname, "event-projection-packed.validation.ts"), server.uri], { cwd: process.cwd(), stdio: "inherit", env: { ...process.env, NPM_CONFIG_USERCONFIG: "/dev/null" } });
+    const status = await new Promise<number | null>((resolve, reject) => { packed.once("error", reject); packed.once("exit", resolve); });
+    assert.equal(status, 0, "all six packed hosts must preserve real Neo4j foreign records");
+  }
+} finally {
+  observeLiveQueries(undefined);
+  restoreEnv(originalEnv);
+  await actual.close();
+  await server.stop();
+  rmSync(f.ws, { recursive: true, force: true });
+}

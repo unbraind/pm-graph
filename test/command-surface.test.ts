@@ -178,7 +178,8 @@ test("export --format cypher emits parameterized Cypher statements", { skip: !pm
     const raw = await runExportRaw(harness, pmRoot, "cypher");
     assert.ok(raw.includes("MERGE (n:PmGraphNode {projectKey: $projectKey"), "real parameterized MERGE clause");
     assert.ok(raw.includes("$projectKey"), "projectKey bound as a Cypher parameter");
-    assert.ok(raw.includes("DETACH DELETE"), "per-project cleanup statement present");
+    assert.ok(raw.includes("DELETE n") && raw.includes("DELETE r"), "explicit node and relationship cleanup statements present");
+    assert.ok(!raw.includes("DETACH DELETE") && raw.includes("pmGraphOwner") && raw.includes("__pmLock"), "cleanup preserves foreign relationships under locks");
   });
 });
 
@@ -306,11 +307,13 @@ test("cypher command returns statement count matching node+relationship count", 
     createItem(ws, "Beta", a);
     const res = await harness.runCommand({ command: "pm-graph cypher", pmRoot }) as CmdResult;
     assert.equal(res.handled, true);
-    const result = res.result as { ok: boolean; graph: { nodes: number; relationships: number }; statements: unknown[] };
+    const result = res.result as { ok: boolean; graph: { nodes: number; relationships: number }; statements: unknown[]; prerequisites: { statement: string }[] };
     assert.equal(result.ok, true);
     assert.ok(result.graph.nodes > 0, "node count reported");
     // 1 DELETE + N node MERGEs + R relationship MERGEs
     assert.strictEqual(result.statements.length, 1 + result.graph.nodes + result.graph.relationships);
+    assert.equal(result.prerequisites.length, 2);
+    assert.ok(result.prerequisites.every((step) => step.statement.includes("IS UNIQUE")));
   });
 });
 

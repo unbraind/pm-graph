@@ -704,13 +704,15 @@ describe("neo4j command success and friendly errors", { concurrency: 1, skip: !p
       assert.equal(getFakeNeo4jLastConfig()?.maxTransactionRetryTime, 0);
       assert.equal(getFakeNeo4jLastSessionConfig()?.database, "neo4j");
       assert.equal(wasFakeNeo4jClosed(), true);
-      assert.ok(getFakeNeo4jCalls().some((c) => c.mode === "write" && c.query.includes("DETACH DELETE")));
+      assert.ok(getFakeNeo4jCalls().some((c) => c.mode === "write" && c.query.includes("DELETE n") && c.query.includes("pmGraphOwner")));
+      assert.ok(getFakeNeo4jCalls().every((c) => !c.query.includes("DETACH DELETE")));
 
       resetFakeNeo4j();
       const full = (await harness.runCommand({ command: "pm-graph sync", args: ["--full"], pmRoot })) as CmdResult;
       const fullResult = full.result as { fullSync: boolean };
       assert.equal(fullResult.fullSync, true);
-      assert.ok(getFakeNeo4jCalls().some((c) => c.query.includes("DETACH DELETE") && c.query.includes("projectKey")));
+      assert.ok(getFakeNeo4jCalls().some((c) => c.query.includes("DELETE n") && c.query.includes("projectKey") && c.query.includes("__pmLock")));
+      assert.ok(getFakeNeo4jCalls().every((c) => !c.query.includes("DETACH DELETE")));
     } finally {
       restoreEnv(original);
       rmSync(ws, { recursive: true, force: true });
