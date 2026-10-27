@@ -8,11 +8,12 @@ import { after, before, test } from "node:test";
 import { PmClient } from "@unbrained/pm-cli/sdk";
 import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../src/index.ts";
+import { publicChildEnv } from "./fixtures/public-child-env.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { name: string; version: string; devDependencies: Record<string, string> };
 const workspace = mkdtempSync(join(tmpdir(), `${pkg.name}-read-output-`));
-const env = { ...process.env, HOME: join(workspace, "home"), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1", PM_AUTHOR: "contract-test", NODE_COMPILE_CACHE: join(workspace, "compile-cache"), npm_config_offline: "true", npm_config_cache: process.env.npm_config_cache ?? join(homedir(), ".npm") };
+const env = { ...publicChildEnv(), NPM_CONFIG_USERCONFIG: devNull, npm_config_userconfig: devNull, HOME: join(workspace, "home"), GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: "1", PM_AUTHOR: "contract-test", NODE_COMPILE_CACHE: join(workspace, "compile-cache"), npm_config_offline: "true", npm_config_cache: process.env.npm_config_cache ?? join(homedir(), ".npm") };
 const ids: string[] = [];
 let cli = "";
 
@@ -62,10 +63,10 @@ before(async () => {
   symlinkSync(join(root, "node_modules"), join(extensionRoot, "node_modules"), process.platform === "win32" ? "junction" : "dir");
   const client = new PmClient({ pmRoot: join(workspace, ".agents/pm"), author: "contract-test", noExtensions: true });
   for (let index = 0; index < 36; index++) {
-    const result = await client.create({ type: "Task", title: `Synthetic output contract row ${index}`, description: "A repeatable fixture with enough content to exercise host budget compaction.", createMode: "progressive" });
+    const result = await client.create({ type: "Task", title: `Synthetic output contract row ${index}`, description: "A repeatable fixture with enough content to exercise host budget compaction.", createMode: "progressive", unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_by", "blocked_reason"], clearDeps: true });
     ids.push(result.item.id);
   }
-  for (let index = 1; index < ids.length; index++) await client.update(ids[index]!, { blockedBy: ids[index - 1]! });
+  for (let index = 1; index < ids.length; index++) await client.update(ids[index]!, { blockedBy: ids[index - 1]!, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_reason"], clearDeps: true });
   writeFileSync(join(workspace, "neo4j-rows.json"), JSON.stringify(ids.map((id) => ({ id, title: "Synthetic provider row" }))));
   Object.assign(env, {
     NEO4J_URI: "bolt://127.0.0.1:9", NEO4J_USER: "synthetic", NEO4J_PASSWORD: "synthetic",
@@ -125,13 +126,24 @@ for (const scenario of scenarios) {
       assert.ok(bounded.estimated_tokens <= budget, "receipt must fit the requested budget");
       const actual: unknown[] = [];
       const cursors = new Set<string>();
+      let activeCursor: string | undefined;
       for (let index = 0; index <= expected.length; index++) {
-        actual.push(...rows(page, path));
+        const delivered = rows(page, path);
+        if ((page.read_output as { strings_compacted?: boolean }).strings_compacted && delivered.length > 0) {
+          // Budget continuations retain row identity but disclose lossy string
+          // compaction. Recover these exact rows through the SDK amount/cost
+          // controls before consuming executable SQL or other full field data.
+          const complete = pm([...args, "--output-include", path, "--output-limit", String(delivered.length), "--output-budget", "unbounded", ...(activeCursor ? ["--output-cursor", activeCursor] : [])]);
+          assert.equal((complete.read_output as { strings_compacted?: boolean }).strings_compacted, false, "exact rows must contain every full field");
+          assert.equal(rows(complete, path).length, delivered.length, "recovery must preserve the retained row window");
+          actual.push(...rows(complete, path));
+        } else actual.push(...delivered);
         const truncation = page.output_budget_truncation as { continuations?: Array<{ path: string; cursor: string }> } | undefined;
         const next = truncation?.continuations?.find((entry) => entry.path === path);
         if (!next) break;
         assert.ok(!cursors.has(next.cursor), "continuation must advance");
         cursors.add(next.cursor);
+        activeCursor = next.cursor;
         page = pm([...args, ...controls, "--output-budget", String(budget), "--output-cursor", next.cursor], [0, 2]);
         // Later rows can be larger than the first page; retry an explicit omission with more capacity.
         for (let retry = 0; page.output_budget_exceeded && retry < 4; retry++) {

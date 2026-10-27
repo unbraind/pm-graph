@@ -1,11 +1,13 @@
 /** Manual packed acceptance across actual global, ephemeral and project package-manager hosts. */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import neo4j from "neo4j-driver";
+import { publicChildEnv } from "./fixtures/public-child-env.ts";
 import { FOREIGN_CHECKPOINTS, clearProjectionHistory } from "./event-projection-recovery-corpus.ts";
 
 const fixtureUri = process.argv[2];
@@ -14,10 +16,12 @@ const root = resolve(import.meta.dirname, "..");
 const scratch = mkdtempSync(join(tmpdir(), "graph-packed-"));
 const sdkVersion = (JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { devDependencies: { "@unbrained/pm-cli": string } }).devDependencies["@unbrained/pm-cli"];
 assert.match(sdkVersion, /^\d{4}\.\d{1,2}\.\d{1,2}$/);
-const baseEnv = { ...process.env, NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null", PM_PATH: "", GIT_CEILING_DIRECTORIES: tmpdir() };
+const baseEnv = { ...publicChildEnv(), NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null", PM_PATH: "", NPM_CONFIG_CACHE: join(scratch, "npm-cache"), npm_config_cache: join(scratch, "npm-cache"), BUN_INSTALL_CACHE_DIR: join(scratch, "bun-cache"), NODE_COMPILE_CACHE: join(scratch, "compile-cache"), GIT_CEILING_DIRECTORIES: tmpdir() };
 /** Run actual package managers and host executables, preserving bounded failure diagnostics. */
 function run(bin: string, args: string[], cwd: string, extra: Record<string, string> = {}, expected = 0): string {
-  const result = spawnSync(bin, args, { cwd, env: { ...baseEnv, ...extra }, encoding: "utf8", timeout: 240000, maxBuffer: 4 * 1024 * 1024 });
+  const install = ["install", "add"].includes(args[0]);
+  const argv = bin === "npm" && args[0] === "install" ? [...args, "--no-audit", "--no-fund"] : args;
+  const result = spawnSync(bin, argv, { cwd, env: { ...baseEnv, ...extra }, encoding: "utf8", timeout: install ? 600000 : 240000, maxBuffer: 4 * 1024 * 1024 });
   assert.equal(result.status, expected, `${bin} ${args[0]}: ${result.stderr || result.stdout || result.error}`);
   return result.stdout;
 }
@@ -79,7 +83,31 @@ async function acceptance(name: string, bin: string, prefix: string[], extension
       assert.equal(retry.ok, true); assert.equal(retry.itemReads, 2); assert.equal(retry.fullScans, 0);
       const native = await session.run("MATCH (n:PmGraphProjectionNode {projectKey:$key,id:$id}) RETURN n.title AS title, n.type AS type", { key: state.source, id: referenceId });
       assert.equal(native.records[0].get("title"), "Packed guarded retry"); assert.equal(native.records[0].get("type"), "Task");
-      console.log(JSON.stringify({ host: name, neo4jForeignRefusals: 8, checkpointUnchanged: true, sparseRetryReads: 2, actualNeo4j: true }));
+      await session.run("MATCH (n:PmGraphProjectionNode {projectKey:$key,id:$id}) CREATE (p:PackedRecoveryForeign {fixtureScope:$key,token:'retain'}) CREATE (n)-[:RECOVERY_PEER {pmGraphOwner:'peer'}]->(p)", { key: state.source, id: referenceId });
+      let recoveryCases = 0;
+      for (const json of [true, false]) for (const flags of [[], ["--rebuild"]]) {
+        const oldCheckpoint = readFileSync(join(ws, "neo.json"), "utf8");
+        invoke(["update", referenceId, "--title", `Committed ${name} ${recoveryCases}`, "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
+        assert.equal(JSON.parse(sinkOutput([], true)).ok, true);
+        // Losing only the local publication after a committed sink action must
+        // not make a later source revision an unrecoverable target conflict.
+        writeFileSync(join(ws, "neo.json"), oldCheckpoint);
+        invoke(["update", referenceId, "--title", `Current ${name} ${recoveryCases}`, "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
+        const result = sinkOutput(flags, json);
+        if (json) { assert.equal(JSON.parse(result).ok, true); assert.equal(JSON.parse(result).fullScans, flags.length ? 1 : 0); }
+        else { assert.match(result, /ok: true/); assert.match(result, new RegExp(`fullScans: ${flags.length ? 1 : 0}`)); }
+        const source = invoke(["get", referenceId]);
+        const metadata = (source.item ?? source) as { title: string };
+        const current = await session.run("MATCH (n:PmGraphProjectionNode {projectKey:$key,id:$id}) RETURN n.title AS title", { key: state.source, id: referenceId });
+        assert.equal(current.records[0].get("title"), metadata.title);
+        const retained = await session.run("MATCH ()-[r:RECOVERY_PEER]->(p:PackedRecoveryForeign {fixtureScope:$key}) RETURN p.token AS token,r.pmGraphOwner AS owner", { key: state.source });
+        assert.equal(retained.records.length, 1); assert.equal(retained.records[0].get("token"), "retain"); assert.equal(retained.records[0].get("owner"), "peer");
+        const receipt = invoke(["pm-graph", "refresh", "neo.json", "--receipt"]);
+        assert.equal(receipt.revision, JSON.parse(readFileSync(join(ws, "neo.json"), "utf8")).revision);
+        recoveryCases++;
+      }
+      await session.run("MATCH ()-[r:RECOVERY_PEER]->(p:PackedRecoveryForeign {fixtureScope:$key}) DELETE r,p", { key: state.source });
+      console.log(JSON.stringify({ host: name, neo4jForeignRefusals: 8, checkpointUnchanged: true, sparseRetryReads: 2, nativeCrashRecoveries: recoveryCases, actualNeo4j: true }));
     } finally { await session.close(); await db.close(); }
     return;
   }
@@ -108,8 +136,14 @@ async function acceptance(name: string, bin: string, prefix: string[], extension
   console.log(JSON.stringify({ host: name, admission: true, sparseReads: 1, fullScans: 0, authoritativeTypeCollision: true, contractionFormats: 2, foreignPayloads: FOREIGN_CHECKPOINTS.length, rebuildFormats: 2 }));
 }
 try {
-  run("npm", ["pack", "--ignore-scripts", "--pack-destination", scratch], root);
-  const archive = join(scratch, readdirSync(scratch).find((file) => file.endsWith(".tgz"))!);
+  const packed = JSON.parse(run("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", scratch], root)) as { filename: string; integrity: string; files: { path: string }[] }[];
+  assert.equal(packed.length, 1);
+  const archive = join(scratch, packed[0].filename);
+  const bytes = readFileSync(archive);
+  assert.equal(packed[0].integrity, `sha512-${createHash("sha512").update(bytes).digest("base64")}`);
+  for (const file of ["dist/index.js", "dist/index.d.ts", "dist/event-projection.js", "dist/neo4j-ownership.js", "README.md"]) assert.ok(packed[0].files.some((entry) => entry.path === file));
+  const artifactSha256 = createHash("sha256").update(bytes).digest("hex");
+  console.log(JSON.stringify({ packedSha256: artifactSha256, files: packed[0].files.length }));
   const npmPrefix = join(scratch, "npm-global-prefix");
   run("npm", ["install", "--global", "--prefix", npmPrefix, "--ignore-scripts", archive, `@unbrained/pm-cli@${sdkVersion}`], scratch);
   const npmExtension = join(npmPrefix, "lib/node_modules/pm-graph");
@@ -126,4 +160,5 @@ try {
     run(manager, [manager === "npm" ? "install" : "add", "--ignore-scripts", archive, `@unbrained/pm-cli@${sdkVersion}`], project);
     await acceptance(`${manager}-local`, join(project, "node_modules/.bin/pm"), [], join(project, "node_modules/pm-graph"));
   }
+  assert.equal(createHash("sha256").update(readFileSync(archive)).digest("hex"), artifactSha256);
 } finally { rmSync(scratch, { recursive: true, force: true }); }

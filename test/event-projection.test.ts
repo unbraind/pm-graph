@@ -184,20 +184,29 @@ test("each storage transition revalidates a competing refresher on the same non-
   const f = fixture();
   try {
     const id = await seed(f.client, "race");
-    const options = { pmRoot: f.pmRoot, stateFile: f.stateFile };
-    for (const boundary of EVENT_PROJECTION_PHASES) {
-      await f.client.update(id, { title: `race ${boundary}`, unset: ["parent", "assignee", "sprint", "release", "blocked_by", "blocked_reason"], clearDeps: true });
-      let injected = false;
-      const outer = await refreshEventProjection({ ...options, rebuild: true, onTransition: async (phase) => {
-        if (phase !== boundary) return;
-        injected = true;
-        const peer = await refreshEventProjection(options);
-        if (phase === "beforeLease" || phase === "released") assert.equal(peer.ok, true, JSON.stringify(peer));
-        else assert.equal(peer.refusal?.code, "STORAGE_BUSY", `boundary ${phase}: ${JSON.stringify(peer)}`);
-      } });
-      assert.equal(injected, true, boundary);
-      assert.equal(outer.ok, true, JSON.stringify(outer));
-      await assertFull(options);
+    let revision: string | null = null;
+    const sink = { key: "intent-coordinator", apply: async (delta: ProjectionDelta): Promise<"applied" | "already_applied" | "conflict"> => {
+      if (revision === delta.revision) return "already_applied";
+      if (revision !== delta.expected) return "conflict";
+      revision = delta.revision; return "applied";
+    } };
+    for (const target of [undefined, sink]) {
+      const options = { pmRoot: f.pmRoot, stateFile: target ? join(f.ws, "sink-race.json") : f.stateFile, ...(target ? { sink: target } : {}) };
+      for (const boundary of EVENT_PROJECTION_PHASES) {
+        if (boundary === "intent" && !target) continue; // Only remote actions need durable pre-action intent.
+        await f.client.update(id, { title: `race ${boundary}`, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_by", "blocked_reason"], clearDeps: true });
+        let injected = false;
+        const outer = await refreshEventProjection({ ...options, rebuild: true, onTransition: async (phase) => {
+          if (phase !== boundary) return;
+          injected = true;
+          const peer = await refreshEventProjection(options);
+          if (phase === "beforeLease" || phase === "released") assert.equal(peer.ok, true, JSON.stringify(peer));
+          else assert.equal(peer.refusal?.code, "STORAGE_BUSY", `boundary ${phase}: ${JSON.stringify(peer)}`);
+        } });
+        assert.equal(injected, true, boundary);
+        assert.equal(outer.ok, true, JSON.stringify(outer));
+        await assertFull(options);
+      }
     }
   } finally { rmSync(f.ws, { recursive: true, force: true }); }
 });
@@ -210,8 +219,9 @@ test("sink crash recovery, target revision conflicts, no-op verification and spa
     let sinkRevision: string | null = null;
     let writes = 0;
     let latest: ProjectionDelta | undefined;
+    const transactions: ProjectionDelta[] = [];
     const sink = { key: "test-transactional-sink", apply: async (delta: ProjectionDelta): Promise<"applied" | "already_applied" | "conflict"> => {
-      latest = delta;
+      latest = delta; transactions.push(delta);
       if (sinkRevision === delta.revision) return "already_applied";
       if (sinkRevision !== delta.expected) return "conflict";
       writes++; sinkRevision = delta.revision; return "applied";
@@ -226,7 +236,8 @@ test("sink crash recovery, target revision conflicts, no-op verification and spa
     const afterCrash: string | null = latest?.revision ?? null;
     const recovered = await refreshEventProjection(options); assert.equal(recovered.ok, true, JSON.stringify(recovered));
     assert.equal(recovered.revision, afterCrash); assert.equal(writes, 2);
-    assert.equal(latest?.removeEdges.filter((edge) => edge.type === "BLOCKED_BY").length, 1);
+    assert.ok(transactions.some((delta) => delta.removeEdges.filter((edge) => edge.type === "BLOCKED_BY").length === 1));
+    assert.equal(latest?.removeEdges.length, 0, "recovered no-op revalidates the current target instead of trusting saved intent");
     assert.equal((await refreshEventProjection(options)).ok, true);
     sinkRevision = "peer-newer-revision";
     assert.equal((await refreshEventProjection(options)).refusal?.code, "SINK_CONFLICT");

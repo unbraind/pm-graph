@@ -17,7 +17,7 @@ all schema files in the source fingerprint.
 | SDK event source | derived_index |
 | Graph equals fresh certified full projection | yes |
 | Authoritative filenames and bytes unchanged | yes |
-| Admission, catch-up and source verification on a shared host | 4617 ms |
+| Admission, catch-up and source verification on a shared host | 17775 ms |
 
 The synthetic scale regression uses 10000 SDK-readable native documents in a real
 non-git tracker and performs the single update through the SDK. It measured 1 item
@@ -34,8 +34,8 @@ JSON wire representation. An independent sink delta model checks synchronization
 A separate regression covers legacy optional dependency metadata absent from
 newly created SDK records; the public corpus exposed that case.
 
-The storage interleaving test injects a competing refresher at all 12 declared
-transition boundaries on the same tracker. The sink recovery test interrupts after
+The storage interleaving test injects a competing refresher at all 27 applicable
+offline and sink transition boundaries on the same tracker. The sink recovery test interrupts after
 sink commit, verifies checkpoint retention, retries the same target revision, and
 refuses a competing newer target. Driver-adapter tests cover the Neo4j transaction
 queries and lifecycle using the repository's driver fixture with real SDK sources;
@@ -112,8 +112,10 @@ write independently proves the node lock while the peer creates its foreign edge
 An additional 140 pure-edge boundaries passed on SDK 2026.10.23 without that
 extra property write, including ordinary/dense nodes and every sink/plan path:
 80 confirmed server lock waits and 16 observed Closing-state rollbacks. Closing
-observations are reported separately from lock waits. Default CI exercises both
-writers, for 280 boundary cases, before collision and packed-host checks. The Node 26 CI job
+observations are reported separately from lock waits. Those measured 280 cases
+cover both writers. Default CI now also exercises explicit projection rebuild's
+owned-edge reset and stale-node cleanup at every boundary, before collision and
+packed-host checks. The Node 26 CI job
 runs this fixture and packed npm/Bun global, npx/bunx and project-local consumers.
 All six packed hosts passed eight real Neo4j foreign-record refusal cases each
 (JSON/TOON, incremental/rebuild, absent/string temporary properties), retained the
@@ -151,3 +153,45 @@ The pure-edge writer also rejects the old sparse transaction: reverting only
 `syncProjectionDelta` on SDK 2026.10.23 loses the actual foreign edge at boundary
 7 (0 versus 1), without any peer node-property write. The fixed function was
 restored byte-for-byte; authored runtime and generated output remain `f6d81a6`.
+That statement identifies the round-three evidence; the recovery implementation
+below supersedes that runtime revision.
+
+## Durable post-action recovery
+
+A new state machine uses seed `0x175004` and 500 random crash sequences. It covers
+initial admission and existing checkpoints; crashes after sink commit, checkpoint
+publication and receipt publication; zero through three intervening source updates;
+and ordinary refresh versus explicit rebuild. SDK read-back supplies every model
+value, including replays of older inputs, CRLF, relationships, native fields,
+custom types/status roles and ambient focus. Two complete runs passed all 500
+sequences; an independent
+transactional sink model equals the SDK full projection and retains foreign data.
+The final shared-host rerun hit its 1800-second limit after the critical regression
+and 200 reported sequences, without a reported assertion failure. That incomplete
+run is a timeout, not a pass; exact-head CI reruns the complete suite.
+
+Real Neo4j 5.26.27 validation covers all 24 combinations of three crash phases,
+zero through three updates and both recovery modes. Each target is read through
+the native driver and compared with a fresh full reference written through the
+same public sink producer. All 24 pass, including a foreign edge on a retained
+node. The apply-only SDK compatibility regression also passes both recovery modes.
+
+An isolated copy with only `refreshEventProjection` reverted fails the source-
+advance regression with `SINK_CONFLICT`; restoring the fixed function passes.
+Recovery records use the existing v1 checkpoint validator and previous-producer
+fixture remains readable/exportable. New malformed marker/foreign-intent records
+fail without replacing other valid records.
+An additional empty-history regression covers a committed generation with no
+event coordinates, subsequent item creation, and explicit rebuild from an opaque
+target revision. Both recovery modes pass.
+
+Marker boundary cases also cover malformed and legacy native rows, canonical
+head ordering, connection failures and a peer changing the revision after marker
+inspection. Even a recovered no-op revalidates the sink CAS. The source event
+version map uses native item identity without prototype-key collisions.
+
+The previous-head CI exposed an exact-row consumer error when longer guarded
+Cypher statements triggered the SDK's disclosed string compaction. The fixed
+packed-host test recovers complete fields through SDK amount/cost controls and
+still asserts every row equals the original, unchanged and in order. Its focused
+regression passes; the guarded producer remains intact.

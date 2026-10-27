@@ -759,6 +759,10 @@ per-path continuation cursors: repeat the same semantic inputs with
 `--output-cursor`, keeping the tracker unchanged, until no cursor remains.
 `--output-limit` is an amount ceiling; cursor recovery applies to budget
 compaction. Command-local selection limits and document budgets still apply.
+When `read_output.strings_compacted` is true, retained rows contain shortened
+fields. Recover the same row window with its starting cursor, the retained row
+count as `--output-limit`, and `--output-budget unbounded` before consuming exact
+field values or executable Cypher. Alternatively use the ordinary raw export.
 
 ### Adoption recipe
 
@@ -802,6 +806,10 @@ TOON receipts identify exact evaluated nodes/edges, source reads and disclosed
 rebuilds/refusals. `--receipt --offset N` recovers committed work pages;
 `--rebuild` explicitly re-admits after cursor gaps. Optional `--neo4j` applies
 revision-checked sparse updates in one transaction using an owned namespace.
+A durable recovery record is saved before sink writes; the marker commits native
+source-history coordinates with its revision. Recovery adopts a verified committed
+result before processing newer events. `--rebuild --neo4j` reconciles the current
+owned target even when its local checkpoint is stale.
 
 See the [SDK and CLI example](docs/event-projection-example.md) for guarantees,
 bounds, recovery and cached materialization costs. See the

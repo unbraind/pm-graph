@@ -1,10 +1,10 @@
-import { ownedCheck, ownedCleanup, ownedNode, ownedEdge, ownedEdgeRemoval } from "./neo4j-ownership.ts";
+import { ownedCheck, ownedCleanup, ownedNode, ownedEdge, ownedEdgeRemoval, ownedResetEdges } from "./neo4j-ownership.ts";
 import type { OwnedScope, OwnedStatement } from "./neo4j-ownership.ts";
 import { registerEventProjection } from "./event-projection-command.ts";
-import { eventProjectionRefusal } from "./event-projection.ts";
+import { eventProjectionRefusal, parseProjectionSourceHead } from "./event-projection.ts";
 export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.ts";
-export type { EventProjectionPhase, EventProjectionOptions, EventProjectionState, EventProjectionReceipt, EventProjectionRefusalCode, ProjectionDelta, ProjectionSink, ProjectionWork } from "./event-projection.ts";
-import type { ProjectionDelta } from "./event-projection.ts";
+export type { EventProjectionPhase, EventProjectionOptions, EventProjectionState, EventProjectionReceipt, EventProjectionRefusalCode, ProjectionDelta, ProjectionSink, ProjectionSinkPosition, ProjectionSourceHead, ProjectionWork } from "./event-projection.ts";
+import type { ProjectionDelta, ProjectionSinkPosition, ProjectionSink } from "./event-projection.ts";
 import { registerContraction } from "./contraction-command.ts";
 export { contractGraph, contractionInputFromGraph } from "./contraction.ts";
 export type { ContractionInput, ContractionRow, ContractionResult, ContractionReceipt, ContractionRefusalCode } from "./contraction.ts";
@@ -2577,6 +2577,27 @@ function ownershipConflict(error: unknown): boolean {
     && ["Neo.ClientError.Schema.ConstraintValidationFailed", "Neo.TransientError.Transaction.DeadlockDetected", "Neo.ClientError.Statement.EntityNotFound", "Neo.ClientError.Statement.TypeError"].includes(String(error.code)));
 }
 
+/** Construct the built-in lazy Neo4j sink for SDK callers and the CLI using identical recovery semantics. */
+export function createNeo4jProjectionSink(): ProjectionSink { return { key: "neo4j", inspect: inspectProjectionSink, apply: syncProjectionDelta }; }
+
+/** Inspect the authoritative owned marker before source planning; final writes re-read it under lock. */
+async function inspectProjectionSink(projectKey: string): Promise<ProjectionSinkPosition | null | "conflict"> {
+  const driver = await createDriver();
+  const session = driver.session({ database: process.env.NEO4J_DATABASE });
+  try {
+    const result = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphProjection {projectKey:$projectKey}) RETURN m.pmGraphOwner AS owner, m.revision AS revision, m.sourceHead AS sourceHead", { projectKey }));
+    if (result.records.length === 0) return null;
+    if (result.records.length !== 1) return "conflict";
+    const row = result.records[0];
+    const revision = row.get("revision");
+    if (!row.keys.includes("owner") || row.get("owner") !== "pm-graph/event-projection" || !row.keys.includes("revision")
+      || revision !== null && (typeof revision !== "string" || revision.length < 1 || revision.length > 128)) return "conflict";
+    const head = parseProjectionSourceHead(row.get("sourceHead"));
+    return { revision: revision as string | null, ...(head ? { sourceHead: head } : {}) };
+  } catch (error) { if (ownershipConflict(error)) return "conflict"; throw error; }
+  finally { try { await session.close(); } finally { await driver.close(); } }
+}
+
 /** Atomically reconcile sparse owned nodes/edges with lock-protected revision and ownership checks. */
 async function syncProjectionDelta(delta: ProjectionDelta): Promise<"applied" | "already_applied" | "conflict"> {
   const driver = await createDriver();
@@ -2595,15 +2616,20 @@ async function syncProjectionDelta(delta: ProjectionDelta): Promise<"applied" | 
       if (current === delta.revision) outcome = "already_applied";
       else if (current === delta.expected) {
         const ids = [...new Set([...delta.nodes.map((n) => n.id), ...delta.removeNodes, ...delta.edges.flatMap((e) => [e.from, e.to]), ...delta.removeEdges.flatMap((e) => [e.from, e.to])])];
-        await applyOwned(tx, ownedCheck(scope, current === null ? null : ids));
-        for (const edge of delta.removeEdges) await applyOwned(tx, ownedEdgeRemoval(scope, edge));
-        await applyOwned(tx, ownedCleanup(scope, delta.removeNodes, [], true));
+        await applyOwned(tx, ownedCheck(scope, current === null || delta.rebuild ? null : ids));
+        if (delta.rebuild) {
+          await applyOwned(tx, ownedResetEdges(scope));
+          await applyOwned(tx, ownedCleanup(scope, null, delta.nodes.map((n) => n.id), true, true));
+        } else {
+          for (const edge of delta.removeEdges) await applyOwned(tx, ownedEdgeRemoval(scope, edge));
+          await applyOwned(tx, ownedCleanup(scope, delta.removeNodes, [], true));
+        }
         for (const node of delta.nodes) await applyOwned(tx, ownedNode(scope, node, true));
         for (const edge of delta.edges) await applyOwned(tx, ownedEdge(scope, edge, true));
-        await applyOwned(tx, { statement: "MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.revision = $revision REMOVE m.lock RETURN count(m) AS written", parameters: { projectKey: delta.projectKey, revision: delta.revision }, expect: { key: "written", value: 1 } });
+        await applyOwned(tx, { statement: "MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.revision = $revision, m.sourceHead = $sourceHead REMOVE m.lock RETURN count(m) AS written", parameters: { projectKey: delta.projectKey, revision: delta.revision, sourceHead: JSON.stringify(delta.sourceHead) }, expect: { key: "written", value: 1 } });
         outcome = "applied";
       } else throw new Error(OWNERSHIP_CONFLICT);
-      if (outcome === "already_applied") await tx.run("MATCH (m:PmGraphProjection {projectKey: $projectKey}) REMOVE m.lock", { projectKey: delta.projectKey });
+      if (outcome === "already_applied") await tx.run("MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.sourceHead = $sourceHead REMOVE m.lock", { projectKey: delta.projectKey, sourceHead: JSON.stringify(delta.sourceHead) });
       return { records: [] };
     });
     return outcome;
@@ -2802,7 +2828,7 @@ async function loadShapedAnalytics(context: CommandContext): Promise<{
  */
 export function activate(api: ExtensionApi): void {
   registerCrossWorkspace(api);
-  registerEventProjection(api, resolvePmRootForContext, { key: "neo4j", apply: syncProjectionDelta });
+  registerEventProjection(api, resolvePmRootForContext, createNeo4jProjectionSink());
   registerSnapshotImpact(api);
   registerContraction(api, resolvePmRootForContext);
   registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));

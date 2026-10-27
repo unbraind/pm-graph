@@ -1,6 +1,6 @@
-import { ownedCheck, ownedCleanup, ownedNode, ownedEdge, ownedEdgeRemoval } from "./neo4j-ownership.js";
+import { ownedCheck, ownedCleanup, ownedNode, ownedEdge, ownedEdgeRemoval, ownedResetEdges } from "./neo4j-ownership.js";
 import { registerEventProjection } from "./event-projection-command.js";
-import { eventProjectionRefusal } from "./event-projection.js";
+import { eventProjectionRefusal, parseProjectionSourceHead } from "./event-projection.js";
 export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.js";
 import { registerContraction } from "./contraction-command.js";
 export { contractGraph, contractionInputFromGraph } from "./contraction.js";
@@ -2165,6 +2165,40 @@ function ownershipConflict(error) {
     return error instanceof Error && (error.message === OWNERSHIP_CONFLICT || "code" in error
         && ["Neo.ClientError.Schema.ConstraintValidationFailed", "Neo.TransientError.Transaction.DeadlockDetected", "Neo.ClientError.Statement.EntityNotFound", "Neo.ClientError.Statement.TypeError"].includes(String(error.code)));
 }
+/** Construct the built-in lazy Neo4j sink for SDK callers and the CLI using identical recovery semantics. */
+export function createNeo4jProjectionSink() { return { key: "neo4j", inspect: inspectProjectionSink, apply: syncProjectionDelta }; }
+/** Inspect the authoritative owned marker before source planning; final writes re-read it under lock. */
+async function inspectProjectionSink(projectKey) {
+    const driver = await createDriver();
+    const session = driver.session({ database: process.env.NEO4J_DATABASE });
+    try {
+        const result = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphProjection {projectKey:$projectKey}) RETURN m.pmGraphOwner AS owner, m.revision AS revision, m.sourceHead AS sourceHead", { projectKey }));
+        if (result.records.length === 0)
+            return null;
+        if (result.records.length !== 1)
+            return "conflict";
+        const row = result.records[0];
+        const revision = row.get("revision");
+        if (!row.keys.includes("owner") || row.get("owner") !== "pm-graph/event-projection" || !row.keys.includes("revision")
+            || revision !== null && (typeof revision !== "string" || revision.length < 1 || revision.length > 128))
+            return "conflict";
+        const head = parseProjectionSourceHead(row.get("sourceHead"));
+        return { revision: revision, ...(head ? { sourceHead: head } : {}) };
+    }
+    catch (error) {
+        if (ownershipConflict(error))
+            return "conflict";
+        throw error;
+    }
+    finally {
+        try {
+            await session.close();
+        }
+        finally {
+            await driver.close();
+        }
+    }
+}
 /** Atomically reconcile sparse owned nodes/edges with lock-protected revision and ownership checks. */
 async function syncProjectionDelta(delta) {
     const driver = await createDriver();
@@ -2185,21 +2219,27 @@ async function syncProjectionDelta(delta) {
                 outcome = "already_applied";
             else if (current === delta.expected) {
                 const ids = [...new Set([...delta.nodes.map((n) => n.id), ...delta.removeNodes, ...delta.edges.flatMap((e) => [e.from, e.to]), ...delta.removeEdges.flatMap((e) => [e.from, e.to])])];
-                await applyOwned(tx, ownedCheck(scope, current === null ? null : ids));
-                for (const edge of delta.removeEdges)
-                    await applyOwned(tx, ownedEdgeRemoval(scope, edge));
-                await applyOwned(tx, ownedCleanup(scope, delta.removeNodes, [], true));
+                await applyOwned(tx, ownedCheck(scope, current === null || delta.rebuild ? null : ids));
+                if (delta.rebuild) {
+                    await applyOwned(tx, ownedResetEdges(scope));
+                    await applyOwned(tx, ownedCleanup(scope, null, delta.nodes.map((n) => n.id), true, true));
+                }
+                else {
+                    for (const edge of delta.removeEdges)
+                        await applyOwned(tx, ownedEdgeRemoval(scope, edge));
+                    await applyOwned(tx, ownedCleanup(scope, delta.removeNodes, [], true));
+                }
                 for (const node of delta.nodes)
                     await applyOwned(tx, ownedNode(scope, node, true));
                 for (const edge of delta.edges)
                     await applyOwned(tx, ownedEdge(scope, edge, true));
-                await applyOwned(tx, { statement: "MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.revision = $revision REMOVE m.lock RETURN count(m) AS written", parameters: { projectKey: delta.projectKey, revision: delta.revision }, expect: { key: "written", value: 1 } });
+                await applyOwned(tx, { statement: "MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.revision = $revision, m.sourceHead = $sourceHead REMOVE m.lock RETURN count(m) AS written", parameters: { projectKey: delta.projectKey, revision: delta.revision, sourceHead: JSON.stringify(delta.sourceHead) }, expect: { key: "written", value: 1 } });
                 outcome = "applied";
             }
             else
                 throw new Error(OWNERSHIP_CONFLICT);
             if (outcome === "already_applied")
-                await tx.run("MATCH (m:PmGraphProjection {projectKey: $projectKey}) REMOVE m.lock", { projectKey: delta.projectKey });
+                await tx.run("MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.sourceHead = $sourceHead REMOVE m.lock", { projectKey: delta.projectKey, sourceHead: JSON.stringify(delta.sourceHead) });
             return { records: [] };
         });
         return outcome;
@@ -2404,7 +2444,7 @@ async function loadShapedAnalytics(context) {
  */
 export function activate(api) {
     registerCrossWorkspace(api);
-    registerEventProjection(api, resolvePmRootForContext, { key: "neo4j", apply: syncProjectionDelta });
+    registerEventProjection(api, resolvePmRootForContext, createNeo4jProjectionSink());
     registerSnapshotImpact(api);
     registerContraction(api, resolvePmRootForContext);
     registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));

@@ -7,9 +7,11 @@ status: in_progress
 priority: 2
 tags[1]: "gh:unbraind/pm-graph#175"
 created_at: "2026-10-27T07:16:00.488Z"
-updated_at: "2026-10-27T15:24:53.296Z"
+updated_at: "2026-10-27T17:58:01.215Z"
+assignee: codex-agent
+claim_principal: codex-agent
 author: codex-agent
-comments[25]{created_at,author,text}:
+comments[34]{created_at,author,text}:
   "2026-10-27T07:16:04.720Z",codex-agent,"Overlap rechecked against current CLI and sibling sources: SDK mutation-events owns cursors and history reads; graph snapshot impact compares complete graphs; syncNeo4j in src/index.ts still upserts every input node and relationship. pm-web consumes event pages for resume and history delivery, and pm-rust complete-projection receipts certify reads rather than update a persisted graph. This feature owns only derived projection state, sparse work receipts and sink reconciliation. No upstream or sibling changes planned."
   "2026-10-27T07:24:18.943Z",codex-agent,"Implementation now uses lazy supported SDK package exports, certified complete admission, opaque mutation cursors, SDK point reads, anchor/stream continuity checks, owned checkpoint locking, finite/dense boundary validation, and exact recoverable receipt pages. Explicit rebuild is required after continuity or workspace-schema changes. Cached graph materialization and checkpoint encoding still visit cached rows; receipts separately disclose full source scans and SDK event-page source. Neo4j reconciliation uses a revision CAS inside one write transaction and a separate owned namespace. Seeded model and real-host regressions are being validated."
   "2026-10-27T07:41:59.200Z",codex-agent,"Evidence: seeded model seed 0x261027 passed 500 random sequences through real SDK reads and mutations. The 10000-item non-git case read one updated item with zero complete refresh item scans, evaluated 3 nodes and 2 edges, emitted 814 JSON bytes and equaled both certified full output and an explicit rebuild. Public main corpus at 4b5e7a1: 108 items, 203 nodes, 372 edges, 1138 admission events; caught-up reads/scans/events all zero, 538 JSON bytes, derived_index, 1108 ms admission plus catch-up. Source copy was read-only, authoritative bytes unchanged. Public data exposed omitted legacy dependency metadata; producer JSON normalization and a regression now cover it. Behavioral revert proof: replacing only refreshEventProjection catch-up admission decision with unconditional rebuild makes the sparse regression fail (fullScans 1 versus required 0); implementation restored. All 12 competing-refresher transition boundaries pass, and interrupted-sink retry checks current target revisions."
@@ -35,7 +37,16 @@ comments[25]{created_at,author,text}:
   "2026-10-27T15:05:32.945Z",codex-agent,"During the bounded CI wait, checked dense-node lock semantics against the official Neo4j concurrent-access manual. Dense relationship creation can use node-delete prevention locks independently of NODE property-write locks. Extended the native fixture with a pure foreign-edge writer in addition to the NODE-write probe: default CI now exercises both, and a focused edges-only run validates the additional 140 boundaries against the merged SDK. Query-complete peer transactions observed Closing are rolled back from the projection side without being misreported as confirmed NODE lock waits. This strengthens class coverage; production queries and schemas are unchanged. Reclaimed for this test-only completion before the final handoff."
   "2026-10-27T15:23:08.233Z",codex-agent,"Additional class evidence completed: all 140 pure foreign-edge boundaries pass on SDK 2026.10.23 across sparse, legacy incremental/full and generated Cypher on ordinary/dense nodes. Observed 80 explicit Blocked states and 16 separately reported Closing-state rollbacks; all actual foreign edges and checkpoints survive. Combined local native evidence is 280 boundaries (140 NODE probes plus 140 pure-edge writers), five late collisions and 48 packed-host refusals. Pure-edge behavioral revert: restoring only the old syncProjectionDelta loses the real foreign edge at boundary 7, exit 1, without a peer property write. This is the fifth negative proof run across four distinct mutants; every function is restored and src/dist are byte-identical to f6d81a6. Updated fixture types/lint pass and duplication remains zero. The required 30-minute runtime CI wait elapsed: https://github.com/unbraind/pm-graph/actions/runs/40524807745 for f6d81a6 has all three jobs queued, no active steps, no npm/Bun full-gate counts. New test-only head checks will remain explicitly pending; no pass is inferred. Greptile reports an expired trial rather than a review; there are no inline findings, and no review approval is claimed. Releasing the claim again, leaving the item in progress for orchestrator verification."
   "2026-10-27T15:24:53.229Z",codex-agent,"Exact test-head handoff: 95281c50d43579958623f6421c7fafd14b8baca4 contains the 280-boundary native fixture; authored runtime/generated output are unchanged from f6d81a6. CI https://github.com/unbraind/pm-graph/actions/runs/40530474274 is queued, so current npm/Bun release-gate counts are unavailable. The prior runtime CI https://github.com/unbraind/pm-graph/actions/runs/40524807745 remained queued with all three jobs unstarted after the required 30-minute bounded wait. No full-gate success or external-review approval is claimed. Claim is released, item remains in progress; subsequent receipt-only commit changes no runtime or tests. PR https://github.com/unbraind/pm-graph/pull/175 is ready for review, not merged or released."
-files[29]{path,scope}:
+  "2026-10-27T16:22:55.026Z",codex-agent,"Round 4 class: durable post-action recovery must reconcile the sink authority before planning newer source work. Current retry recomputes a new payload from the stale checkpoint, so a committed sink revision becomes unreachable after source updates. Plan: persist owned recovery intent before sink action; commit native source-history coordinates with the sink revision in the same transaction; inspect/reconcile the marker before source guards, adopt a verified committed intent, then continue mutation catch-up. Explicit rebuild reads the current marker, certifies the current source and reconciles the complete owned projection under ownership guards. Audit all checkpoint/sink/receipt paths, retain prior-schema compatibility and foreign-data refusals, add seeded crash/source-update model tests plus real Neo4j and packed JSON/TOON checks. Main is current; no merge required."
+  "2026-10-27T16:49:12.351Z",codex-agent,"Round-4 implementation and evidence: recovery intent is atomically stored before action using the unchanged v1 checkpoint validator. Neo4j commits the native SDK cursor/anchor with revision in the same transaction, inspects that authority before new planning, adopts a source-verified committed intent, and continues sparse events. Missing cached contributions for a source-known marker disclose a certified rebuild; source-unknown markers refuse ordinary refresh. Explicit rebuild CAS binds the current observed target revision, resets only owned edges, preserves foreign edges on retained nodes, and prunes only stale owned nodes under ownership locks. Source status/history/normalization remain SDK-owned. Audited legacy sync (no separate post-transaction checkpoint), offline atomic checkpoint/receipt, custom CAS compatibility, CLI JSON/TOON, and packed hosts. New 500-sequence model passes across three post-action crash phases, 0-3 source updates, admission/existing checkpoints, both modes, older-input replay, native fields, relationships and custom roles; all values come from SDK read-back. Real Neo4j passes all 24 phase/update/mode combinations and matches a full reference written through the same SDK sink, retaining a foreign relationship. Isolated changed-function revert reproduces SINK_CONFLICT after source advances; restored copy passes. Types/lint/zero duplication/build/202 docstrings pass. Packed six-host recovery checks are running."
+  "2026-10-27T17:28:52.116Z",codex-agent,"The previous-head CI run 40531036817 failed its exact Cypher-row consumer test (Node 26: 431/432 passed). SDK budget receipts explicitly marked strings_compacted; the test incorrectly executed shortened row fields. The consumer now recovers the identical cursor window with the SDK amount and unbounded-cost controls, then retains the original exact row/order equality and all cursor/budget assertions. Focused packaged-host Cypher recovery passes (1/1). Documentation explains exact-field recovery; no SQL guard or production row format was weakened. The separate compatibility/ownership regression files pass 6/6, including foreign JSON, prior-producer v1, non-git JSON/TOON and all guarded writes. Read-only marker inspection now has an additional malformed-row/legacy-row corpus (1/1)."
+  "2026-10-27T17:30:27.339Z",codex-agent,"Whole-class audit: inspected every source checkpoint publication, revision comparison, Neo4j transaction, SDK sink and CLI adapter. Both refresh surfaces now use the same durable-intent/revision recovery implementation and the public built-in sink factory; legacy sync and generated Cypher retain the shared ownership guards and have no separate persisted post-action checkpoint. JSON/TOON and six installation hosts exercise the same adapter. Recovery revalidates even an unchanged target after inspection; event version lookups use Map for arbitrary native identities. Revalidated the read-only public main corpus: 109 items, 205 nodes, 376 edges, 1160 admission events; admission 1 scan, caught-up 0 scans/0 reads/0 events, 559-byte JSON, 17775 ms on the shared host, derived_index, full equality, every authoritative filename and byte unchanged including schema JSON."
+  "2026-10-27T17:32:46.376Z",codex-agent,"Behavioral revert proof (disposable copy, fixed worktree untouched): node --test --test-concurrency=2 --test-name-pattern='legacy CAS sink recovers' test/event-projection-post-action.test.ts. Reverting only refreshEventProjection to the prior implementation yields 0/1 passing and SINK_CONFLICT after sink commit, lost checkpoint and later source mutation, exit 1. Restoring that function yields 1/1 passing, covering both ordinary sparse retry and explicit rebuild. All earlier foreign-data, empty-history, type-provenance, transaction-lock and schema-fingerprint regressions are retained."
+  "2026-10-27T17:33:18.461Z",codex-agent,"Final focused checks: node --test --test-concurrency=2 test/event-projection-neo4j.test.ts passes 1/1, including explicit full rebuild of owned data; native marker corpus passes 1/1. npm run build:test, npm run typecheck, npm run lint, npm run duplication and npm run docstring pass: zero duplication, all 202 documented declarations. Full release suites remain CI-only at unchanged thresholds and two workers. The real packed acceptance now captures and verifies one 52-file archive with SHA-256 2bad3b24720e612f95a2f59dfb62b8e59fdc7d9db11edfed80c4390b1af50420; all six consumers share these exact bytes. Final host results are still in progress."
+  "2026-10-27T17:41:50.313Z",codex-agent,"Added empty-native-history post-action recovery coverage using the existing scratch-only history reset helper (SDK init emits a workspace event). Both ordinary sparse recovery and explicit rebuild pass after a committed empty generation and later item creation. An opaque observed target revision refuses ordinary catch-up, while explicit rebuild binds that current revision and converges. Focused empty-history/opaque-revision regression passes 1/1 across both modes. Full 500-sequence linked rerun remains in progress on the shared host."
+  "2026-10-27T17:48:53.765Z",codex-agent,"Final archive npm-global acceptance passes: eight actual Neo4j foreign-record refusals, checkpoint preservation, sparse retry with two reads, and four native post-action recoveries (JSON/TOON by incremental/rebuild). Remaining hosts are running. Expanded the native before/after-query matrix and late-node collision corpus to include explicit projection rebuild, because its new owned-edge reset/stale-node pruning is another write path of the same ownership class. The focused rebuild variant runs both node-probe and pure-edge writers on ordinary/dense nodes; default CI now includes it alongside every existing path."
+  "2026-10-27T17:58:00.959Z",codex-agent,"Final linked 500-sequence rerun reached its explicit 1800-second shared-host timeout: critical legacy-CAS regression passed, 200 sequences were reported, then the runner terminated its child with SIGTERM (exit 5; timeout, no assertion failure reported). This is incomplete evidence, not a pass. Earlier complete runs passed all 500 sequences (direct run 3/3 and linked run 4/4 before the additional boundary cases). Current focused boundary tests pass separately, including malformed/reordered/competing markers and empty history/opaque revisions. No further full local rerun will burden the saturated host; exact-head CI will run the entire property suite at unchanged thresholds/two workers. Packed npm-global current-artifact checks pass; other hosts remain active."
+files[32]{path,scope}:
   .github/workflows/ci.yml,project
   package.json,project
   scripts/coverage-gate.ts,project
@@ -53,6 +64,7 @@ files[29]{path,scope}:
   test/event-projection-neo4j-live.validation.ts,project
   test/event-projection-neo4j.test.ts,project
   test/event-projection-packed.validation.ts,project
+  test/event-projection-post-action.test.ts,project
   test/event-projection-provenance.test.ts,project
   test/event-projection-recovery-corpus.ts,project
   test/event-projection-recovery.test.ts,project
@@ -62,10 +74,12 @@ files[29]{path,scope}:
   test/fixtures/neo4j-live-loader.ts,project
   test/fixtures/neo4j-live-proxy.ts,project
   test/fixtures/neo4j-server.ts,project
+  test/fixtures/public-child-env.ts,project
   test/neo4j-ownership.test.ts,project
+  test/read-output-host.test.ts,project
   test/snapshot-impact-public.validation.ts,project
   test/tracker-fingerprint.test.ts,project
-tests[5]:
+tests[7]:
   - command: node --test --test-concurrency=2 --test-name-pattern='admission|foreign|lost anchors|source churn|storage transition|sink crash|legacy optional|Neo4j sparse' test/event-projection.test.ts test/event-projection-neo4j.test.ts
     scope: project
     provenance:
@@ -105,6 +119,22 @@ tests[5]:
       source_ref: feat/event-sparse-projection-receipts
     updated_by: codex-agent
     updated_at: "2026-10-27T14:43:29.512Z"
+  - command: node --test --test-concurrency=2 test/event-projection-post-action.test.ts
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T16:49:21.040Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
+  - command: "node --test --test-concurrency=2 --test-name-pattern=cypher: test/read-output-host.test.ts"
+    scope: project
+    pm_context_mode: none
+    workspace_context_mode: snapshot
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T17:33:07.503Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
 docs[3]{path,scope}:
   docs/event-projection-example.md,project
   docs/event-projection-validation.md,project

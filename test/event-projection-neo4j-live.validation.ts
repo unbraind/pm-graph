@@ -8,18 +8,19 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve as absolute } from "node:path";
 import neo4j from "neo4j-driver";
 import { deleteItem } from "@unbrained/pm-cli/sdk";
+import { publicChildEnv } from "./fixtures/public-child-env.ts";
 import { startNeo4j } from "./fixtures/neo4j-server.ts";
 import { observeLiveQueries, runLiveObserved } from "./fixtures/neo4j-live-proxy.ts";
 import { fixture, seed } from "./event-projection-helpers.ts";
 import { applyEnv, collectHandlers, restoreEnv } from "./helpers.ts";
 import type { OwnedStatement } from "../src/neo4j-ownership.ts";
-import { readEventProjection, refreshEventProjection } from "../src/index.ts";
+import { createNeo4jProjectionSink, readEventProjection, refreshEventProjection } from "../src/index.ts";
 import type { EventProjectionReceipt } from "../src/index.ts";
 
 const home = process.argv[2];
 assert.ok(home, "Supply an unpacked isolated Neo4j fixture distribution");
 const variant = process.argv[3];
-assert.ok(process.argv.length <= 4 && (variant === undefined || ["--sparse-only", "--preservation-only", "--packed-only", "--collision-only", "--edges-only"].includes(variant)), "Use only a fixture home and an optional focused variant");
+assert.ok(process.argv.length <= 4 && (variant === undefined || ["--sparse-only", "--preservation-only", "--packed-only", "--collision-only", "--edges-only", "--recovery-only", "--rebuild-only"].includes(variant)), "Use only a fixture home and an optional focused variant");
 const server = await startNeo4j(absolute(home));
 console.log(JSON.stringify({ fixtureReady: true, maxProcessors: 2, maxHeapMiB: 512 }));
 const actual = neo4j.driver(server.uri, neo4j.auth.basic("fixture", "synthetic"), { maxTransactionRetryTime: 0 });
@@ -60,11 +61,14 @@ async function executePlan(): Promise<EventProjectionReceipt> {
   } finally { await session.close(); }
 }
 
+/** Identify projection commands independently of their refresh strategy. */
+function projectionMode(mode: string): boolean { return mode === "sparse" || mode === "sparse-rebuild"; }
+
 /** Both sparse and legacy paths use the normal command host over the same non-git tracker. */
 async function invoke(mode: string): Promise<EventProjectionReceipt> {
   if (mode === "cypher") return executePlan();
-  const handler = handlers.get(mode === "sparse" ? "pm-graph refresh" : "pm-graph sync")!;
-  return await handler({ pm_root: f.pmRoot, cwd: f.ws, args: mode === "sparse" ? ["projection.json", "--neo4j"] : mode === "full" ? ["--full"] : [] }) as EventProjectionReceipt;
+  const handler = handlers.get(projectionMode(mode) ? "pm-graph refresh" : "pm-graph sync")!;
+  return await handler({ pm_root: f.pmRoot, cwd: f.ws, args: projectionMode(mode) ? ["projection.json", "--neo4j", ...(mode === "sparse-rebuild" ? ["--rebuild"] : [])] : mode === "full" ? ["--full"] : [] }) as EventProjectionReceipt;
 }
 
 /** Late node collisions and preexisting same-kind foreign edges exercise the shared MERGE guards. */
@@ -75,12 +79,12 @@ async function collisionCases(): Promise<void> {
   const identity = await readEventProjection(identityFile); assert.ok(identity);
   const exported = await handlers.get("pm-graph cypher")!({ pm_root: f.pmRoot, cwd: f.ws }) as { statements: OwnedStatement[] };
   const legacyKey = String(exported.statements[0].parameters.projectKey);
-  for (const mode of ["sparse", "legacy", "full", "cypher"]) {
+  for (const mode of ["sparse", "sparse-rebuild", "legacy", "full", "cypher"]) {
     await query("MATCH (n) DETACH DELETE n");
     await f.client.restore(a, "2"); rmSync(f.stateFile, { force: true });
     await query("CREATE (:FixtureForeign {id:'peer'})");
-    const label = mode === "sparse" ? "PmGraphProjectionNode" : "PmGraphNode";
-    const key = mode === "sparse" ? identity.source : legacyKey;
+    const label = projectionMode(mode) ? "PmGraphProjectionNode" : "PmGraphNode";
+    const key = projectionMode(mode) ? identity.source : legacyKey;
     let injected = false;
     observeLiveQueries(async (phase, text, parameters) => {
       if (injected || phase !== "before" || !text.startsWith(`MERGE (n:${label}`) || parameters?.id !== a) return;
@@ -93,7 +97,7 @@ async function collisionCases(): Promise<void> {
     const node = await query(`MATCH (n:${label} {projectKey:$key,id:$id}) RETURN n.pmGraphOwner AS owner,n.title AS title,n.__pmLock AS lock`, { key, id: a });
     assert.equal(node.records[0].get("owner"), "peer"); assert.equal(node.records[0].get("title"), "foreign original");
     assert.equal(node.records[0].get("lock"), false);
-    if (mode === "sparse") assert.equal(existsSync(f.stateFile), false);
+    if (projectionMode(mode)) assert.equal(existsSync(f.stateFile), false);
   }
   await query("MATCH (n) DETACH DELETE n");
   await f.client.restore(a, "1"); rmSync(f.stateFile, { force: true });
@@ -110,11 +114,57 @@ async function collisionCases(): Promise<void> {
   console.log(JSON.stringify({ lateNodeCollisions: 4, foreignRelationshipCollisions: 1, preserved: true }));
 }
 
+/** Compare native SDK state with a fresh full reference written through the exact same sink producer. */
+async function recoveryCases(): Promise<void> {
+  observeLiveQueries(undefined);
+  const sink = createNeo4jProjectionSink();
+  const reference = { key: "native-full-reference", inspect: async () => sink.inspect!("native-full-reference"), apply: async (delta: Parameters<typeof sink.apply>[0]) => sink.apply({ ...delta, projectKey: "native-full-reference" }) };
+  const referenceFile = join(f.ws, "reference.json");
+  let recoveredCases = 0;
+  for (const phase of ["afterSink", "checkpoint", "receipt"] as const) for (const updates of [0, 1, 2, 3]) for (const rebuild of [false, true]) {
+    await query("MATCH (n) DETACH DELETE n");
+    rmSync(f.stateFile, { force: true }); rmSync(f.stateFile + ".pending.json", { force: true });
+    rmSync(referenceFile, { force: true }); rmSync(referenceFile + ".pending.json", { force: true });
+    await f.client.restore(a, "2");
+    const options = { pmRoot: f.pmRoot, stateFile: f.stateFile, sink };
+    assert.equal((await refreshEventProjection(options)).ok, true);
+    const initial = await readEventProjection(f.stateFile); assert.ok(initial);
+    await query("MATCH (n:PmGraphProjectionNode {projectKey:$key,id:$id}) CREATE (p:FixtureRecoveryForeign {token:'retain'}) CREATE (n)-[:RECOVERY_PEER {pmGraphOwner:'peer'}]->(p)", { key: initial.source, id: b });
+    await f.client.update(a, { title: `committed ${phase} ${updates} ${rebuild}`, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_by", "blocked_reason"], clearDeps: true });
+    let interrupted = false;
+    const crash = await refreshEventProjection({ ...options, onTransition: (step) => { if (phase === step) { interrupted = true; throw new Error("native post-action crash"); } } });
+    assert.equal(interrupted, true); assert.equal(crash.ok, false);
+    for (let update = 0; update < updates; update++) await f.client.update(a, { title: `current ${phase} ${updates} ${rebuild} ${update}`, blockedBy: b, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_reason"], clearDeps: true });
+    const result = await refreshEventProjection({ ...options, rebuild });
+    assert.equal(result.ok, true, JSON.stringify({ phase, updates, rebuild, result }));
+    assert.equal(result.fullScans, rebuild ? 1 : 0);
+    const state = await readEventProjection(f.stateFile); assert.ok(state);
+    const marker = await sink.inspect!(state.source);
+    assert.ok(marker && marker !== "conflict");
+    assert.equal(marker.revision, state.revision);
+    assert.deepEqual(marker.sourceHead, { cursor: state.cursor, anchor: state.anchor });
+    assert.equal((await refreshEventProjection({ pmRoot: f.pmRoot, stateFile: referenceFile, sink: reference, rebuild: true })).ok, true);
+    // Both reads use native database values after the same SDK write normalization;
+    // only target namespace/ownership metadata is outside graph semantics.
+    const native = async (key: string): Promise<unknown> => {
+      const nodes = await query("MATCH (n:PmGraphProjectionNode {projectKey:$key}) CALL { WITH n UNWIND keys(n) AS k WITH n,k WHERE NOT k IN ['projectKey','pmGraphOwner'] ORDER BY k RETURN collect([k,n[k]]) AS properties } RETURN n.id AS id,properties ORDER BY id", { key });
+      const edges = await query("MATCH (a:PmGraphProjectionNode {projectKey:$key})-[r]->(b:PmGraphProjectionNode {projectKey:$key}) WHERE r.pmGraphOwner='pm-graph/event-projection' CALL { WITH r UNWIND keys(r) AS k WITH r,k WHERE k <> 'pmGraphOwner' ORDER BY k RETURN collect([k,r[k]]) AS properties } RETURN a.id AS source,b.id AS target,type(r) AS type,properties ORDER BY source,target,type", { key });
+      return { nodes: nodes.records.map((row) => row.toObject()), edges: edges.records.map((row) => row.toObject()) };
+    };
+    assert.deepEqual(await native(state.source), await native("native-full-reference"));
+    const foreign = await query("MATCH ()-[r:RECOVERY_PEER]->(p:FixtureRecoveryForeign) RETURN p.token AS token,r.pmGraphOwner AS owner");
+    assert.equal(foreign.records.length, 1); assert.equal(foreign.records[0].get("token"), "retain"); assert.equal(foreign.records[0].get("owner"), "peer");
+    recoveredCases++;
+    if (recoveredCases % 4 === 0) console.log(JSON.stringify({ nativeRecoveryCases: recoveredCases }));
+  }
+  console.log(JSON.stringify({ nativeRecoveryCases: recoveredCases, sourceUpdates: "0-3", fullReferenceEqual: true, foreignDataPreserved: true }));
+}
+
 try {
-  for (const probeNode of variant === "--edges-only" ? [false] : variant ? [true] : [true, false])
-  for (const mode of variant === "--packed-only" || variant === "--collision-only" ? [] : variant && variant !== "--edges-only" ? ["sparse"] : ["sparse", "legacy", "full", "cypher"]) for (const dense of variant && variant !== "--edges-only" ? [false] : [false, true]) {
+  for (const probeNode of variant === "--edges-only" ? [false] : variant && variant !== "--rebuild-only" ? [true] : [true, false])
+  for (const mode of variant === "--packed-only" || variant === "--collision-only" || variant === "--recovery-only" ? [] : variant === "--rebuild-only" ? ["sparse-rebuild"] : variant && variant !== "--edges-only" ? ["sparse"] : ["sparse", "sparse-rebuild", "legacy", "full", "cypher"]) for (const dense of variant && variant !== "--edges-only" && variant !== "--rebuild-only" ? [false] : [false, true]) {
     console.log(JSON.stringify({ mode, dense, probeNode, preparing: true }));
-    const label = mode === "sparse" ? "PmGraphProjectionNode" : "PmGraphNode";
+    const label = projectionMode(mode) ? "PmGraphProjectionNode" : "PmGraphNode";
     const baseline: string[] = [];
     const prepare = async (): Promise<void> => {
       observeLiveQueries(undefined);
@@ -184,7 +234,7 @@ CREATE (n)-[r:FOREIGN {pmGraphOwner:'peer', token:$token}]->(p) RETURN count(r) 
           await new Promise((resolve) => { setTimeout(resolve, 10); });
         }
         assert.equal(settled, true, "peer must commit or demonstrably wait on the transaction lock");
-        if (probeNode && variant !== "--preservation-only" && mode === "sparse" && !dense && phase === "after" && text.includes("WITH collect(n) AS ns") && text.endsWith("RETURN foreign")) {
+        if (probeNode && variant !== "--preservation-only" && projectionMode(mode) && !dense && phase === "after" && text.includes("WITH collect(n) AS ns") && text.endsWith("RETURN foreign")) {
           missingRequiredLock = true;
           assert.fail("the ownership check must hold the sparse victim's write lock until commit");
         }
@@ -211,8 +261,9 @@ CREATE (n)-[r:FOREIGN {pmGraphOwner:'peer', token:$token}]->(p) RETURN count(r) 
   }
   console.log(JSON.stringify({ cases, blockedPeerTransitions: blocked, peerClosingRollbacks: closingRollbacks, realNeo4j: true, nonGitTracker: true }));
   if (variant === undefined || variant === "--collision-only") await collisionCases();
+  if (variant === undefined || variant === "--recovery-only") await recoveryCases();
   if (variant === undefined || variant === "--packed-only") {
-    const packed = spawn(process.execPath, [join(import.meta.dirname, "event-projection-packed.validation.ts"), server.uri], { cwd: process.cwd(), stdio: "inherit", env: { ...process.env, NPM_CONFIG_USERCONFIG: "/dev/null" } });
+    const packed = spawn(process.execPath, [join(import.meta.dirname, "event-projection-packed.validation.ts"), server.uri], { cwd: process.cwd(), stdio: "inherit", env: { ...publicChildEnv(), NPM_CONFIG_USERCONFIG: "/dev/null" } });
     const status = await new Promise<number | null>((resolve, reject) => { packed.once("error", reject); packed.once("exit", resolve); });
     assert.equal(status, 0, "all six packed hosts must preserve real Neo4j foreign records");
   }

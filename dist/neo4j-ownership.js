@@ -1,9 +1,10 @@
 /** Force write locks before ownership reads; rejected guards roll back every temporary property change. */
-function ownershipPrelude(scope, all, incident) {
+function ownershipPrelude(scope, all, incident, onlyStale = false) {
     const select = all ? `MATCH (n:${scope.label} {projectKey: $projectKey})` : `UNWIND $ids AS itemId MATCH (n:${scope.label} {projectKey: $projectKey, id: itemId})`;
+    const selection = select + (onlyStale ? " WHERE NOT n.id IN $currentIds" : "");
     const relationships = incident ? `CALL { WITH ns UNWIND ns AS n MATCH (n)-[r]-() WITH DISTINCT r ORDER BY elementId(r)
 SET r.__pmLock = NOT coalesce(r.__pmLock, false) REMOVE r.__pmLock RETURN collect(r) AS rs }` : "WITH ns, [] AS rs";
-    return `${select}
+    return `${selection}
 WITH DISTINCT n ORDER BY n.id, elementId(n) SET n.__pmLock = NOT coalesce(n.__pmLock, false) REMOVE n.__pmLock
 WITH collect(n) AS ns
 ${relationships}
@@ -17,13 +18,13 @@ export function ownedCheck(scope, ids) {
     return { statement: `${ownershipPrelude(scope, ids === null, false)} RETURN foreign`, parameters: { ...scope, ids: ids ?? [] }, expect: { key: "foreign", value: 0 } };
 }
 /** Delete only owned relationships, then plain DELETE refuses any concurrently attached foreign edge. */
-export function ownedCleanup(scope, ids, currentIds, full) {
+export function ownedCleanup(scope, ids, currentIds, full, onlyStale = false) {
     const checked = scope.label === "PmGraphNode" ? `CALL {
 MERGE (m:PmGraphSync {projectKey:$projectKey}) ON CREATE SET m.pmGraphOwner=$owner
 SET m.__pmLock = NOT coalesce(m.__pmLock, false) REMOVE m.__pmLock
 RETURN CASE WHEN m.pmGraphOwner=$owner THEN 0 ELSE 1 END AS markerForeign }
-CALL { ${ownershipPrelude(scope, ids === null, true)} RETURN ns,rs,foreign }
-WITH ns,rs,foreign + markerForeign AS foreign` : ownershipPrelude(scope, ids === null, true);
+CALL { ${ownershipPrelude(scope, ids === null, true, onlyStale)} RETURN ns,rs,foreign }
+WITH ns,rs,foreign + markerForeign AS foreign` : ownershipPrelude(scope, ids === null, true, onlyStale);
     return { statement: `${checked}
 WITH ns, rs, foreign, [n IN ns WHERE $full OR (size($currentIds) > 0 AND NOT n.id IN $currentIds)] AS doomed
 FOREACH (r IN CASE WHEN foreign = 0 THEN [r IN rs WHERE r.pmGraphOwner = $owner AND (startNode(r) IN doomed OR endNode(r) IN doomed)] ELSE [] END | DELETE r)
@@ -55,5 +56,13 @@ SET r.__pmLock = NOT coalesce(r.__pmLock, false) REMOVE r.__pmLock WITH collect(
 WITH rs, size([r IN rs WHERE r.pmGraphOwner IS NULL OR r.pmGraphOwner <> $owner]) AS foreign
 FOREACH (r IN CASE WHEN foreign = 0 THEN rs ELSE [] END | DELETE r) RETURN foreign`,
         parameters: { ...scope, from: edge.from, to: edge.to }, expect: { key: "foreign", value: 0 } };
+}
+/** Reset only owned edges; retained nodes may keep unrelated foreign relationships during rebuild. */
+export function ownedResetEdges(scope) {
+    return { statement: `MATCH (a:${scope.label} {projectKey:$projectKey})-[r]->(b:${scope.label} {projectKey:$projectKey})
+WHERE r.pmGraphOwner = $owner AND a.pmGraphOwner = $owner AND b.pmGraphOwner = $owner
+SET r.__pmLock = NOT coalesce(r.__pmLock, false) REMOVE r.__pmLock WITH collect(r) AS rs
+WITH rs, size([r IN rs WHERE r.pmGraphOwner IS NULL OR r.pmGraphOwner <> $owner]) AS foreign
+FOREACH (r IN CASE WHEN foreign = 0 THEN rs ELSE [] END | DELETE r) RETURN foreign`, parameters: { ...scope }, expect: { key: "foreign", value: 0 } };
 }
 //# sourceMappingURL=neo4j-ownership.js.map

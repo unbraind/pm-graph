@@ -8,8 +8,36 @@ import { join } from "node:path";
 import test from "node:test";
 import { fixture, seed } from "./event-projection-helpers.ts";
 import { applyEnv, collectHandlers, restoreEnv } from "./helpers.ts";
-import { fakeRecord, getFakeNeo4jCalls, resetFakeNeo4j, setFakeNeo4jFail, setFakeNeo4jWrite } from "./fixtures/neo4j-fake.ts";
+import { fakeRecord, getFakeNeo4jCalls, resetFakeNeo4j, setFakeNeo4jFail, setFakeNeo4jWrite, setFakeNeo4jRead, wasFakeNeo4jClosed } from "./fixtures/neo4j-fake.ts";
+import { createNeo4jProjectionSink } from "../src/index.ts";
 import type { EventProjectionReceipt } from "../src/index.ts";
+
+test("native marker inspection validates every row before planning and retains legacy markers", async () => {
+  const saved = applyEnv({ NEO4J_URI: "bolt://fixture.invalid", NEO4J_USER: "fixture", NEO4J_PASSWORD: "synthetic" });
+  const owned = { owner: "pm-graph/event-projection", revision: "committed" };
+  try {
+    const inspect = createNeo4jProjectionSink().inspect!;
+    for (const fields of [{}, { revision: null }, { ...owned, owner: "peer" }, { owner: owned.owner }, { ...owned, revision: 0 }, { ...owned, revision: "" }, { ...owned, revision: "x".repeat(129) }]) {
+      resetFakeNeo4j(); setFakeNeo4jRead(() => ({ records: [fakeRecord(fields)] }));
+      assert.equal(await inspect("fixture"), "conflict");
+      assert.equal(wasFakeNeo4jClosed(), true);
+      assert.ok(getFakeNeo4jCalls().every((call) => call.mode === "read"));
+    }
+    for (const count of [0, 2]) {
+      resetFakeNeo4j(); setFakeNeo4jRead(() => ({ records: Array.from({ length: count }, () => fakeRecord(owned)) }));
+      assert.equal(await inspect("fixture"), count === 0 ? null : "conflict");
+    }
+    for (const sourceHead of [undefined, null, "broken", "{}", {}]) {
+      resetFakeNeo4j(); setFakeNeo4jRead(() => ({ records: [fakeRecord({ ...owned, revision: null, sourceHead })] }));
+      assert.deepEqual(await inspect("fixture"), { revision: null, ...((sourceHead === "{}" || typeof sourceHead === "object" && sourceHead !== null) ? { sourceHead: {} } : {}) });
+    }
+    setFakeNeo4jFail(new Error("ordinary availability failure"));
+    await assert.rejects(inspect("fixture"), /ordinary availability/);
+    setFakeNeo4jFail(Object.assign(new Error("concurrent marker removal"), { code: "Neo.ClientError.Statement.EntityNotFound" }));
+    assert.equal(await inspect("fixture"), "conflict");
+    assert.equal(wasFakeNeo4jClosed(), true);
+  } finally { resetFakeNeo4j(); restoreEnv(saved); }
+});
 
 test("every missing, nonfinite or conflicting Neo4j guard aborts dependent writes before checkpoint publication", async () => {
   const f = fixture();

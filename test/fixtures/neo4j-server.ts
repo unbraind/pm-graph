@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import neo4j from "neo4j-driver";
+import { publicChildEnv } from "./public-child-env.ts";
 
 /** Start an explicitly supplied unpacked distribution with bounded memory/CPU and stop only its child. */
 export async function startNeo4j(home: string): Promise<{ uri: string; stop: () => Promise<void> }> {
@@ -24,7 +25,7 @@ export async function startNeo4j(home: string): Promise<{ uri: string; stop: () 
     "server.memory.heap.initial_size=512m", "server.memory.heap.max_size=512m", "server.memory.pagecache.size=64m",
     "server.jvm.additional=-XX:ActiveProcessorCount=2", "db.transaction.timeout=120s", "db.lock.acquisition.timeout=30s",
   ].join("\n") + "\n");
-  const child = spawn(join(home, "bin/neo4j"), ["console"], { cwd: home, detached: process.platform !== "win32", env: { ...process.env, NEO4J_HOME: home, NEO4J_CONF: join(home, "conf") }, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(join(home, "bin/neo4j"), ["console"], { cwd: home, detached: process.platform !== "win32", env: { ...publicChildEnv(), NEO4J_HOME: home, NEO4J_CONF: join(home, "conf") }, stdio: ["ignore", "pipe", "pipe"] });
   let diagnostics = "";
   child.stdout.on("data", (chunk: Buffer) => { diagnostics = (diagnostics + chunk.toString()).slice(-4000); });
   child.stderr.on("data", (chunk: Buffer) => { diagnostics = (diagnostics + chunk.toString()).slice(-4000); });
