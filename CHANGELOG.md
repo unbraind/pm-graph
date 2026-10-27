@@ -43,7 +43,6 @@
 
 - A release run bumped and committed a new version every night while publishing was impossible, because the only externally-failable step runs last ([pm-graph-wos1](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-wos1.toon))
 - Fix release publish ordering ahead of protected main push ([pm-graph-ihhe](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ihhe.toon))
-- Committed CHANGELOG.md drifts from deterministic regeneration after the pm-graph-3svp type classification change, breaking changelog:check on every PR ([pm-graph-brgk](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-brgk.toon))
 - Refresh managed pm-github extension for project-local PM CLI 2026.9.27 ([pm-graph-ipvn](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ipvn.toon))
 - Graph export uses quadratic item and edge scans on large trackers ([pm-graph-3a1p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-3a1p.toon))
 - Remove vulnerable braces dependency from certification toolchain ([pm-graph-g8uc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-g8uc.toon))
@@ -54,9 +53,12 @@
 ### Other
 
 - Cover the output_format decline contract with real SDK harness tests instead of a registration-only assertion ([pm-graph-vgj0](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-vgj0.toon))
-- Bring pm-graph to real 100% line/branch/function coverage and raise the gate to 100 ([pm-graph-6zil](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-6zil.toon))
 - Render package visuals with build-time Triplicate tokens ([pm-graph-triplicate](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-triplicate.toon))
 - Certify pm-graph on PM CLI/SDK 2026.10.4 and consolidate pending dependency updates ([pm-graph-lcmc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-lcmc.toon))
+
+### Closed
+
+- Closed: Committed CHANGELOG.md drifts from deterministic regeneration after the pm-graph-3svp type classification change, breaking changelog:check on every PR ([pm-graph-brgk](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-brgk.toon))
 
 ## 2026.10.14 - 2026-10-14
 
@@ -117,10 +119,10 @@
 
 ## 2026.8.31 - 2026-08-31
 
-### Fixed
+### Closed
 
-- Pin pm-changelog 2026.8.30 before the next release ([pm-graph-g0em](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-g0em.toon))
-- Regenerate the changelog after the release tag was created ([pm-graph-7la7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-7la7.toon))
+- Closed: Pin pm-changelog 2026.8.30 before the next release ([pm-graph-g0em](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-g0em.toon))
+- Closed: Regenerate the changelog after the release tag was created ([pm-graph-7la7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-7la7.toon))
 
 ## 2026.8.29 - 2026-08-29
 
@@ -136,18 +138,15 @@
 
 ## 2026.8.28 - 2026-08-28
 
-### Fixed
-
-- Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
-
-### Security
-
-- The identity gate deadlocks the one remediation its own failure message prescribes ([pm-graph-m8f9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-m8f9.toon))
-
 ### Other
 
 - Drop inert pm manifest key and guard the closed manifest vocabulary ([pm-graph-g2fs](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-g2fs.toon))
 - Realign changelog branch with main after xc7g release-note rewrite ([pm-graph-1lzu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-1lzu.toon))
+
+### Closed
+
+- Closed: The identity gate deadlocks the one remediation its own failure message prescribes ([pm-graph-m8f9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-m8f9.toon))
+- Closed: Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
 
 ## 2026.8.17 - 2026-08-17
 
@@ -210,14 +209,14 @@
 - Replace the list-all shell-outs with the in-process SDK item reader ([pm-graph-v7k3](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-v7k3.toon))
 - Run the test suite against TypeScript sources behind an uncheatable coverage gate ([pm-graph-5cu7](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-5cu7.toon))
 
-### Fixed
-
-- pm-graph status help documents the version field with a stale literal, and the release version-bump regex targets that string instead of the real declaration ([pm-graph-b3sw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-b3sw.toon))
-
 ### Other
 
 - Raise the pm-graph engine from 63% line coverage toward the 100% mandate ([pm-graph-xnbt](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-xnbt.toon))
 - Adopt pm-cli 2026.7.29 ([pm-graph-jh4d](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-jh4d.toon))
+
+### Closed
+
+- Closed: pm-graph status help documents the version field with a stale literal, and the release version-bump regex targets that string instead of the real declaration ([pm-graph-b3sw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-b3sw.toon))
 
 ## 2026.7.28 - 2026-07-28
 
@@ -252,13 +251,13 @@
 
 ## 2026.7.23 - 2026-07-23
 
-### Fixed
-
-- Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-graph-10e8](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-10e8.toon))
-
 ### Other
 
 - Adopt pm field-aware merge driver for multi-agent branch-merge safety ([pm-graph-tjqb](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-tjqb.toon))
+
+### Closed
+
+- Closed: Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-graph-10e8](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-10e8.toon))
 
 ## 2026.7.18 - 2026-07-18
 
@@ -266,10 +265,10 @@
 
 - Canonical pm pm-graph export gains shaping flags (--output/--edges/--root/--depth/--filter/--include-closed) ([pm-graph-83ev](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-83ev.toon))
 
-### Fixed
+### Closed
 
-- Analytics and sync ignore ctx.pm_root: tracker_not_initialized under custom --pm-path ([pm-graph-swfx](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-swfx.toon))
-- Exporter adapter 'graph' collides with new core pm graph command group (pm-cli 2026.7.18) ([pm-graph-3svp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-3svp.toon))
+- Closed: Analytics and sync ignore ctx.pm_root: tracker_not_initialized under custom --pm-path ([pm-graph-swfx](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-swfx.toon))
+- Closed: Exporter adapter 'graph' collides with new core pm graph command group (pm-cli 2026.7.18) ([pm-graph-3svp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-3svp.toon))
 
 ## 2026.7.15 - 2026-07-15
 
@@ -279,9 +278,9 @@
 
 ## 2026.7.14-1 - 2026-07-14
 
-### Fixed
+### Closed
 
-- pm-graph export --format json emits TOON; neighbors/query reject positional args at contract layer ([pm-graph-1fr9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fr9.toon))
+- Closed: pm-graph export --format json emits TOON; neighbors/query reject positional args at contract layer ([pm-graph-1fr9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fr9.toon))
 
 ## 2026.7.10-1 - 2026-07-10
 
