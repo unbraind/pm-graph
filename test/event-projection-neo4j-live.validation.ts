@@ -19,7 +19,7 @@ import type { EventProjectionReceipt } from "../src/index.ts";
 const home = process.argv[2];
 assert.ok(home, "Supply an unpacked isolated Neo4j fixture distribution");
 const variant = process.argv[3];
-assert.ok(process.argv.length <= 4 && (variant === undefined || ["--sparse-only", "--preservation-only", "--packed-only", "--collision-only"].includes(variant)), "Use only a fixture home and an optional focused variant");
+assert.ok(process.argv.length <= 4 && (variant === undefined || ["--sparse-only", "--preservation-only", "--packed-only", "--collision-only", "--edges-only"].includes(variant)), "Use only a fixture home and an optional focused variant");
 const server = await startNeo4j(absolute(home));
 console.log(JSON.stringify({ fixtureReady: true, maxProcessors: 2, maxHeapMiB: 512 }));
 const actual = neo4j.driver(server.uri, neo4j.auth.basic("fixture", "synthetic"), { maxTransactionRetryTime: 0 });
@@ -32,6 +32,7 @@ await f.client.update(a, { blockedBy: b, unset: ["parent", "assignee", "reviewer
 let cases = 0;
 let blocked = 0;
 let nextToken = 0;
+let closingRollbacks = 0;
 const query = async (text: string, params: Record<string, unknown> = {}) => {
   const session = actual.session();
   try { return await session.run(text, params); } finally { await session.close(); }
@@ -110,8 +111,9 @@ async function collisionCases(): Promise<void> {
 }
 
 try {
-  for (const mode of variant === "--packed-only" || variant === "--collision-only" ? [] : variant ? ["sparse"] : ["sparse", "legacy", "full", "cypher"]) for (const dense of variant ? [false] : [false, true]) {
-    console.log(JSON.stringify({ mode, dense, preparing: true }));
+  for (const probeNode of variant === "--edges-only" ? [false] : variant ? [true] : [true, false])
+  for (const mode of variant === "--packed-only" || variant === "--collision-only" ? [] : variant && variant !== "--edges-only" ? ["sparse"] : ["sparse", "legacy", "full", "cypher"]) for (const dense of variant && variant !== "--edges-only" ? [false] : [false, true]) {
+    console.log(JSON.stringify({ mode, dense, probeNode, preparing: true }));
     const label = mode === "sparse" ? "PmGraphProjectionNode" : "PmGraphNode";
     const baseline: string[] = [];
     const prepare = async (): Promise<void> => {
@@ -147,15 +149,17 @@ try {
         injected = true;
         injection = `${phase} ${text.slice(0, 100)}`;
         let settled = false;
+        let queryCompleted = false;
         const session = actual.session();
         peer = (async () => {
           const tx = session.beginTransaction({ metadata: { fixtureToken: token } });
           try {
-            // The probe explicitly needs NODE write access, including on dense nodes;
-            // it proves the claimed node lock independently of commit-stage locks.
+            // The optional node probe proves NODE write exclusion independently
+            // of commit-stage locks; pure-edge runs omit that extra write.
             const result = await tx.run(`MATCH (n:${label} {id: $id}), (p:FixtureForeign {id:'peer'})
-SET n.__peerProbe = $token
+${probeNode ? "SET n.__peerProbe = $token" : ""}
 CREATE (n)-[r:FOREIGN {pmGraphOwner:'peer', token:$token}]->(p) RETURN count(r) AS created`, { id: a, token });
+            queryCompleted = true;
             await tx.commit(); return Number(result.records[0].get("created"));
           } catch (error) { await tx.rollback(); throw error; }
           finally { settled = true; await session.close(); }
@@ -170,10 +174,17 @@ CREATE (n)-[r:FOREIGN {pmGraphOwner:'peer', token:$token}]->(p) RETURN count(r) 
             blocked++;
             throw Object.assign(new Error("Fixture requests rollback while peer waits"), { code: "Neo.ClientError.Schema.ConstraintValidationFailed" });
           }
+          if (!probeNode && queryCompleted && attempt >= 10 && lastStatuses.includes("Closing")) {
+            // Dense relationship creation may wait only during commit. The query
+            // has already created its real edge; roll back the contender to let
+            // that peer finish, without claiming a NODE write-lock observation.
+            closingRollbacks++;
+            throw Object.assign(new Error("Fixture requests rollback during peer commit"), { code: "Neo.ClientError.Schema.ConstraintValidationFailed" });
+          }
           await new Promise((resolve) => { setTimeout(resolve, 10); });
         }
         assert.equal(settled, true, "peer must commit or demonstrably wait on the transaction lock");
-        if (variant !== "--preservation-only" && mode === "sparse" && !dense && phase === "after" && text.includes("WITH collect(n) AS ns") && text.endsWith("RETURN foreign")) {
+        if (probeNode && variant !== "--preservation-only" && mode === "sparse" && !dense && phase === "after" && text.includes("WITH collect(n) AS ns") && text.endsWith("RETURN foreign")) {
           missingRequiredLock = true;
           assert.fail("the ownership check must hold the sparse victim's write lock until commit");
         }
@@ -186,17 +197,19 @@ CREATE (n)-[r:FOREIGN {pmGraphOwner:'peer', token:$token}]->(p) RETURN count(r) 
       assert.equal(created, 1, "fixture peer must create an actual foreign edge");
       const remaining = await query("MATCH ()-[r:FOREIGN {token:$token}]->() RETURN count(r) AS count", { token });
       assert.equal(Number(remaining.records[0].get("count")), 1, `${mode} dense=${dense} boundary=${boundary}: foreign edge was lost`);
-      const probe = await query(`MATCH (n:${label} {id:$id}) RETURN n.__peerProbe AS token`, { id: a });
-      assert.equal(probe.records[0].get("token"), token);
+      if (probeNode) {
+        const probe = await query(`MATCH (n:${label} {id:$id}) RETURN n.__peerProbe AS token`, { id: a });
+        assert.equal(probe.records[0].get("token"), token);
+      }
       assert.equal(result.ok, false, `${mode} boundary ${boundary} must refuse the competing write`);
       assert.equal(result.refusal?.code, "SINK_CONFLICT", JSON.stringify({ mode, dense, boundary, injection, lastStatuses, result }));
       if (checkpoint !== undefined) assert.equal(readFileSync(f.stateFile, "utf8"), checkpoint);
       cases++;
       if (cases % 8 === 0) console.log(JSON.stringify({ passedTransitions: cases, blockedPeerTransitions: blocked }));
     }
-    console.log(JSON.stringify({ mode, dense, boundaries: baseline.length * 2, foreignEdgesPreserved: true }));
+    console.log(JSON.stringify({ mode, dense, probeNode, boundaries: baseline.length * 2, foreignEdgesPreserved: true }));
   }
-  console.log(JSON.stringify({ cases, blockedPeerTransitions: blocked, realNeo4j: true, nonGitTracker: true }));
+  console.log(JSON.stringify({ cases, blockedPeerTransitions: blocked, peerClosingRollbacks: closingRollbacks, realNeo4j: true, nonGitTracker: true }));
   if (variant === undefined || variant === "--collision-only") await collisionCases();
   if (variant === undefined || variant === "--packed-only") {
     const packed = spawn(process.execPath, [join(import.meta.dirname, "event-projection-packed.validation.ts"), server.uri], { cwd: process.cwd(), stdio: "inherit", env: { ...process.env, NPM_CONFIG_USERCONFIG: "/dev/null" } });

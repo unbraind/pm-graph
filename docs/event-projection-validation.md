@@ -106,9 +106,14 @@ in a non-git scratch directory, loopback networking, a 512 MiB heap and at most 
 processors. It injects foreign-edge creation before and after every query on the
 same non-git tracker, including sparse and dense database nodes. It observes actual
 server lock waits, requests a typed rollback, verifies each foreign edge survives,
-and verifies refused refreshes retain the checkpoint bytes. All 140 injected query
+and verifies refused refreshes retain the checkpoint bytes. The 140 node-probe query
 boundaries passed, with 96 confirmed server lock waits. A competing node-property
-write independently proves the node lock while the peer creates its foreign edge. The Node 26 CI job
+write independently proves the node lock while the peer creates its foreign edge.
+An additional 140 pure-edge boundaries passed on SDK 2026.10.23 without that
+extra property write, including ordinary/dense nodes and every sink/plan path:
+80 confirmed server lock waits and 16 observed Closing-state rollbacks. Closing
+observations are reported separately from lock waits. Default CI exercises both
+writers, for 280 boundary cases, before collision and packed-host checks. The Node 26 CI job
 runs this fixture and packed npm/Bun global, npx/bunx and project-local consumers.
 All six packed hosts passed eight real Neo4j foreign-record refusal cases each
 (JSON/TOON, incremental/rebuild, absent/string temporary properties), retained the
@@ -141,3 +146,8 @@ Removing only the node MERGE ownership predicate fails the late-node refusal
 case. Removing only the relationship MERGE predicate fails the matching-foreign-
 relationship refusal case. Each revert exits 1, and every original guard was
 restored before rebuilding.
+
+The pure-edge writer also rejects the old sparse transaction: reverting only
+`syncProjectionDelta` on SDK 2026.10.23 loses the actual foreign edge at boundary
+7 (0 versus 1), without any peer node-property write. The fixed function was
+restored byte-for-byte; authored runtime and generated output remain `f6d81a6`.
