@@ -45,3 +45,25 @@ Reproduce with `node scripts/validate-event-projection.ts <public-copy-tracker>
 test/event-projection.test.ts test/event-projection-neo4j.test.ts`. Packed acceptance
 is `node test/event-projection-packed.validation.ts` and uses actual npm/Bun global,
 npx/bunx and project-local hosts without resolving the SDK from executable paths.
+
+## Re-review recovery regressions
+
+Two general invariants now have adversarial coverage: storage presence is
+independent of its decoded JSON value, and rebuilds start a coherent event
+generation. The shared corpus exercises 116 foreign payload variants across
+incremental/rebuild attempts and offline/sink targets, preserving bytes and
+refusing before applying a sink. The real non-git CLI checks JSON and TOON,
+receipt reads and Neo4j flag paths. Packed acceptance repeats the foreign-data
+and empty-history recovery cases on all six installation hosts.
+
+The generation model covers empty, workspace-only, item-only and mixed replacement
+streams. It compares cursor and versions with SDK mutation pages, checks the graph
+against certified SDK reads, verifies the target CAS retains its expected revision,
+and resumes sparse refresh after each rebuild. A checkpoint captured unchanged
+from the pre-fix `1f44fbd` producer in `test/fixtures/event-projection-v1.json`
+remains readable/exportable; no valid checkpoint schema is tightened.
+
+Both defects have behavioral revert proof: classifying decoded null as missing
+fails the foreign-data refusal regression, and restoring the prior-anchor fallback
+fails empty-stream recovery with `SOURCE_INCOMPLETE`. Existing tests remain intact.
+The package test and coverage runners explicitly use at most two workers.

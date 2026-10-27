@@ -1,24 +1,26 @@
 /** Manual packed acceptance across actual global, ephemeral and project package-manager hosts. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { FOREIGN_CHECKPOINTS, clearProjectionHistory } from "./event-projection-recovery-corpus.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const scratch = mkdtempSync(join(tmpdir(), "graph-packed-"));
 const sdkVersion = "2026.10.20";
 const baseEnv = { ...process.env, NPM_CONFIG_USERCONFIG: "/dev/null", npm_config_userconfig: "/dev/null", PM_PATH: "", GIT_CEILING_DIRECTORIES: tmpdir() };
 /** Run actual package managers and host executables, preserving bounded failure diagnostics. */
-function run(bin: string, args: string[], cwd: string, extra: Record<string, string> = {}): string {
+function run(bin: string, args: string[], cwd: string, extra: Record<string, string> = {}, expected = 0): string {
   const result = spawnSync(bin, args, { cwd, env: { ...baseEnv, ...extra }, encoding: "utf8", timeout: 240000, maxBuffer: 4 * 1024 * 1024 });
-  assert.equal(result.status, 0, `${bin} ${args[0]}: ${result.stderr || result.stdout || result.error}`);
+  assert.equal(result.status, expected, `${bin} ${args[0]}: ${result.stderr || result.stdout || result.error}`);
   return result.stdout;
 }
 /** Exercise admission and sparse update through a real installed pm host and packed extension. */
 function acceptance(name: string, bin: string, prefix: string[], extension: string, extra: Record<string, string> = {}): void {
   const ws = join(scratch, name); mkdirSync(ws);
-  const invoke = (args: string[]): Record<string, unknown> => JSON.parse(run(bin, [...prefix, ...args, "--json"], ws, extra)) as Record<string, unknown>;
+  const output = (args: string[], expected = 0, json = true): string => run(bin, [...prefix, ...args, ...(json ? ["--json"] : [])], ws, extra, expected);
+  const invoke = (args: string[], expected = 0): Record<string, unknown> => JSON.parse(output(args, expected)) as Record<string, unknown>;
   invoke(["init", "--defaults", "--agent-guidance", "skip", "--prefix", "packed"]);
   const extensions = join(ws, ".agents/pm/extensions"); mkdirSync(extensions, { recursive: true });
   const installed = join(extensions, "pm-graph");
@@ -32,7 +34,29 @@ function acceptance(name: string, bin: string, prefix: string[], extension: stri
   invoke(["update", id, "--title", "Packed update", "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
   const sparse = invoke(["pm-graph", "refresh", "projection.json"]);
   assert.equal(sparse.itemReads, 1); assert.equal(sparse.fullScans, 0);
-  console.log(JSON.stringify({ host: name, admission: true, sparseReads: 1, fullScans: 0 }));
+  const foreign = join(ws, "foreign.json");
+  for (const bytes of FOREIGN_CHECKPOINTS) {
+    writeFileSync(foreign, bytes);
+    const refusal = invoke(["pm-graph", "refresh", "foreign.json"], 2);
+    assert.equal((refusal.refusal as { code: string }).code, "FOREIGN_STATE");
+    assert.equal(readFileSync(foreign, "utf8"), bytes);
+  }
+  writeFileSync(foreign, "null");
+  assert.equal((invoke(["pm-graph", "refresh", "foreign.json", "--rebuild"], 2).refusal as { code: string }).code, "FOREIGN_STATE");
+  assert.match(output(["pm-graph", "refresh", "foreign.json", "--rebuild"], 2, false), /FOREIGN_STATE/);
+  assert.equal(readFileSync(foreign, "utf8"), "null");
+  for (const json of [true, false]) {
+    invoke(["update", id, "--title", `Next generation ${json}`, "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
+    invoke(["pm-graph", "refresh", "projection.json"]);
+    clearProjectionHistory(join(ws, ".agents/pm"));
+    const rebuilt = output(["pm-graph", "refresh", "projection.json", "--rebuild"], 0, json);
+    if (json) assert.equal(JSON.parse(rebuilt).mode, "rebuild"); else assert.match(rebuilt, /mode: "?rebuild"?/);
+    const state = JSON.parse(readFileSync(join(ws, "projection.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(Object.hasOwn(state, "cursor"), false); assert.equal(Object.hasOwn(state, "anchor"), false);
+    assert.deepEqual(state.versions, {});
+    assert.equal(invoke(["pm-graph", "refresh", "projection.json"]).fullScans, 0);
+  }
+  console.log(JSON.stringify({ host: name, admission: true, sparseReads: 1, fullScans: 0, foreignPayloads: FOREIGN_CHECKPOINTS.length, rebuildFormats: 2 }));
 }
 try {
   run("npm", ["pack", "--ignore-scripts", "--pack-destination", scratch], root);

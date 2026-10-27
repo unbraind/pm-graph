@@ -25,12 +25,17 @@ visit cached rows. This is sparse source projection, not constant-time checkpoin
 A `CURSOR_GAP` refuses to advance the checkpoint. It covers changed/lost cursor
 anchors, noncontiguous subject versions, and workspace-schema mutations. Run
 `--rebuild` explicitly to replace the derived projection after a new certified full
-read. Opaque cursor interpretation, source completeness, and mutation ordering
+read. Rebuild resets cursor, anchor and per-subject versions together, including
+when authoritative history is empty. The target revision lineage remains intact
+for sink CAS; the checkpoint format and existing v1 read contract are unchanged.
+Opaque cursor interpretation, source completeness, and mutation ordering
 remain SDK responsibilities; direct source-file edits outside SDK mutation/history
 contracts require an explicit rebuild. Each refresh is bounded to 100000 items,
 1000000 events, a 128 MiB checkpoint, JSON depth 24, and strings of 65536 characters.
 Source churn refuses with `SOURCE_BUSY`; retry. Invalid/foreign checkpoints refuse
-with `FOREIGN_STATE` even with `--rebuild`; choose another file. Source failures
+with `FOREIGN_STATE` even with `--rebuild`; choose another file. Existing JSON
+`null`, other scalar values, arrays and malformed files remain foreign storage,
+never an absent checkpoint. Only a missing file admits a new projection. Source failures
 leave the previous committed checkpoint available. Refusals carry `exit_code: 2`
 and a machine-readable code/remedy without echoing source errors or paths.
 

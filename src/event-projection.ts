@@ -134,21 +134,23 @@ export function eventProjectionRefusal(code: EventProjectionRefusalCode): EventP
   };
   return { ok: false, exit_code: 2, refusal: { code, remedy: remedies[code] }, work: [] };
 }
+/** Storage presence is out of band: every JSON value, including null, remains an existing payload. */
+type CheckpointRead = { kind: "missing" } | { kind: "invalid" } | { kind: "present"; value: unknown };
 /** Read one bounded regular checkpoint, without blocking on FIFOs or following symbolic links. */
-async function readState(file: string): Promise<unknown> {
+async function readState(file: string): Promise<CheckpointRead> {
   let handle: Awaited<ReturnType<typeof open>>;
   try { handle = await open(file, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" }; throw error; }
   try {
     const info = await handle.stat();
-    if (!info.isFile() || info.size > MAX_BYTES) return false;
-    return JSON.parse(await handle.readFile("utf8")) as unknown;
-  } catch { return false; } finally { await handle.close(); }
+    if (!info.isFile() || info.size > MAX_BYTES) return { kind: "invalid" };
+    return { kind: "present", value: JSON.parse(await handle.readFile("utf8")) as unknown };
+  } catch { return { kind: "invalid" }; } finally { await handle.close(); }
 }
 /** Read and validate a committed offline projection without returning a partially decoded state. */
 export async function readEventProjection(file: string): Promise<EventProjectionState | null> {
   const value = await readState(file);
-  return validateEventProjection(value) ? value : null;
+  return value.kind === "present" && validateEventProjection(value.value) ? value.value : null;
 }
 /** Read pages through the SDK, preserving opaque cursors and refusing bounded partial catch-up. */
 async function events(pmRoot: string, since: string | undefined, maxEvents: number): Promise<{ rows: MutationEvent[]; cursor?: string; pages: number; anchor?: MutationEvent; sources: string[] }> {
@@ -166,6 +168,11 @@ async function events(pmRoot: string, since: string | undefined, maxEvents: numb
     cursor = page.next_cursor ?? cursor;
   } while (page.has_more);
   return { rows, cursor, pages, sources: [...sources], anchor: rows.at(-1) };
+}
+/** Start a coherent event generation; rebuilds retain target revision lineage but no event coordinates. */
+function eventGeneration(previous: EventProjectionState | null, rebuild: boolean): Pick<EventProjectionState, "cursor" | "anchor" | "versions"> {
+  if (rebuild || previous === null) return { versions: {} };
+  return { cursor: previous.cursor, anchor: previous.anchor, versions: { ...previous.versions } };
 }
 /** Use the SDK's exact item reader, including configured schemas, without child/corpus scans. */
 async function item(pmRoot: string, id: string): Promise<ItemMetadata | null> {
@@ -222,8 +229,9 @@ export async function refreshEventProjection(options: EventProjectionOptions): P
     await options.onTransition?.("leased");
     const raw = await readState(stateFile);
     await options.onTransition?.("read");
-    if (raw !== null && !validateEventProjection(raw)) return eventProjectionRefusal("FOREIGN_STATE");
-    const previous = raw as EventProjectionState | null;
+    const previous = raw.kind === "missing" ? null
+      : raw.kind === "present" && validateEventProjection(raw.value) ? raw.value : undefined;
+    if (previous === undefined) return eventProjectionRefusal("FOREIGN_STATE");
     const source = hash(await realpath(pmRoot));
     if (previous && previous.source !== source) return eventProjectionRefusal("FOREIGN_STATE");
     const target = options.sink?.key ?? "offline";
@@ -236,9 +244,10 @@ export async function refreshEventProjection(options: EventProjectionOptions): P
       if (!anchor || hash(anchor) !== previous.anchor.hash) return eventProjectionRefusal("CURSOR_GAP");
     }
     await options.onTransition?.("anchored");
-    const batch = await events(pmRoot, rebuild ? undefined : previous?.cursor, options.maxEvents ?? MAX * 10);
+    const generation = eventGeneration(previous, rebuild);
+    const batch = await events(pmRoot, generation.cursor, options.maxEvents ?? MAX * 10);
     await options.onTransition?.("events");
-    const versions: Record<string, number> = rebuild ? {} : { ...previous.versions };
+    const versions = generation.versions;
     const changed = new Set<string>();
     for (const event of batch.rows) {
       if (!rebuild && event.version !== (versions[event.item_id] ?? 0) + 1) return eventProjectionRefusal("CURSOR_GAP");
@@ -278,7 +287,7 @@ export async function refreshEventProjection(options: EventProjectionOptions): P
     contributions.sort((a, b) => a.id.localeCompare(b.id));
     const graph = materialize(contributions);
     const cursor = batch.cursor;
-    const anchor = batch.anchor ? { item_id: batch.anchor.item_id, version: batch.anchor.version, hash: hash(batch.anchor.entry) } : previous?.anchor;
+    const anchor = batch.anchor ? { item_id: batch.anchor.item_id, version: batch.anchor.version, hash: hash(batch.anchor.entry) } : generation.anchor;
     const revision = stateRevision({ target, base: previous?.revision ?? null, source, cursor, contributions, graph, versions });
     const evaluated = rebuild ? [...(previous?.contributions ?? []), ...contributions] : [...previous.contributions.filter((c) => changed.has(c.id)), ...contributions.filter((c) => changed.has(c.id))];
     const workNodes = new Set(evaluated.flatMap((c) => c.nodes.map((n) => n.id)));

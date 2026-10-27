@@ -113,17 +113,17 @@ async function readState(file) {
     }
     catch (error) {
         if (error.code === "ENOENT")
-            return null;
+            return { kind: "missing" };
         throw error;
     }
     try {
         const info = await handle.stat();
         if (!info.isFile() || info.size > MAX_BYTES)
-            return false;
-        return JSON.parse(await handle.readFile("utf8"));
+            return { kind: "invalid" };
+        return { kind: "present", value: JSON.parse(await handle.readFile("utf8")) };
     }
     catch {
-        return false;
+        return { kind: "invalid" };
     }
     finally {
         await handle.close();
@@ -132,7 +132,7 @@ async function readState(file) {
 /** Read and validate a committed offline projection without returning a partially decoded state. */
 export async function readEventProjection(file) {
     const value = await readState(file);
-    return validateEventProjection(value) ? value : null;
+    return value.kind === "present" && validateEventProjection(value.value) ? value.value : null;
 }
 /** Read pages through the SDK, preserving opaque cursors and refusing bounded partial catch-up. */
 async function events(pmRoot, since, maxEvents) {
@@ -151,6 +151,12 @@ async function events(pmRoot, since, maxEvents) {
         cursor = page.next_cursor ?? cursor;
     } while (page.has_more);
     return { rows, cursor, pages, sources: [...sources], anchor: rows.at(-1) };
+}
+/** Start a coherent event generation; rebuilds retain target revision lineage but no event coordinates. */
+function eventGeneration(previous, rebuild) {
+    if (rebuild || previous === null)
+        return { versions: {} };
+    return { cursor: previous.cursor, anchor: previous.anchor, versions: { ...previous.versions } };
 }
 /** Use the SDK's exact item reader, including configured schemas, without child/corpus scans. */
 async function item(pmRoot, id) {
@@ -212,9 +218,10 @@ export async function refreshEventProjection(options) {
         await options.onTransition?.("leased");
         const raw = await readState(stateFile);
         await options.onTransition?.("read");
-        if (raw !== null && !validateEventProjection(raw))
+        const previous = raw.kind === "missing" ? null
+            : raw.kind === "present" && validateEventProjection(raw.value) ? raw.value : undefined;
+        if (previous === undefined)
             return eventProjectionRefusal("FOREIGN_STATE");
-        const previous = raw;
         const source = hash(await realpath(pmRoot));
         if (previous && previous.source !== source)
             return eventProjectionRefusal("FOREIGN_STATE");
@@ -230,9 +237,10 @@ export async function refreshEventProjection(options) {
                 return eventProjectionRefusal("CURSOR_GAP");
         }
         await options.onTransition?.("anchored");
-        const batch = await events(pmRoot, rebuild ? undefined : previous?.cursor, options.maxEvents ?? MAX * 10);
+        const generation = eventGeneration(previous, rebuild);
+        const batch = await events(pmRoot, generation.cursor, options.maxEvents ?? MAX * 10);
         await options.onTransition?.("events");
-        const versions = rebuild ? {} : { ...previous.versions };
+        const versions = generation.versions;
         const changed = new Set();
         for (const event of batch.rows) {
             if (!rebuild && event.version !== (versions[event.item_id] ?? 0) + 1)
@@ -280,7 +288,7 @@ export async function refreshEventProjection(options) {
         contributions.sort((a, b) => a.id.localeCompare(b.id));
         const graph = materialize(contributions);
         const cursor = batch.cursor;
-        const anchor = batch.anchor ? { item_id: batch.anchor.item_id, version: batch.anchor.version, hash: hash(batch.anchor.entry) } : previous?.anchor;
+        const anchor = batch.anchor ? { item_id: batch.anchor.item_id, version: batch.anchor.version, hash: hash(batch.anchor.entry) } : generation.anchor;
         const revision = stateRevision({ target, base: previous?.revision ?? null, source, cursor, contributions, graph, versions });
         const evaluated = rebuild ? [...(previous?.contributions ?? []), ...contributions] : [...previous.contributions.filter((c) => changed.has(c.id)), ...contributions.filter((c) => changed.has(c.id))];
         const workNodes = new Set(evaluated.flatMap((c) => c.nodes.map((n) => n.id)));
