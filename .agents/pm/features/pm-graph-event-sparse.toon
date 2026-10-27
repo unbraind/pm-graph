@@ -7,11 +7,9 @@ status: in_progress
 priority: 2
 tags[1]: "gh:unbraind/pm-graph#175"
 created_at: "2026-10-27T07:16:00.488Z"
-updated_at: "2026-10-27T17:58:01.215Z"
-assignee: codex-agent
-claim_principal: codex-agent
+updated_at: "2026-10-27T18:41:15.693Z"
 author: codex-agent
-comments[34]{created_at,author,text}:
+comments[37]{created_at,author,text}:
   "2026-10-27T07:16:04.720Z",codex-agent,"Overlap rechecked against current CLI and sibling sources: SDK mutation-events owns cursors and history reads; graph snapshot impact compares complete graphs; syncNeo4j in src/index.ts still upserts every input node and relationship. pm-web consumes event pages for resume and history delivery, and pm-rust complete-projection receipts certify reads rather than update a persisted graph. This feature owns only derived projection state, sparse work receipts and sink reconciliation. No upstream or sibling changes planned."
   "2026-10-27T07:24:18.943Z",codex-agent,"Implementation now uses lazy supported SDK package exports, certified complete admission, opaque mutation cursors, SDK point reads, anchor/stream continuity checks, owned checkpoint locking, finite/dense boundary validation, and exact recoverable receipt pages. Explicit rebuild is required after continuity or workspace-schema changes. Cached graph materialization and checkpoint encoding still visit cached rows; receipts separately disclose full source scans and SDK event-page source. Neo4j reconciliation uses a revision CAS inside one write transaction and a separate owned namespace. Seeded model and real-host regressions are being validated."
   "2026-10-27T07:41:59.200Z",codex-agent,"Evidence: seeded model seed 0x261027 passed 500 random sequences through real SDK reads and mutations. The 10000-item non-git case read one updated item with zero complete refresh item scans, evaluated 3 nodes and 2 edges, emitted 814 JSON bytes and equaled both certified full output and an explicit rebuild. Public main corpus at 4b5e7a1: 108 items, 203 nodes, 372 edges, 1138 admission events; caught-up reads/scans/events all zero, 538 JSON bytes, derived_index, 1108 ms admission plus catch-up. Source copy was read-only, authoritative bytes unchanged. Public data exposed omitted legacy dependency metadata; producer JSON normalization and a regression now cover it. Behavioral revert proof: replacing only refreshEventProjection catch-up admission decision with unconditional rebuild makes the sparse regression fail (fullScans 1 versus required 0); implementation restored. All 12 competing-refresher transition boundaries pass, and interrupted-sink retry checks current target revisions."
@@ -46,6 +44,9 @@ comments[34]{created_at,author,text}:
   "2026-10-27T17:41:50.313Z",codex-agent,"Added empty-native-history post-action recovery coverage using the existing scratch-only history reset helper (SDK init emits a workspace event). Both ordinary sparse recovery and explicit rebuild pass after a committed empty generation and later item creation. An opaque observed target revision refuses ordinary catch-up, while explicit rebuild binds that current revision and converges. Focused empty-history/opaque-revision regression passes 1/1 across both modes. Full 500-sequence linked rerun remains in progress on the shared host."
   "2026-10-27T17:48:53.765Z",codex-agent,"Final archive npm-global acceptance passes: eight actual Neo4j foreign-record refusals, checkpoint preservation, sparse retry with two reads, and four native post-action recoveries (JSON/TOON by incremental/rebuild). Remaining hosts are running. Expanded the native before/after-query matrix and late-node collision corpus to include explicit projection rebuild, because its new owned-edge reset/stale-node pruning is another write path of the same ownership class. The focused rebuild variant runs both node-probe and pure-edge writers on ordinary/dense nodes; default CI now includes it alongside every existing path."
   "2026-10-27T17:58:00.959Z",codex-agent,"Final linked 500-sequence rerun reached its explicit 1800-second shared-host timeout: critical legacy-CAS regression passed, 200 sequences were reported, then the runner terminated its child with SIGTERM (exit 5; timeout, no assertion failure reported). This is incomplete evidence, not a pass. Earlier complete runs passed all 500 sequences (direct run 3/3 and linked run 4/4 before the additional boundary cases). Current focused boundary tests pass separately, including malformed/reordered/competing markers and empty history/opaque revisions. No further full local rerun will burden the saturated host; exact-head CI will run the entire property suite at unchanged thresholds/two workers. Packed npm-global current-artifact checks pass; other hosts remain active."
+  "2026-10-27T18:25:35.419Z",codex-agent,"Clarified the durable-recovery contract: adopting a verified earlier sink commit can publish its checkpoint before a later source/ownership refusal. Successful committed history is retained, never rolled back to erase that later refusal. The strengthened competing-marker regression passes 1/1 and asserts the adopted checkpoint revision remains in the sink audit after the later SINK_CONFLICT. Source/generated changes here are documentation only; executable JavaScript remains byte-identical to bfe8899. Verified the captured 52-file archive digest and all nine runtime/declaration/map files against bfe8899 before this declaration-comment clarification; preserved the private artifact without tracking binaries. Current archive has passed npm global, Bun global, npx and bunx: 32 real foreign-data refusals and 16 crash recoveries. Project-local hosts continue."
+  "2026-10-27T18:35:37.187Z",codex-agent,"Final six-host packed acceptance passes on SDK 2026.10.23: npm-global, bun-global, npx, bunx, npm-local and bun-local, all using the same 52-file archive (SHA-256 2bad3b24720e612f95a2f59dfb62b8e59fdc7d9db11edfed80c4390b1af50420). Total: 48 actual Neo4j foreign-record refusals with retained checkpoints, plus 24 native post-action recoveries across JSON/TOON and normal/rebuild; source values read through each real SDK host equal target values and foreign edges survive. Sparse retries use two point reads and zero full scans. Original archive digest remains unchanged after every host; private bytes were preserved, with no tracked binary. Its nine runtime/declaration/map files matched bfe8899; subsequent declaration-comment/test-report changes do not alter executable JS. The isolated packed fixture stopped cleanly. Running the additional explicit-rebuild interleaving matrix through linked test 8 (none/snapshot context, operator fixture path passed only at execution)."
+  "2026-10-27T18:41:11.626Z",codex-agent,"Final linked test 8 passes: explicit projection rebuild, both node-probe and pure foreign-edge writers on ordinary/dense nodes, all 96 query boundaries. Observed 60 actual Blocked transitions and eight separately reported Closing-state rollbacks. Every real foreign edge survives, every refusal is typed SINK_CONFLICT, and checkpoint bytes remain unchanged. This adds 96 measured boundaries to the retained 280 from the earlier ownership audit. The isolated server stopped cleanly. Final current checks pass build/test types, source types, lint, zero duplication and 202 documented declarations. All six packed hosts pass 48 ownership refusals plus 24 crash recoveries; real post-action matrix passes 24 combinations; the changed-function revert fails as required and restoration passes. Two prior 500-sequence runs pass; the last resource-limited rerun timed out at 30 minutes after 200 reported sequences and is explicitly incomplete. No local full release suite was run on the saturated host. Final exact-head npm/Bun release evidence will be reported at https://github.com/unbraind/pm-graph/pull/175/checks and in the linked PR body/final handoff; no pending check is a pass. Completing tracker writes before final CI verification, leaving this item in progress and releasing only this claim."
 files[32]{path,scope}:
   .github/workflows/ci.yml,project
   package.json,project
@@ -79,7 +80,7 @@ files[32]{path,scope}:
   test/read-output-host.test.ts,project
   test/snapshot-impact-public.validation.ts,project
   test/tracker-fingerprint.test.ts,project
-tests[7]:
+tests[8]:
   - command: node --test --test-concurrency=2 --test-name-pattern='admission|foreign|lost anchors|source churn|storage transition|sink crash|legacy optional|Neo4j sparse' test/event-projection.test.ts test/event-projection-neo4j.test.ts
     scope: project
     provenance:
@@ -133,6 +134,16 @@ tests[7]:
     provenance:
       author: codex-agent
       created_at: "2026-10-27T17:33:07.503Z"
+      source_kind: local_mutation
+      source_ref: feat/event-sparse-projection-receipts
+  - command: "node test/event-projection-neo4j-live.validation.ts \"$GRAPH_FIXTURE_HOME\" --rebuild-only"
+    scope: project
+    timeout_seconds: 3600
+    pm_context_mode: none
+    workspace_context_mode: snapshot
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-27T18:22:54.331Z"
       source_kind: local_mutation
       source_ref: feat/event-sparse-projection-receipts
 docs[3]{path,scope}:

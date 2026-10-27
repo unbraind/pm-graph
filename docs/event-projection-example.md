@@ -84,6 +84,10 @@ can advance independently. `--receipt` reads only a published checkpoint.
 
 A source-known marker without cached recovery contributions requires a disclosed
 certified recovery rebuild. A source-unknown marker refuses ordinary refresh.
+Recovering a verified earlier sink commit can publish its checkpoint before a
+later source or ownership check refuses. That retains the success which already
+happened; a later refusal does not roll it back. Read `--receipt` to inspect that
+reconciled revision.
 Explicit `--rebuild --neo4j` reads the current marker and reprojects the current
 certified source with a transaction-protected CAS. It resets owned relationships,
 upserts all current nodes and removes stale owned nodes. Foreign relationships on

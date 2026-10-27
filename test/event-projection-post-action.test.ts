@@ -220,6 +220,7 @@ test("marker boundary failures and competing post-inspection commits never repor
     const reordered: ProjectionSink = { ...model.sink, inspect: async () => ({ revision: position.revision, sourceHead: { anchor: { hash: anchor.hash, version: anchor.version, item_id: anchor.item_id }, cursor } }) };
     assert.equal((await refreshEventProjection({ ...options, sink: reordered })).fullScans, 0, "both sides use the producer's source-head normalization");
     await crash("newer committed");
+    const committedBeforeRace = model.position()!.revision; assert.ok(committedBeforeRace);
     const raced: ProjectionSink = { ...model.sink, inspect: async () => {
       const observed = await model.sink.inspect!("");
       assert.ok(observed && observed !== "conflict");
@@ -228,6 +229,8 @@ test("marker boundary failures and competing post-inspection commits never repor
     } };
     assert.equal((await refreshEventProjection({ ...options, sink: raced })).refusal?.code, "SINK_CONFLICT", "even recovered no-ops must revalidate the current target");
     assert.equal(model.position()?.revision, "e".repeat(64));
+    assert.equal((await readEventProjection(f.stateFile))?.revision, committedBeforeRace, "a later refusal retains the verified earlier sink success");
+    assert.ok(model.audit.includes(committedBeforeRace));
     assert.equal((await refreshEventProjection({ ...options, rebuild: true })).ok, true);
   } finally { rmSync(f.ws, { recursive: true, force: true }); }
 });

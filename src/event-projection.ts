@@ -13,7 +13,7 @@ const requireSdk = createRequire(import.meta.url);
 /** Acquire the supported SDK only when projection storage is used. */
 function sdk(): typeof PmSdk { return requireSdk("@unbrained/pm-cli/sdk") as typeof PmSdk; }
 
-/** Stable refusal categories; checkpoint and sink changes are never published on refusal. */
+/** Stable refusals; verified earlier sink commits may be recovered before later work refuses. */
 export type EventProjectionRefusalCode = "INVALID_INPUT" | "FOREIGN_STATE" | "CURSOR_GAP" | "SOURCE_INCOMPLETE" | "SOURCE_BUSY" | "LIMIT" | "SINK_CONFLICT" | "SINK_UNAVAILABLE" | "STORAGE_BUSY";
 /** One exact graph entity re-evaluated, whether changed, removed or unchanged. */
 export type ProjectionWork = { kind: "node"; id: string } | { kind: "edge"; from: string; to: string; type: string };

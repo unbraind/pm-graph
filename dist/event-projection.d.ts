@@ -1,5 +1,5 @@
 import type { Graph, GraphNode, GraphRelationship } from "./index.ts";
-/** Stable refusal categories; checkpoint and sink changes are never published on refusal. */
+/** Stable refusals; verified earlier sink commits may be recovered before later work refuses. */
 export type EventProjectionRefusalCode = "INVALID_INPUT" | "FOREIGN_STATE" | "CURSOR_GAP" | "SOURCE_INCOMPLETE" | "SOURCE_BUSY" | "LIMIT" | "SINK_CONFLICT" | "SINK_UNAVAILABLE" | "STORAGE_BUSY";
 /** One exact graph entity re-evaluated, whether changed, removed or unchanged. */
 export type ProjectionWork = {

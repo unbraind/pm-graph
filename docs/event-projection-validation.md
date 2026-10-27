@@ -135,8 +135,8 @@ sweeps during a node-only refresh. Late node/edge MERGE collision tests also
 verify that foreign properties remain intact when they appear after preflight.
 All four node-collision paths (sparse, legacy incremental/full and generated Cypher)
 and the matching foreign-relationship collision passed against the real server.
-The measured local packed-host runs used SDK 2026.10.20; the validator derives the
-SDK version from the repository pin, so the merged-pin CI run uses 2026.10.23.
+The initial ownership-only packed run used SDK 2026.10.20. The recovery run below
+uses SDK 2026.10.23; the validator derives the SDK version from the repository pin.
 
 Behavioral revert proofs restore only the changed function or selection rule. The
 old sparse transaction loses the actual peer edge at query boundary 7 (0 versus
@@ -195,3 +195,19 @@ Cypher statements triggered the SDK's disclosed string compaction. The fixed
 packed-host test recovers complete fields through SDK amount/cost controls and
 still asserts every row equals the original, unchanged and in order. Its focused
 regression passes; the guarded producer remains intact.
+
+All six actual packed hosts pass on SDK 2026.10.23: npm/Bun global, npx/bunx and
+npm/Bun project-local. They share one verified 52-file archive with SHA-256
+`2bad3b24720e612f95a2f59dfb62b8e59fdc7d9db11edfed80c4390b1af50420`.
+The run passes 48 real Neo4j foreign-record refusals and 24 crash recoveries across
+JSON/TOON and ordinary/rebuild modes. Native values equal SDK source read-back;
+foreign data remains intact. All nine runtime/declaration/map files matched
+`bfe8899` when verified. Later declaration documentation and test-report changes
+alter no executable JavaScript. The artifact stays private and untracked.
+
+The focused explicit-rebuild interleaving matrix also passes all 96 boundaries:
+node-probe and pure-edge writers, ordinary and dense nodes. It observes 60 actual
+lock waits and eight separately reported Closing-state rollbacks; foreign edges
+survive and refused refreshes retain their checkpoints. This adds to the earlier
+280 measured boundaries. The PM-linked command uses none/snapshot context and
+receives its explicitly owned fixture home only as an execution-time input.
