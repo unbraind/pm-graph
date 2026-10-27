@@ -27,13 +27,24 @@ function acceptance(name: string, bin: string, prefix: string[], extension: stri
   cpSync(extension, installed, { recursive: true });
   const scope = join(installed, "node_modules/@unbrained"); mkdirSync(scope, { recursive: true });
   if (!existsSync(join(scope, "pm-cli"))) symlinkSync(join(dirname(extension), "@unbrained/pm-cli"), join(scope, "pm-cli"), "dir");
-  const created = invoke(["create", "Task", "Packed source", "--create-mode", "progressive", "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
+  invoke(["schema", "add-type", "ExternalPmItem"]);
+  const created = invoke(["create", "ExternalPmItem", "Packed source", "--id", "a", "--create-mode", "progressive", "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
   const id = String(created.id ?? (created.item as { id: string })?.id);
+  const referencing = invoke(["create", "Task", "Packed reference", "--id", "b", "--create-mode", "progressive", "--parent", id, "--blocked-by", id, "--dep", `id=${id},kind=related_to`, "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_reason"]);
+  const referenceId = String(referencing.id ?? (referencing.item as { id: string })?.id);
   const initial = invoke(["pm-graph", "refresh", "projection.json"]);
   assert.equal(initial.fullScans, 1);
   invoke(["update", id, "--title", "Packed update", "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
   const sparse = invoke(["pm-graph", "refresh", "projection.json"]);
   assert.equal(sparse.itemReads, 1); assert.equal(sparse.fullScans, 0);
+  const graph = JSON.parse(readFileSync(join(ws, "projection.json"), "utf8")) as { graph: { nodes: { id: string; labels: string[]; properties: { title: string; type: string } }[] } };
+  const authoritative = graph.graph.nodes.find((node) => node.id === id);
+  assert.deepEqual(authoritative?.labels, ["PmItem", "ExternalPmItem"]);
+  assert.equal(authoritative.properties.title, "Packed update");
+  for (const json of [true, false]) {
+    const contracted = output(["pm-graph", "contract", id, referenceId, "--edges", "CHILD_OF,BLOCKED_BY,RELATED_TO"], 0, json);
+    if (json) assert.equal(JSON.parse(contracted).receipt.unknown, 0); else assert.match(contracted, /unknown: 0/);
+  }
   const foreign = join(ws, "foreign.json");
   for (const bytes of FOREIGN_CHECKPOINTS) {
     writeFileSync(foreign, bytes);
@@ -56,7 +67,7 @@ function acceptance(name: string, bin: string, prefix: string[], extension: stri
     assert.deepEqual(state.versions, {});
     assert.equal(invoke(["pm-graph", "refresh", "projection.json"]).fullScans, 0);
   }
-  console.log(JSON.stringify({ host: name, admission: true, sparseReads: 1, fullScans: 0, foreignPayloads: FOREIGN_CHECKPOINTS.length, rebuildFormats: 2 }));
+  console.log(JSON.stringify({ host: name, admission: true, sparseReads: 1, fullScans: 0, authoritativeTypeCollision: true, contractionFormats: 2, foreignPayloads: FOREIGN_CHECKPOINTS.length, rebuildFormats: 2 }));
 }
 try {
   run("npm", ["pack", "--ignore-scripts", "--pack-destination", scratch], root);

@@ -56,10 +56,12 @@ test("seeded model: 500 operation sequences read SDK state, replay older inputs,
     let randomState = 0x261027;
     const random = (bound: number): number => { randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0; return randomState % bound; };
     const parent = await seed(f.client, "root", "Feature");
+    const types = ["Task", "ExternalPmItem", "PmFacet", "Status", "PmItem"];
+    for (const type of types.slice(1)) await f.client.schemaAddType(type);
     const statuses = Array.from({ length: 4 }, (_, index) => `custom_${random(10000)}_${index}`);
     for (const status of statuses) await f.client.schemaAddStatus(status, { role: ["active"] });
     const ids = [];
-    for (let i = 0; i < 5; i++) { await f.client.focus(parent); ids.push(await seed(f.client, `item${i}`)); }
+    for (let i = 0; i < 5; i++) { await f.client.focus(parent); ids.push(await seed(f.client, `item${i}`, types[i])); }
     const model = new Map<string, ItemMetadata>();
     for (const id of [parent, ...ids]) model.set(id, await authoritative(f.pmRoot, id));
     const inputs: Array<{ id: string; options: UpdateCommandOptions }> = [];
@@ -83,7 +85,7 @@ test("seeded model: 500 operation sequences read SDK state, replay older inputs,
         const id = ids[random(ids.length)];
         const target = ids[(ids.indexOf(id) + 1 + random(ids.length - 1)) % ids.length];
         const withScope = random(2) === 0;
-        const update: UpdateCommandOptions = { title: `  value ${random(80)}${random(2) ? "\r\n" : "\n"}continued  `, type: "Task", status: statuses[random(statuses.length)],
+        const update: UpdateCommandOptions = { title: `  value ${random(80)}${random(2) ? "\r\n" : "\n"}continued  `, type: types[random(types.length)], status: statuses[random(statuses.length)],
           priority: random(5), tags: `tag${random(4)}, Tag ${random(4)}`, deadline: `2027-01-${String(1 + random(28)).padStart(2, "0")}`,
           ...(withScope ? { parent, blockedBy: target, blockedReason: `reason ${random(8)}\r\nnext`, assignee: `agent${random(4)}`, sprint: `s${random(3)}`, release: `r${random(3)}` }
             : { unset: ["parent", "blocked_by", "blocked_reason", "assignee", "sprint", "release"] }),

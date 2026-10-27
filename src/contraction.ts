@@ -14,7 +14,7 @@ export type ContractionInput = {
 };
 /** Adapt the existing SDK-backed package projection without copying tracker metadata into output. */
 export function contractionInputFromGraph(graph: Graph, boundary: string[], edgeTypes: string[]): ContractionInput {
-  return { nodes: graph.nodes.map((node) => ({ id: node.id, unknown: node.labels.includes("ExternalPmItem") })),
+  return { nodes: graph.nodes.map((node) => ({ id: node.id, unknown: !node.labels.includes("PmItem") && node.labels.includes("ExternalPmItem") })),
     edges: graph.relationships.map(({ from, to, type }) => ({ from, to, type })), boundary, edgeTypes };
 }
 /** Original identities and evidence remain distinct from the summary-id namespace. */

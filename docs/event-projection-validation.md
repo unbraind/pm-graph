@@ -67,3 +67,24 @@ Both defects have behavioral revert proof: classifying decoded null as missing
 fails the foreign-data refusal regression, and restoring the prior-anchor fallback
 fails empty-stream recovery with `SOURCE_INCOMPLETE`. Existing tests remain intact.
 The package test and coverage runners explicitly use at most two workers.
+
+## Authoritative items and custom type labels
+
+Contribution ownership, identified by the SDK item ID, determines which node is
+authoritative. Custom type names can equal graph labels such as `ExternalPmItem`,
+`PmItem` or `PmFacet`; those names never grant placeholder precedence. The
+contraction adapter recognizes the producer's `PmItem` role before classifying a
+reference as unknown. Export, legacy sync and status reads supply the configured
+item registry and schema to the SDK so custom folders are included.
+
+The provenance regression covers references before and after their owners, all
+structural relationship forms, missing targets, deletion and SDK restore, sparse
+sink deltas, admission and explicit rebuild. Real CLI JSON/TOON paths exercise
+refresh, receipt reads, export, contraction and status without a git executable.
+Both Neo4j adapters retain the real item's native properties. The 500-sequence
+SDK read-back model varies custom types as well as statuses; all six packed hosts
+repeat the `ExternalPmItem` reference collision and both contraction formats.
+The existing v1 checkpoint format remains unchanged.
+Reverting materialization precedence, contraction classification or the configured
+SDK read independently fails the corresponding regression; all three revert runs
+returned exit 1 before restoring the fixes.

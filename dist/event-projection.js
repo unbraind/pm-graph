@@ -175,11 +175,13 @@ function contribution(value) {
 /** Materialize cached contributions; canonical owner order makes facet collision precedence deterministic. */
 function materialize(contributions) {
     const nodes = new Map();
+    const itemIds = new Set(contributions.map((c) => c.id));
     const relationships = [];
     for (const c of contributions)
         for (const n of c.nodes) {
-            const previous = nodes.get(n.id);
-            if (!previous || previous.labels.includes("ExternalPmItem"))
+            // Only the owning contribution can supply an authoritative item. Labels also
+            // contain user-configured type names and cannot establish placeholder provenance.
+            if (n.id === c.id || (!itemIds.has(n.id) && !nodes.has(n.id)))
                 nodes.set(n.id, n);
         }
     for (const c of contributions)

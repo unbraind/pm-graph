@@ -12,7 +12,7 @@ import { existsSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createPmCliExpectedError, isPmCliExpectedError, EXIT_CODE, listAllItemMetadata, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
+import { createPmCliExpectedError, isPmCliExpectedError, EXIT_CODE, listAllItemMetadata, readSettings, resolveItemTypeRegistry, resolveImplicitPmRoot, } from "@unbrained/pm-cli/sdk";
 import { runGraph } from "@unbrained/pm-cli/sdk/graph";
 import { registerBlockerCuts } from "./blocker-cuts-command.js";
 export { minimalBlockerCuts } from "./blocker-cuts.js";
@@ -658,14 +658,17 @@ export function graphFromItems(items, workspace, depsByItem, options = {}) {
  * `listAllItemMetadata` payload already carries `dependencies[]`,
  * `blocked_by`, `tags`, and facet fields, so a single call is enough to build
  * the full graph — no per-item `pm deps` round-trips and no unused `--include-body`
- * body payload are needed.
+ * body payload are needed. The configured SDK type registry and schema are
+ * supplied explicitly so custom item folders receive the same projection.
  */
 async function fetchItemsViaSdk(pmRoot) {
     // Validate here as well as in resolvePmRootForContext: the exporter pipeline
     // reaches loadGraphFromPath(pmRoot) directly, with no CommandContext involved.
     assertPmTracker(pmRoot);
     try {
-        return await listAllItemMetadata(pmRoot);
+        const settings = await readSettings(pmRoot);
+        const registry = resolveItemTypeRegistry(settings);
+        return await listAllItemMetadata(pmRoot, settings.item_format, registry.type_to_folder, undefined, settings.schema);
     }
     catch (err) {
         // The shell-out this replaced threw expected errors, so its failures carried an
@@ -2744,7 +2747,7 @@ export function activate(api) {
             let localItemCount = 0;
             try {
                 const pmRoot = resolvePmRootForContext(context);
-                const items = await listAllItemMetadata(pmRoot);
+                const items = await fetchItemsViaSdk(pmRoot);
                 localItemCount = items.length;
             }
             catch {

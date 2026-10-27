@@ -25,6 +25,8 @@ import {
   type PmCliExpectedError,
   type FlagDefinition,
   listAllItemMetadata,
+  readSettings,
+  resolveItemTypeRegistry,
   resolveImplicitPmRoot,
   type Exporter,
   type GlobalOptions,
@@ -852,14 +854,17 @@ export function graphFromItems(
  * `listAllItemMetadata` payload already carries `dependencies[]`,
  * `blocked_by`, `tags`, and facet fields, so a single call is enough to build
  * the full graph — no per-item `pm deps` round-trips and no unused `--include-body`
- * body payload are needed.
+ * body payload are needed. The configured SDK type registry and schema are
+ * supplied explicitly so custom item folders receive the same projection.
  */
 async function fetchItemsViaSdk(pmRoot: string): Promise<ItemMetadata[]> {
   // Validate here as well as in resolvePmRootForContext: the exporter pipeline
   // reaches loadGraphFromPath(pmRoot) directly, with no CommandContext involved.
   assertPmTracker(pmRoot);
   try {
-    return await listAllItemMetadata(pmRoot);
+    const settings = await readSettings(pmRoot);
+    const registry = resolveItemTypeRegistry(settings);
+    return await listAllItemMetadata(pmRoot, settings.item_format, registry.type_to_folder, undefined, settings.schema);
   } catch (err: unknown) {
     // The shell-out this replaced threw expected errors, so its failures carried an
     // exitCode. A plain Error escaping here would bypass that contract: the host
@@ -3226,7 +3231,7 @@ export function activate(api: ExtensionApi): void {
       let localItemCount = 0;
       try {
         const pmRoot = resolvePmRootForContext(context);
-        const items = await listAllItemMetadata(pmRoot);
+        const items = await fetchItemsViaSdk(pmRoot);
         localItemCount = items.length;
       } catch {
         // Non-fatal: workspace may not be initialised

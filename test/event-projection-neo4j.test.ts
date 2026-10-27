@@ -14,8 +14,17 @@ test("Neo4j sparse transaction locks before revision read, replaces properties, 
   const f = fixture();
   const original = applyEnv({ NEO4J_URI: "bolt://fixture.invalid", NEO4J_USER: "fixture", NEO4J_PASSWORD: "synthetic" });
   try {
-    const a = await seed(f.client, "neo-a"); const b = await seed(f.client, "neo-b");
+    await f.client.schemaAddType("ExternalPmItem");
+    const a = await seed(f.client, "neo-a", "ExternalPmItem"); const b = await seed(f.client, "neo-b");
     await f.client.update(a, { blockedBy: b });
+    await f.client.update(b, { blockedBy: a });
+    resetFakeNeo4j();
+    const handlers = collectHandlers();
+    const legacy = await handlers.get("pm-graph sync")!({ cwd: f.ws, pm_root: f.pmRoot, args: [] }) as { ok: boolean };
+    assert.equal(legacy.ok, true);
+    const legacyWrite = getFakeNeo4jCalls().find((call) => call.query.includes("SET n += $properties") && call.params?.id === a);
+    assert.deepEqual(legacyWrite?.params?.labels, ["PmItem", "ExternalPmItem"]);
+    assert.equal((legacyWrite?.params?.properties as { status: string }).status, "open");
     resetFakeNeo4j();
     let revision: unknown = null;
     setFakeNeo4jWrite((query, params) => {
@@ -23,11 +32,14 @@ test("Neo4j sparse transaction locks before revision read, replaces properties, 
       if (query.includes("SET m.revision")) revision = params?.revision;
       return { records: [] };
     });
-    const run = collectHandlers().get("pm-graph refresh")!;
+    const run = handlers.get("pm-graph refresh")!;
     const invoke = async (): Promise<EventProjectionReceipt> => await run({ cwd: f.ws, pm_root: f.pmRoot, args: ["projection.json", "--neo4j"] }) as EventProjectionReceipt;
     const initial = await invoke(); assert.equal(initial.ok, true, JSON.stringify(initial));
     assert.ok(getFakeNeo4jCalls()[0].query.includes("CREATE CONSTRAINT"));
     assert.ok(getFakeNeo4jCalls()[2].query.includes("SET m.lock = true RETURN m.revision"));
+    const authoritativeWrite = getFakeNeo4jCalls().find((call) => call.query.includes("SET n = $properties") && call.params?.id === a);
+    assert.deepEqual(authoritativeWrite?.params?.labels, ["PmItem", "ExternalPmItem"]);
+    assert.equal((authoritativeWrite?.params?.properties as { status: string }).status, "open");
     assert.equal(wasFakeNeo4jClosed(), true);
     await f.client.update(a, { unset: ["blocked_by", "blocked_reason"] });
     const changed = await invoke(); assert.equal(changed.ok, true, JSON.stringify(changed));
