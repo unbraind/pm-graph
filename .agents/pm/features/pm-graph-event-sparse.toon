@@ -1,0 +1,30 @@
+id: pm-graph-event-sparse
+title: Refresh projections from mutation events with sparse work receipts
+description: "Acceptance: after initial admission, one update among 10000 items avoids a complete successful refresh scan; cursor gaps force a disclosed rebuild or refusal; incremental and full projections are equal. Deliver typed SDK and CLI, compact receipts and remedies, seeded state and concurrency tests, non-git public-corpus validation, and npm plus Bun CI release gates."
+type: Feature
+status: in_progress
+priority: 2
+tags: []
+created_at: "2026-10-27T07:16:00.488Z"
+updated_at: "2026-10-27T07:45:22.166Z"
+author: codex-agent
+comments[4]{created_at,author,text}:
+  "2026-10-27T07:16:04.720Z",codex-agent,"Overlap rechecked against current CLI and sibling sources: SDK mutation-events owns cursors and history reads; graph snapshot impact compares complete graphs; syncNeo4j in src/index.ts still upserts every input node and relationship. pm-web consumes event pages for resume and history delivery, and pm-rust complete-projection receipts certify reads rather than update a persisted graph. This feature owns only derived projection state, sparse work receipts and sink reconciliation. No upstream or sibling changes planned."
+  "2026-10-27T07:24:18.943Z",codex-agent,"Implementation now uses lazy supported SDK package exports, certified complete admission, opaque mutation cursors, SDK point reads, anchor/stream continuity checks, owned checkpoint locking, finite/dense boundary validation, and exact recoverable receipt pages. Explicit rebuild is required after continuity or workspace-schema changes. Cached graph materialization and checkpoint encoding still visit cached rows; receipts separately disclose full source scans and SDK event-page source. Neo4j reconciliation uses a revision CAS inside one write transaction and a separate owned namespace. Seeded model and real-host regressions are being validated."
+  "2026-10-27T07:41:59.200Z",codex-agent,"Evidence: seeded model seed 0x261027 passed 500 random sequences through real SDK reads and mutations. The 10000-item non-git case read one updated item with zero complete refresh item scans, evaluated 3 nodes and 2 edges, emitted 814 JSON bytes and equaled both certified full output and an explicit rebuild. Public main corpus at 4b5e7a1: 108 items, 203 nodes, 372 edges, 1138 admission events; caught-up reads/scans/events all zero, 538 JSON bytes, derived_index, 1108 ms admission plus catch-up. Source copy was read-only, authoritative bytes unchanged. Public data exposed omitted legacy dependency metadata; producer JSON normalization and a regression now cover it. Behavioral revert proof: replacing only refreshEventProjection catch-up admission decision with unconditional rebuild makes the sparse regression fail (fullScans 1 versus required 0); implementation restored. All 12 competing-refresher transition boundaries pass, and interrupted-sink retry checks current target revisions."
+  "2026-10-27T07:45:20.447Z",codex-agent,"The linked targeted pm test command passed 8/8 tests with no failures or skips; result tracking is disabled by project policy, so the exact command and outcome are recorded here. Additional checks pass for legacy optional dependency fields and custom active/blocked/done/canceled registry roles. Neo4j adapter checks now refuse a dependent delta when a marker, touched node or incident edge is foreign, before graph writes, and preserve driver cleanup. Full npm and Bun release-gate evidence will come from the CI Node matrix; thresholds remain unchanged. No SDK gap or upstream bug required a workaround."
+files[7]{path,scope}:
+  scripts/validate-event-projection.ts,project
+  src/event-projection-command.ts,project
+  src/event-projection.ts,project
+  src/index.ts,project
+  test/event-projection-neo4j.test.ts,project
+  test/event-projection-packed.validation.ts,project
+  test/event-projection.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test --test-concurrency=2 --test-name-pattern='admission|foreign|lost anchors|source churn|storage transition|sink crash|legacy optional|Neo4j sparse' test/event-projection.test.ts test/event-projection-neo4j.test.ts,project,codex-agent,"2026-10-27T07:42:04.744Z",local_mutation,feat/event-sparse-projection-receipts
+docs[3]{path,scope}:
+  docs/event-projection-example.md,project
+  docs/event-projection-validation.md,project
+  README.md,project
+body: ""

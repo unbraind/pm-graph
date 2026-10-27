@@ -1,3 +1,5 @@
+export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.ts";
+export type { EventProjectionPhase, EventProjectionOptions, EventProjectionState, EventProjectionReceipt, EventProjectionRefusalCode, ProjectionDelta, ProjectionSink, ProjectionWork } from "./event-projection.ts";
 export { contractGraph, contractionInputFromGraph } from "./contraction.ts";
 export type { ContractionInput, ContractionRow, ContractionResult, ContractionReceipt, ContractionRefusalCode } from "./contraction.ts";
 export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.ts";

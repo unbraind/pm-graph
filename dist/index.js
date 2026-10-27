@@ -1,3 +1,5 @@
+import { registerEventProjection } from "./event-projection-command.js";
+export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.js";
 import { registerContraction } from "./contraction-command.js";
 export { contractGraph, contractionInputFromGraph } from "./contraction.js";
 import { registerCrossWorkspace } from "./cross-workspace-command.js";
@@ -2171,6 +2173,55 @@ export function analyzeGraph(graph, topN = 10) {
         bridgeEdges: connectors.bridges,
     };
 }
+// ---------------------------------------------------------------------------
+// Neo4j sync
+// ---------------------------------------------------------------------------
+/** Atomically reconcile sparse owned nodes/edges with a revision CAS in Neo4j. */
+async function syncProjectionDelta(delta) {
+    const driver = await createDriver();
+    const session = driver.session({ database: process.env.NEO4J_DATABASE });
+    let outcome = "conflict";
+    try {
+        await session.executeWrite((tx) => tx.run("CREATE CONSTRAINT pm_graph_projection_key IF NOT EXISTS FOR (m:PmGraphProjection) REQUIRE m.projectKey IS UNIQUE"));
+        await session.executeWrite((tx) => tx.run("CREATE CONSTRAINT pm_graph_projection_node_key IF NOT EXISTS FOR (n:PmGraphProjectionNode) REQUIRE (n.projectKey, n.id) IS UNIQUE"));
+        await session.executeWrite(async (tx) => {
+            // The write lock is acquired before reading the revision; it spans all writes.
+            const owner = "pm-graph/event-projection";
+            const marker = await tx.run("MERGE (m:PmGraphProjection {projectKey: $projectKey}) ON CREATE SET m.pmGraphOwner = $owner WITH m WHERE m.pmGraphOwner = $owner SET m.lock = true RETURN m.revision AS revision", { projectKey: delta.projectKey, owner });
+            if (!marker.records.length)
+                return { records: [] };
+            const current = marker.records[0].get("revision") ?? null;
+            if (current === delta.revision)
+                outcome = "already_applied";
+            else if (current === delta.expected) {
+                // Refuse the entire dependent delta when a touched entity is foreign.
+                const ids = [...new Set([...delta.nodes.map((n) => n.id), ...delta.removeNodes, ...delta.edges.flatMap((e) => [e.from, e.to]), ...delta.removeEdges.flatMap((e) => [e.from, e.to])])];
+                const foreign = await tx.run("MATCH (n:PmGraphProjectionNode {projectKey: $projectKey}) WHERE ($initial OR n.id IN $ids) AND (n.pmGraphOwner IS NULL OR n.pmGraphOwner <> $owner OR EXISTS { MATCH (n)-[r]-() WHERE r.pmGraphOwner IS NULL OR r.pmGraphOwner <> $owner }) RETURN count(n) AS foreign", { projectKey: delta.projectKey, owner, ids, initial: current === null });
+                if (toNumber(foreign.records[0]?.get("foreign") ?? 0) > 0)
+                    return { records: [] };
+                for (const e of delta.removeEdges)
+                    await tx.run(`MATCH (a:PmGraphProjectionNode {projectKey: $projectKey, id: $from})-[r:\`${e.type}\`]->(b:PmGraphProjectionNode {projectKey: $projectKey, id: $to}) DELETE r`, { projectKey: delta.projectKey, from: e.from, to: e.to });
+                await tx.run("MATCH (n:PmGraphProjectionNode {projectKey: $projectKey}) WHERE n.id IN $ids DETACH DELETE n", { projectKey: delta.projectKey, ids: delta.removeNodes });
+                for (const n of delta.nodes)
+                    await tx.run("MERGE (n:PmGraphProjectionNode {projectKey: $projectKey, id: $id}) SET n = $properties, n.pmGraphOwner = $owner, n.projectKey = $projectKey, n.id = $id, n.labels = $labels", { projectKey: delta.projectKey, id: n.id, labels: n.labels, properties: n.properties, owner });
+                for (const e of delta.edges)
+                    await tx.run(`MATCH (a:PmGraphProjectionNode {projectKey: $projectKey, id: $from}), (b:PmGraphProjectionNode {projectKey: $projectKey, id: $to}) MERGE (a)-[r:\`${e.type}\`]->(b) SET r = $properties, r.pmGraphOwner = $owner`, { projectKey: delta.projectKey, from: e.from, to: e.to, properties: e.properties, owner });
+                await tx.run("MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.revision = $revision REMOVE m.lock", { projectKey: delta.projectKey, revision: delta.revision });
+                outcome = "applied";
+            }
+            return { records: [] };
+        });
+        return outcome;
+    }
+    finally {
+        try {
+            await session.close();
+        }
+        finally {
+            await driver.close();
+        }
+    }
+}
 /**
  * Push a graph into Neo4j, replacing or reconciling with what is there.
  *
@@ -2382,6 +2433,7 @@ async function loadShapedAnalytics(context) {
  */
 export function activate(api) {
     registerCrossWorkspace(api);
+    registerEventProjection(api, resolvePmRootForContext, { key: "neo4j", apply: syncProjectionDelta });
     registerSnapshotImpact(api);
     registerContraction(api, resolvePmRootForContext);
     registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));

@@ -306,7 +306,7 @@ Example output:
 
 ## Without git
 
-All offline graph commands, including `contract` and `blocker-cuts`, and the graph exporter
+All offline graph commands, including `refresh`, `contract` and `blocker-cuts`, and the graph exporter
 work in plain initialized trackers without Git. Neo4j commands need their
 documented database configuration and connectivity; they also do not need a
 Git repository.
@@ -663,7 +663,7 @@ See the [SDK and CLI example](docs/snapshot-impact-example.md) and the
 
 ## Without git
 
-Graph projection, consent-scoped `project`, export, offline analysis, path/impact/explain and snapshot
+Graph projection, event-sparse `refresh`, consent-scoped `project`, export, offline analysis, path/impact/explain and snapshot
 comparison work in plain trackers. Snapshot comparison reads only the two
 explicit JSON files and also works without a tracker. Neo4j operations require
 their configured database connection. None of these graph operations needs a
@@ -782,3 +782,16 @@ with no hidden node IDs, labels or source exception text. Source completeness
 and output omission receipts remain separate. JSON and compact TOON use the
 host's standard output controls. See the [manifest and SDK example](docs/cross-workspace-example.md)
 for scope, authorization, pagination, refusal remedies and limits.
+
+## Event-sparse projection receipts
+
+`pm pm-graph refresh projection.json` admits a certified SDK source once, then
+point-reads changed items from `listMutationEvents` catch-up pages. Compact JSON or
+TOON receipts identify exact evaluated nodes/edges, source reads and disclosed
+rebuilds/refusals. `--receipt --offset N` recovers committed work pages;
+`--rebuild` explicitly re-admits after cursor gaps. Optional `--neo4j` applies
+revision-checked sparse updates in one transaction using an owned namespace.
+
+See the [SDK and CLI example](docs/event-projection-example.md) for guarantees,
+bounds, recovery and cached materialization costs. See the
+[measured validation](docs/event-projection-validation.md) for public-data evidence.
