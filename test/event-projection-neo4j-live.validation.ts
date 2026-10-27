@@ -79,7 +79,8 @@ async function collisionCases(): Promise<void> {
   const identity = await readEventProjection(identityFile); assert.ok(identity);
   const exported = await handlers.get("pm-graph cypher")!({ pm_root: f.pmRoot, cwd: f.ws }) as { statements: OwnedStatement[] };
   const legacyKey = String(exported.statements[0].parameters.projectKey);
-  for (const mode of ["sparse", "sparse-rebuild", "legacy", "full", "cypher"]) {
+  const collisionModes = ["sparse", "sparse-rebuild", "legacy", "full", "cypher"];
+  for (const mode of collisionModes) {
     await query("MATCH (n) DETACH DELETE n");
     await f.client.restore(a, "2"); rmSync(f.stateFile, { force: true });
     await query("CREATE (:FixtureForeign {id:'peer'})");
@@ -111,7 +112,7 @@ async function collisionCases(): Promise<void> {
   const edge = await query("MATCH (:PmGraphProjectionNode {projectKey:$key,id:$from})-[r:BLOCKED_BY]->(:PmGraphProjectionNode {projectKey:$key,id:$to}) RETURN r.pmGraphOwner AS owner,r.source AS source,r.__pmLock AS lock", { key: identity.source, from: a, to: b });
   assert.equal(edge.records[0].get("owner"), "peer"); assert.equal(edge.records[0].get("source"), "foreign original");
   assert.equal(edge.records[0].get("lock"), false);
-  console.log(JSON.stringify({ lateNodeCollisions: 4, foreignRelationshipCollisions: 1, preserved: true }));
+  console.log(JSON.stringify({ lateNodeCollisions: collisionModes.length, foreignRelationshipCollisions: 1, preserved: true }));
 }
 
 /** Compare native SDK state with a fresh full reference written through the exact same sink producer. */
