@@ -145,6 +145,26 @@ jobs:
           npm run release:check
           bun run release:check
 
+      - name: Set up Java for isolated Neo4j concurrency fixtures
+        if: matrix.node-version == 26
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Preserve foreign graph records across real Neo4j session interleavings
+        if: matrix.node-version == 26
+        shell: bash
+        run: |
+          graph_fixture="$(mktemp -d)"
+          trap 'rm -rf "$graph_fixture"' EXIT
+          mkdir "$graph_fixture/server"
+          curl --fail --silent --show-error --location --retry 3 https://dist.neo4j.org/neo4j-community-5.26.27-unix.tar.gz --output "$graph_fixture/archive.tgz"
+          printf '%s  %s\n' 5e752081e2863febf3d2f11fab31e1a3185e1ea7bb5e0bcf7d8e516ddbec5349 "$graph_fixture/archive.tgz" | sha256sum --check --status
+          tar -xzf "$graph_fixture/archive.tgz" --strip-components=1 -C "$graph_fixture/server"
+          printf '%s\n' '{"owner":"pm-graph/isolated-neo4j-fixture","version":1}' > "$graph_fixture/server/pm-graph-fixture.json"
+          node test/event-projection-neo4j-live.validation.ts "$graph_fixture/server"
+
   windows-prepare-lifecycle:
     runs-on: windows-latest
     steps:

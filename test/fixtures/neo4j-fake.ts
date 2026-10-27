@@ -101,7 +101,7 @@ type FakeState = {
 
 const state: FakeState = {
   read: () => ({ records: [] }),
-  write: () => ({ records: [fakeRecord({ deleted: fakeInteger(2), count: 0 })] }),
+  write: () => ({ records: [fakeRecord({ deleted: fakeInteger(2), count: 0, foreign: 0, written: 1 })] }),
   failWith: undefined,
   calls: [],
   lastUri: undefined,
@@ -113,7 +113,7 @@ const state: FakeState = {
 /** Restore default handlers, captured calls, and failure injection. */
 export function resetFakeNeo4j(): void {
   state.read = () => ({ records: [] });
-  state.write = () => ({ records: [fakeRecord({ deleted: fakeInteger(2), count: 0 })] });
+  state.write = () => ({ records: [fakeRecord({ deleted: fakeInteger(2), count: 0, foreign: 0, written: 1 })] });
   state.failWith = undefined;
   state.calls = [];
   state.lastUri = undefined;
@@ -175,7 +175,9 @@ function runWork(
       return mode === "read" ? state.read(query, params) : state.write(query, params);
     },
   };
-  return Promise.resolve(work(tx)).then((result) => result as FakeNeo4jResult);
+  return Promise.resolve(work(tx))
+    .then((result) => mode === "write" && process.env.PM_GRAPH_TEST_REPEAT_WRITE === "1" ? work(tx) : result)
+    .then((result) => result as FakeNeo4jResult);
 }
 
 /**

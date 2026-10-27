@@ -19,7 +19,7 @@
     "changelog:check": "pm-changelog --pm-root .agents/pm --mode replace --output CHANGELOG.md --all-release-tags --release-version-from-package --date-from-version --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --check --pm-arg=--output-budget --pm-arg=unbounded --pm-arg=--output-limit --pm-arg=unbounded",
     "release:check": "npm run brand:check && npm run typecheck && npm run lint && npm run duplication && npm run build && npm run docstring && npm run coverage && npm run audit:prod && npm run pack:dry-run && npm run changelog:check && npm run verify:release-publish-attestation && npm run verify:release-changelog-date",
     "prepack": "npm run build",
-    "test": "npm run build && npm run build:test && node --test test/*.test.ts",
+    "test": "npm run build && npm run build:test && node --test --test-concurrency=2 test/*.test.ts",
     "prepublishOnly": "npm run release:check",
     "release:notes": "pm-changelog --pm-root .agents/pm --stdout --since-previous-tag --until-release-tag --release-version-from-package --date-from-version --item-url-base https://github.com/unbraind/pm-graph/blob/main/.agents/pm --respect-item-release --pm-bin ./node_modules/.bin/pm --github-step-summary --pm-arg=--output-budget --pm-arg=unbounded --pm-arg=--output-limit --pm-arg=unbounded",
     "merge:install": "pm merge install",
@@ -52,7 +52,9 @@
     "docs/blocker-cuts-example.md",
     "docs/contraction-example.md",
     "docs/cross-workspace-example.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs/event-projection-example.md",
+    "docs/event-projection-validation.md"
   ],
   "repository": {
     "type": "git",
@@ -110,13 +112,16 @@
       "docs/blocker-cuts-example.md",
       "docs/contraction-example.md",
       "CHANGELOG.md",
-      "docs/cross-workspace-example.md"
+      "docs/cross-workspace-example.md",
+      "docs/event-projection-example.md",
+      "docs/event-projection-validation.md"
     ],
     "examples": [
       "README.md",
       "docs/blocker-cuts-example.md",
       "docs/contraction-example.md",
-      "docs/cross-workspace-example.md"
+      "docs/cross-workspace-example.md",
+      "docs/event-projection-example.md"
     ]
   },
   "publishConfig": {
