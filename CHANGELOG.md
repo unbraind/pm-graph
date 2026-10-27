@@ -6,6 +6,10 @@
 
 - Collapse equivalent graph nodes while preserving boundary explanations ([pm-graph-cif6](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-cif6.toon))
 
+### Other
+
+- Stop Hound from linting generated dist/ output ([pm-graph-hound-generated-dist](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-hound-generated-dist.toon))
+
 ## 2026.10.25 - 2026-10-25
 
 ### Added
