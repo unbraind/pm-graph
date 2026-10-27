@@ -2185,6 +2185,7 @@ async function syncProjectionDelta(delta) {
         await session.executeWrite((tx) => tx.run("CREATE CONSTRAINT pm_graph_projection_key IF NOT EXISTS FOR (m:PmGraphProjection) REQUIRE m.projectKey IS UNIQUE"));
         await session.executeWrite((tx) => tx.run("CREATE CONSTRAINT pm_graph_projection_node_key IF NOT EXISTS FOR (n:PmGraphProjectionNode) REQUIRE (n.projectKey, n.id) IS UNIQUE"));
         await session.executeWrite(async (tx) => {
+            outcome = "conflict"; // Driver retries must not retain a previous attempt's outcome.
             // The write lock is acquired before reading the revision; it spans all writes.
             const owner = "pm-graph/event-projection";
             const marker = await tx.run("MERGE (m:PmGraphProjection {projectKey: $projectKey}) ON CREATE SET m.pmGraphOwner = $owner WITH m WHERE m.pmGraphOwner = $owner SET m.lock = true RETURN m.revision AS revision", { projectKey: delta.projectKey, owner });

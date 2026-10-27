@@ -35,6 +35,12 @@ test("Neo4j sparse transaction locks before revision read, replaces properties, 
     assert.ok(getFakeNeo4jCalls().some((call) => call.query.includes("SET n = $properties")));
     assert.ok(getFakeNeo4jCalls().some((call) => call.query.includes("SET r = $properties")));
     const noop = await invoke(); assert.equal(noop.ok, true, JSON.stringify(noop));
+    await f.client.update(a, { title: "driver retry" });
+    let markerReads = 0;
+    process.env.PM_GRAPH_TEST_REPEAT_WRITE = "1";
+    setFakeNeo4jWrite((query) => query.includes("RETURN m.revision") ? { records: [fakeRecord({ revision: ++markerReads === 1 ? revision : "competing-retry" })] } : { records: [] });
+    assert.equal((await invoke()).refusal?.code, "SINK_CONFLICT");
+    delete process.env.PM_GRAPH_TEST_REPEAT_WRITE;
     await f.client.update(a, { title: "foreign collision" });
     setFakeNeo4jWrite((query) => query.includes("RETURN m.revision") ? { records: [fakeRecord({ revision })] } : { records: [fakeRecord({ foreign: 1 })] });
     assert.equal((await invoke()).refusal?.code, "SINK_CONFLICT");

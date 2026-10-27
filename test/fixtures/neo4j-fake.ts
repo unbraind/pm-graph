@@ -175,7 +175,9 @@ function runWork(
       return mode === "read" ? state.read(query, params) : state.write(query, params);
     },
   };
-  return Promise.resolve(work(tx)).then((result) => result as FakeNeo4jResult);
+  return Promise.resolve(work(tx))
+    .then((result) => mode === "write" && process.env.PM_GRAPH_TEST_REPEAT_WRITE === "1" ? work(tx) : result)
+    .then((result) => result as FakeNeo4jResult);
 }
 
 /**
