@@ -5,6 +5,7 @@ into a non-git scratch directory. Authoritative source files and directories wer
 made read-only after warming the SDK event index; writable projection storage was
 separate. No source mutations were attempted by the feature. The refreshed measurement includes
 all schema files in the source fingerprint.
+The latest measurement uses the merged SDK 2026.10.24 pin.
 
 | Measurement | Result |
 | --- | ---: |
@@ -17,7 +18,7 @@ all schema files in the source fingerprint.
 | SDK event source | derived_index |
 | Graph equals fresh certified full projection | yes |
 | Authoritative filenames and bytes unchanged | yes |
-| Admission, catch-up and source verification on a shared host | 17775 ms |
+| Admission, catch-up and source verification on a shared host | 2215 ms |
 
 The synthetic scale regression uses 10000 SDK-readable native documents in a real
 non-git tracker and performs the single update through the SDK. It measured 1 item
