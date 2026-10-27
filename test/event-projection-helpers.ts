@@ -43,4 +43,3 @@ export async function assertFull(options: EventProjectionOptions): Promise<Event
   assert.deepEqual(comparable(state.graph), comparable(graphFromItems(full.items.sort((a, b) => a.id.localeCompare(b.id)), "projection", new Map())));
   return state;
 }
-
