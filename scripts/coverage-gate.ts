@@ -181,7 +181,7 @@ export function runCoverageGate(root: string): void {
   // This is a new runner, including when a regression test invokes the gate.
   delete env.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, [
-    "--test", "--experimental-test-coverage",
+    "--test", "--test-concurrency=2", "--experimental-test-coverage",
     ...required.map((file) => `--test-coverage-include=${file}`),
     `--test-coverage-lines=${config.thresholds.lines}`,
     `--test-coverage-branches=${config.thresholds.branches}`,

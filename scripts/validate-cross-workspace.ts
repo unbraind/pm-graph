@@ -1,19 +1,11 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { listAllComplete } from "@unbrained/pm-cli/sdk";
 import { projectWorkspaces } from "../src/cross-workspace.ts";
 import { isMainInvocation } from "./main-invocation.ts";
 
-/** Hash every regular source file and its relative name, including hidden tracker metadata. */
-function fingerprint(root: string): string {
-  const digest = createHash("sha256");
-  const entries = readdirSync(root, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
-  const files = entries.map((entry) => relative(root, join(entry.parentPath, entry.name))).sort();
-  for (const file of files) digest.update(file).update(readFileSync(join(root, file)));
-  return digest.digest("hex");
-}
+import { fingerprint } from "./tracker-fingerprint.ts";
+export { fingerprint } from "./tracker-fingerprint.ts";
 
 /** Measure an explicit public tracker copy; verify complete source identity, privacy and no source mutation. */
 export async function validateCrossWorkspace(pmRoot: string): Promise<Record<string, number | boolean | string>> {

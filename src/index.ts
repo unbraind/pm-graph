@@ -1,3 +1,10 @@
+import { ownedCheck, ownedCleanup, ownedNode, ownedEdge, ownedEdgeRemoval, ownedResetEdges } from "./neo4j-ownership.ts";
+import type { OwnedScope, OwnedStatement } from "./neo4j-ownership.ts";
+import { registerEventProjection } from "./event-projection-command.ts";
+import { eventProjectionRefusal, parseProjectionSourceHead } from "./event-projection.ts";
+export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.ts";
+export type { EventProjectionPhase, EventProjectionOptions, EventProjectionState, EventProjectionReceipt, EventProjectionRefusalCode, ProjectionDelta, ProjectionSink, ProjectionSinkPosition, ProjectionSourceHead, ProjectionWork } from "./event-projection.ts";
+import type { ProjectionDelta, ProjectionSinkPosition, ProjectionSink } from "./event-projection.ts";
 import { registerContraction } from "./contraction-command.ts";
 export { contractGraph, contractionInputFromGraph } from "./contraction.ts";
 export type { ContractionInput, ContractionRow, ContractionResult, ContractionReceipt, ContractionRefusalCode } from "./contraction.ts";
@@ -21,6 +28,8 @@ import {
   type PmCliExpectedError,
   type FlagDefinition,
   listAllItemMetadata,
+  readSettings,
+  resolveItemTypeRegistry,
   resolveImplicitPmRoot,
   type Exporter,
   type GlobalOptions,
@@ -34,7 +43,7 @@ export { minimalBlockerCuts } from "./blocker-cuts.ts";
 export type { BlockerCut, BlockerCutOptions, BlockerCutReceipt, BlockerCutRefusalCode, BlockerCutResult } from "./blocker-cuts.ts";
 export type { BlockerCutCommandRefusal } from "./blocker-cuts-command.ts";
 
-const EXTENSION_VERSION = "2026.10.26";
+const EXTENSION_VERSION = "2026.10.28";
 
 // ---------------------------------------------------------------------------
 // Error contract
@@ -848,14 +857,17 @@ export function graphFromItems(
  * `listAllItemMetadata` payload already carries `dependencies[]`,
  * `blocked_by`, `tags`, and facet fields, so a single call is enough to build
  * the full graph — no per-item `pm deps` round-trips and no unused `--include-body`
- * body payload are needed.
+ * body payload are needed. The configured SDK type registry and schema are
+ * supplied explicitly so custom item folders receive the same projection.
  */
 async function fetchItemsViaSdk(pmRoot: string): Promise<ItemMetadata[]> {
   // Validate here as well as in resolvePmRootForContext: the exporter pipeline
   // reaches loadGraphFromPath(pmRoot) directly, with no CommandContext involved.
   assertPmTracker(pmRoot);
   try {
-    return await listAllItemMetadata(pmRoot);
+    const settings = await readSettings(pmRoot);
+    const registry = resolveItemTypeRegistry(settings);
+    return await listAllItemMetadata(pmRoot, settings.item_format, registry.type_to_folder, undefined, settings.schema);
   } catch (err: unknown) {
     // The shell-out this replaced threw expected errors, so its failures carried an
     // exitCode. A plain Error escaping here would bypass that contract: the host
@@ -1061,53 +1073,16 @@ async function shapedAnalyticsGraph(context: CommandContext, flags: AnalyticsFla
 // Cypher generation (for export)
 // ---------------------------------------------------------------------------
 
-/**
- * Produce the ordered Cypher statement batch that upserts a graph.
- *
- * The first statement `DETACH DELETE`s every `PmGraphNode` tagged with the
- * graph's project key, so a sync is a clean replace rather than a stale merge;
- * then one `MERGE` per node and one `MERGE` per relationship, each carrying its
- * parameters and all stamped with the project key so multiple workspaces can
- * share one database without colliding.
- *
- * @returns Statement/parameter pairs in execution order.
- */
-function cypherStatements(
-  graph: Graph,
-): Array<{ statement: string; parameters: Record<string, unknown> }> {
-  const statements: Array<{ statement: string; parameters: Record<string, unknown> }> = [
-    {
-      statement: "MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n",
-      parameters: { projectKey: graph.projectKey },
-    },
-  ];
+const LEGACY_CONSTRAINTS = [
+  "CREATE CONSTRAINT pm_graph_sync_key IF NOT EXISTS FOR (m:PmGraphSync) REQUIRE m.projectKey IS UNIQUE",
+  "CREATE CONSTRAINT pm_graph_node_key IF NOT EXISTS FOR (n:PmGraphNode) REQUIRE (n.projectKey, n.id) IS UNIQUE",
+];
 
-  statements.push(
-    ...graph.nodes.map((node) => ({
-      statement:
-        "MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id",
-      parameters: {
-        projectKey: graph.projectKey,
-        id: node.id,
-        labels: node.labels,
-        properties: { ...node.properties, projectKey: graph.projectKey },
-      },
-    })),
-  );
-
-  for (const relationship of graph.relationships) {
-    statements.push({
-      statement: `MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
-      parameters: {
-        projectKey: graph.projectKey,
-        from: relationship.from,
-        to: relationship.to,
-        properties: relationship.properties,
-      },
-    });
-  }
-
-  return statements;
+/** Produce the same guarded, ownership-preserving statement plan used by legacy sync. */
+function cypherStatements(graph: Graph, full = true): OwnedStatement[] {
+  const scope: OwnedScope = { label: "PmGraphNode", projectKey: graph.projectKey, owner: "pm-graph/legacy-sync" };
+  return [ownedCleanup(scope, null, graph.nodes.map((n) => n.id), full),
+    ...graph.nodes.map((n) => ownedNode(scope, n, false)), ...graph.relationships.map((e) => ownedEdge(scope, e, false))];
 }
 
 // ---------------------------------------------------------------------------
@@ -1553,8 +1528,8 @@ export function renderPlantuml(graph: Graph, theme: BrandTheme = "light"): strin
 function renderExport(format: ExportFormat, graph: Graph): string {
   switch (format) {
     case "cypher":
-      return cypherStatements(graph)
-        .map((s) => `// params: ${JSON.stringify(s.parameters)}\n${s.statement};`)
+      return LEGACY_CONSTRAINTS.map((statement) => `// prerequisite, execute before the data transaction: ${statement};`).join("\n") + "\n" + cypherStatements(graph)
+        .map((s) => `// Execute the complete batch in one transaction; roll back unless ${s.expect.key} = ${s.expect.value}.\n// params: ${JSON.stringify(s.parameters)}\n${s.statement};`)
         .join("\n");
     case "mermaid":
       return renderMermaid(graph);
@@ -2586,113 +2561,117 @@ export function analyzeGraph(graph: Graph, topN: number = 10): AnalyzeReport {
 // Neo4j sync
 // ---------------------------------------------------------------------------
 
-type SyncOptions = {
-  fullSync: boolean;
-};
+const OWNERSHIP_CONFLICT = "PM_GRAPH_SINK_CONFLICT";
 
-/**
- * Push a graph into Neo4j, replacing or reconciling with what is there.
- *
- * A `fullSync` first wipes every `PmGraphNode` for the project key; otherwise
- * the run is incremental — nodes and relationships are upserted and then any
- * node whose id was absent from this graph is `DETACH DELETE`d, so deleted
- * items actually disappear from the store. That pruning is skipped entirely
- * when the incoming graph has no nodes at all: an empty read is far more likely
- * to be a failed or misconfigured scan than a project whose every item was
- * deleted, so the stored nodes are left untouched rather than wiped. Use
- * `fullSync` to empty a project deliberately. A `PmGraphSync` marker records the
- * last-sync timestamp and extension version. Every write error is funnelled
- * through {@link neo4jFriendlyError}, and the session and driver are closed in
- * a `finally` so a thrown error never leaks a connection.
- *
- * @returns Counts of nodes/relationships written and stale nodes deleted.
- */
-async function syncNeo4j(
-  graph: Graph,
-  options: SyncOptions,
-): Promise<{
-  syncedNodes: number;
-  syncedRelationships: number;
-  deletedStaleNodes: number;
+/** Run a producer's exact guard and abort the whole transaction on missing or conflicting results. */
+async function applyOwned(tx: Neo4jTransaction, step: OwnedStatement): Promise<Neo4jResult> {
+  const result = await tx.run(step.statement, step.parameters);
+  if (result.records.length !== 1 || !result.records[0].keys.includes(step.expect.key)
+    || unwrapNeo4jInteger(result.records[0].get(step.expect.key)) !== step.expect.value) throw new Error(OWNERSHIP_CONFLICT);
+  return result;
+}
+
+/** Ownership races and plain-node deletion constraints are recoverable sink conflicts. */
+function ownershipConflict(error: unknown): boolean {
+  return error instanceof Error && (error.message === OWNERSHIP_CONFLICT || "code" in error
+    && ["Neo.ClientError.Schema.ConstraintValidationFailed", "Neo.TransientError.Transaction.DeadlockDetected", "Neo.ClientError.Statement.EntityNotFound", "Neo.ClientError.Statement.TypeError"].includes(String(error.code)));
+}
+
+/** Construct the built-in lazy Neo4j sink for SDK callers and the CLI using identical recovery semantics. */
+export function createNeo4jProjectionSink(): ProjectionSink { return { key: "neo4j", inspect: inspectProjectionSink, apply: syncProjectionDelta }; }
+
+/** Inspect the authoritative owned marker before source planning; final writes re-read it under lock. */
+async function inspectProjectionSink(projectKey: string): Promise<ProjectionSinkPosition | null | "conflict"> {
+  const driver = await createDriver();
+  const session = driver.session({ database: process.env.NEO4J_DATABASE });
+  try {
+    const result = await session.executeRead((tx) => tx.run("MATCH (m:PmGraphProjection {projectKey:$projectKey}) RETURN m.pmGraphOwner AS owner, m.revision AS revision, m.sourceHead AS sourceHead", { projectKey }));
+    if (result.records.length === 0) return null;
+    if (result.records.length !== 1) return "conflict";
+    const row = result.records[0];
+    const revision = row.get("revision");
+    if (!row.keys.includes("owner") || row.get("owner") !== "pm-graph/event-projection" || !row.keys.includes("revision")
+      || revision !== null && (typeof revision !== "string" || revision.length < 1 || revision.length > 128)) return "conflict";
+    const head = parseProjectionSourceHead(row.get("sourceHead"));
+    return { revision: revision as string | null, ...(head ? { sourceHead: head } : {}) };
+  } catch (error) { if (ownershipConflict(error)) return "conflict"; throw error; }
+  finally { try { await session.close(); } finally { await driver.close(); } }
+}
+
+/** Atomically reconcile sparse owned nodes/edges with lock-protected revision and ownership checks. */
+async function syncProjectionDelta(delta: ProjectionDelta): Promise<"applied" | "already_applied" | "conflict"> {
+  const driver = await createDriver();
+  const session = driver.session({ database: process.env.NEO4J_DATABASE });
+  let outcome: "applied" | "already_applied" | "conflict" = "conflict";
+  try {
+    await session.executeWrite((tx) => tx.run("CREATE CONSTRAINT pm_graph_projection_key IF NOT EXISTS FOR (m:PmGraphProjection) REQUIRE m.projectKey IS UNIQUE"));
+    await session.executeWrite((tx) => tx.run("CREATE CONSTRAINT pm_graph_projection_node_key IF NOT EXISTS FOR (n:PmGraphProjectionNode) REQUIRE (n.projectKey, n.id) IS UNIQUE"));
+    await session.executeWrite(async (tx) => {
+      outcome = "conflict";
+      const scope: OwnedScope = { label: "PmGraphProjectionNode", projectKey: delta.projectKey, owner: "pm-graph/event-projection" };
+      // Force a property change before ownership is read; null self-assignment can be optimized away.
+      const marker = await tx.run("MERGE (m:PmGraphProjection {projectKey: $projectKey}) ON CREATE SET m.pmGraphOwner = $owner SET m.__pmLock = NOT coalesce(m.__pmLock, false) REMOVE m.__pmLock WITH m WHERE m.pmGraphOwner = $owner SET m.lock = true RETURN m.revision AS revision", scope);
+      if (marker.records.length !== 1 || !marker.records[0].keys.includes("revision") || marker.records[0].get("revision") === undefined) throw new Error(OWNERSHIP_CONFLICT);
+      const current = marker.records[0].get("revision") ?? null;
+      if (current === delta.revision) outcome = "already_applied";
+      else if (current === delta.expected) {
+        const ids = [...new Set([...delta.nodes.map((n) => n.id), ...delta.removeNodes, ...delta.edges.flatMap((e) => [e.from, e.to]), ...delta.removeEdges.flatMap((e) => [e.from, e.to])])];
+        await applyOwned(tx, ownedCheck(scope, current === null || delta.rebuild ? null : ids));
+        if (delta.rebuild) {
+          await applyOwned(tx, ownedResetEdges(scope));
+          await applyOwned(tx, ownedCleanup(scope, null, delta.nodes.map((n) => n.id), true, true));
+        } else {
+          for (const edge of delta.removeEdges) await applyOwned(tx, ownedEdgeRemoval(scope, edge));
+          await applyOwned(tx, ownedCleanup(scope, delta.removeNodes, [], true));
+        }
+        for (const node of delta.nodes) await applyOwned(tx, ownedNode(scope, node, true));
+        for (const edge of delta.edges) await applyOwned(tx, ownedEdge(scope, edge, true));
+        await applyOwned(tx, { statement: "MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.revision = $revision, m.sourceHead = $sourceHead REMOVE m.lock RETURN count(m) AS written", parameters: { projectKey: delta.projectKey, revision: delta.revision, sourceHead: JSON.stringify(delta.sourceHead) }, expect: { key: "written", value: 1 } });
+        outcome = "applied";
+      } else throw new Error(OWNERSHIP_CONFLICT);
+      if (outcome === "already_applied") await tx.run("MATCH (m:PmGraphProjection {projectKey: $projectKey}) SET m.sourceHead = $sourceHead REMOVE m.lock", { projectKey: delta.projectKey, sourceHead: JSON.stringify(delta.sourceHead) });
+      return { records: [] };
+    });
+    return outcome;
+  } catch (error) {
+    if (ownershipConflict(error)) return "conflict";
+    throw error;
+  } finally { try { await session.close(); } finally { await driver.close(); } }
+}
+
+type SyncOptions = { fullSync: boolean };
+
+/** Apply the exported legacy plan in one transaction; foreign data always refuses the entire plan. */
+async function syncNeo4j(graph: Graph, options: SyncOptions): Promise<{
+  syncedNodes: number; syncedRelationships: number; deletedStaleNodes: number;
 }> {
   const driver = await createDriver();
   const session = driver.session({ database: process.env.NEO4J_DATABASE });
-  const projectKey = graph.projectKey;
-  const currentIds = new Set(graph.nodes.map((n) => n.id));
-
+  let deletedStaleNodes = 0;
   try {
-    if (options.fullSync) {
-      // Full resync: wipe all graph nodes for this project first
-      await session.executeWrite((tx) =>
-        tx.run(
-          "MATCH (n:PmGraphNode {projectKey: $projectKey}) DETACH DELETE n",
-          { projectKey },
-        ),
-      );
-    }
-
-    // Upsert nodes with progress-friendly batching
-    for (let i = 0; i < graph.nodes.length; i++) {
-      const node = graph.nodes[i];
-      await session.executeWrite((tx) =>
-        tx.run(
-          "MERGE (n:PmGraphNode {projectKey: $projectKey, id: $id}) SET n += $properties, n.labels = $labels RETURN n.id",
-          {
-            projectKey,
-            id: node.id,
-            labels: node.labels,
-            properties: { ...node.properties, projectKey },
-          },
-        ),
-      );
-    }
-
-    // Upsert relationships
-    for (const relationship of graph.relationships) {
-      await session.executeWrite((tx) =>
-        tx.run(
-          `MATCH (from:PmGraphNode {projectKey: $projectKey, id: $from}), (to:PmGraphNode {projectKey: $projectKey, id: $to}) MERGE (from)-[r:${relationship.type}]->(to) SET r += $properties RETURN type(r)`,
-          {
-            projectKey,
-            from: relationship.from,
-            to: relationship.to,
-            properties: relationship.properties,
-          },
-        ),
-      );
-    }
-
-    // Incremental mode: delete stale nodes that were not in this sync
-    let deletedStaleNodes = 0;
-    if (!options.fullSync && currentIds.size > 0) {
-      const deleteResult = await session.executeWrite((tx) =>
-        tx.run(
-          "MATCH (n:PmGraphNode {projectKey: $projectKey}) WHERE NOT n.id IN $currentIds DETACH DELETE n RETURN count(n) AS deleted",
-          { projectKey, currentIds: [...currentIds] },
-        ),
-      );
-      deletedStaleNodes = toNumber(deleteResult.records[0]?.get("deleted"));
-    }
-
-    // Store last sync timestamp
-    await session.executeWrite((tx) =>
-      tx.run(
-        "MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version",
-        { projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION },
-      ),
-    );
-
-    return {
-      syncedNodes: graph.nodes.length,
-      syncedRelationships: graph.relationships.length,
-      deletedStaleNodes,
-    };
-  } catch (err: unknown) {
-    throw neo4jFriendlyError(err);
-  } finally {
-    await session.close();
-    await driver.close();
-  }
+    for (const statement of LEGACY_CONSTRAINTS) await session.executeWrite((tx) => tx.run(statement));
+    await session.executeWrite(async (tx) => {
+      deletedStaleNodes = 0;
+      const parameters = { projectKey: graph.projectKey, owner: "pm-graph/legacy-sync" };
+      const marker = await tx.run("MERGE (m:PmGraphSync {projectKey: $projectKey}) ON CREATE SET m.pmGraphOwner = $owner SET m.__pmLock = NOT coalesce(m.__pmLock, false) REMOVE m.__pmLock WITH m WHERE m.pmGraphOwner = $owner RETURN count(m) AS written", parameters);
+      if (marker.records.length !== 1 || toNumber(marker.records[0].get("written")) !== 1) throw new Error(OWNERSHIP_CONFLICT);
+      const plan = cypherStatements(graph, options.fullSync);
+      for (const [index, step] of plan.entries()) {
+        const result = await applyOwned(tx, step);
+        if (index === 0 && !options.fullSync && graph.nodes.length > 0) {
+          const count = result.records[0].keys.includes("deleted") ? unwrapNeo4jInteger(result.records[0].get("deleted")) : null;
+          if (count === null || !Number.isSafeInteger(count) || count < 0) throw new Error(OWNERSHIP_CONFLICT);
+          deletedStaleNodes = count;
+        }
+      }
+      await applyOwned(tx, { statement: "MERGE (m:PmGraphSync {projectKey: $projectKey}) SET m.lastSyncedAt = $timestamp, m.syncVersion = $version RETURN count(m) AS written", parameters: { projectKey: graph.projectKey, timestamp: new Date().toISOString(), version: EXTENSION_VERSION }, expect: { key: "written", value: 1 } });
+      return { records: [] };
+    });
+    return { syncedNodes: graph.nodes.length, syncedRelationships: graph.relationships.length, deletedStaleNodes };
+  } catch (error) {
+    if (ownershipConflict(error)) throw new Error(OWNERSHIP_CONFLICT);
+    throw neo4jFriendlyError(error);
+  } finally { try { await session.close(); } finally { await driver.close(); } }
 }
 
 // ---------------------------------------------------------------------------
@@ -2849,6 +2828,7 @@ async function loadShapedAnalytics(context: CommandContext): Promise<{
  */
 export function activate(api: ExtensionApi): void {
   registerCrossWorkspace(api);
+  registerEventProjection(api, resolvePmRootForContext, createNeo4jProjectionSink());
   registerSnapshotImpact(api);
   registerContraction(api, resolvePmRootForContext);
   registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
@@ -3071,7 +3051,7 @@ export function activate(api: ExtensionApi): void {
   // --- pm-graph cypher -----------------------------------------------------
   api.registerCommand({
     name: "pm-graph cypher",
-    read_output: { row_keys: ["statements"] },
+    read_output: { row_keys: ["prerequisites", "statements"] },
     description: "Render Cypher statements for importing the current workspace graph into Neo4j.",
     run: async (context) => {
       if (hasHelpFlag(context)) {
@@ -3082,7 +3062,7 @@ export function activate(api: ExtensionApi): void {
             "--json": "Output as JSON",
           },
           output: {
-            statements: "Array of { statement, parameters } objects ready to execute against Neo4j",
+            statements: "Array of { statement, parameters, expect } objects; execute in one transaction and roll back unless every expected result matches",
           },
         };
       }
@@ -3094,6 +3074,7 @@ export function activate(api: ExtensionApi): void {
             nodes: graph.nodes.length,
             relationships: graph.relationships.length,
           },
+          prerequisites: LEGACY_CONSTRAINTS.map((statement) => ({ statement, parameters: {} })),
           statements: cypherStatements(graph),
         };
       } catch (err: unknown) {
@@ -3106,7 +3087,7 @@ export function activate(api: ExtensionApi): void {
   api.registerCommand({
     name: "pm-graph sync",
     description:
-      "Sync the current workspace graph into Neo4j. Add --full for a complete wipe-and-resync.",
+      "Sync the current workspace graph into Neo4j. Add --full to replace all owned project nodes atomically.",
     run: async (context) => {
       const args = context.args ?? [];
 
@@ -3115,7 +3096,7 @@ export function activate(api: ExtensionApi): void {
           usage: "pm pm-graph sync [--full] [--json]",
           description: "Sync the current workspace graph into Neo4j. Requires NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD.",
           flags: {
-            "--full": "Full wipe-and-resync: deletes all existing PmGraphNode entries for this project before re-importing",
+            "--full": "Replace owned project nodes in one transaction; foreign nodes or relationships refuse the whole sync",
             "--json": "Output as JSON",
           },
           output: {
@@ -3138,7 +3119,9 @@ export function activate(api: ExtensionApi): void {
         throw wrapCommandError(err, "Failed to load workspace graph");
       }
 
-      const result = await syncNeo4j(graph, { fullSync });
+      let result: Awaited<ReturnType<typeof syncNeo4j>>;
+      try { result = await syncNeo4j(graph, { fullSync }); }
+      catch (error) { if (ownershipConflict(error)) return eventProjectionRefusal("SINK_CONFLICT"); throw error; }
 
       return {
         ok: true,
@@ -3187,7 +3170,7 @@ export function activate(api: ExtensionApi): void {
       let localItemCount = 0;
       try {
         const pmRoot = resolvePmRootForContext(context);
-        const items = await listAllItemMetadata(pmRoot);
+        const items = await fetchItemsViaSdk(pmRoot);
         localItemCount = items.length;
       } catch {
         // Non-fatal: workspace may not be initialised

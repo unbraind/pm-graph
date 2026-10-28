@@ -160,6 +160,11 @@ pm pm-graph export --format dot --filter type=Task --filter status=open,in_progr
 
 Render parameterized Cypher statements for importing the current workspace graph into Neo4j. Returns the statements without executing them. **Does not require Neo4j.**
 
+Run the returned `prerequisites` before opening the data transaction. Execute all
+`statements` in one transaction and compare each result with its `expect` guard;
+roll back the entire batch on a mismatch. This is the same guarded plan used by
+`sync`, including ownership checks and explicit deletion of owned relationships.
+
 ```bash
 pm pm-graph cypher --json
 ```
@@ -199,7 +204,13 @@ graph TD
 Sync the current workspace graph into Neo4j using the `NEO4J_*` environment variables.
 
 - **Default (incremental):** Upserts all nodes and relationships, then deletes stale nodes that are no longer present in the workspace.
-- **`--full`:** Performs a complete wipe-and-resync — deletes all `PmGraphNode` entries for the project before re-importing.
+- **`--full`:** Replaces the project's owned `PmGraphNode` entries in one transaction. Foreign nodes or relationships refuse the complete sync with `SINK_CONFLICT`.
+
+Sync takes write locks before checking ownership, deletes only owned
+relationships, and uses plain node deletion so a concurrent foreign edge causes
+rollback. Existing unmarked Neo4j records remain readable; writing over them
+requires explicit ownership reconciliation or an empty destination. No record is
+automatically adopted from its label alone.
 
 After every sync, a `lastSyncedAt` timestamp is stored in a `PmGraphSync` metadata node in Neo4j.
 
@@ -306,7 +317,7 @@ Example output:
 
 ## Without git
 
-All offline graph commands, including `contract` and `blocker-cuts`, and the graph exporter
+All offline graph commands, including `refresh`, `contract` and `blocker-cuts`, and the graph exporter
 work in plain initialized trackers without Git. Neo4j commands need their
 documented database configuration and connectivity; they also do not need a
 Git repository.
@@ -663,7 +674,7 @@ See the [SDK and CLI example](docs/snapshot-impact-example.md) and the
 
 ## Without git
 
-Graph projection, consent-scoped `project`, export, offline analysis, path/impact/explain and snapshot
+Graph projection, event-sparse `refresh`, consent-scoped `project`, export, offline analysis, path/impact/explain and snapshot
 comparison work in plain trackers. Snapshot comparison reads only the two
 explicit JSON files and also works without a tracker. Neo4j operations require
 their configured database connection. None of these graph operations needs a
@@ -748,6 +759,10 @@ per-path continuation cursors: repeat the same semantic inputs with
 `--output-cursor`, keeping the tracker unchanged, until no cursor remains.
 `--output-limit` is an amount ceiling; cursor recovery applies to budget
 compaction. Command-local selection limits and document budgets still apply.
+When `read_output.strings_compacted` is true, retained rows contain shortened
+fields. Recover the same row window with its starting cursor, the retained row
+count as `--output-limit`, and `--output-budget unbounded` before consuming exact
+field values or executable Cypher. Alternatively use the ordinary raw export.
 
 ### Adoption recipe
 
@@ -782,3 +797,20 @@ with no hidden node IDs, labels or source exception text. Source completeness
 and output omission receipts remain separate. JSON and compact TOON use the
 host's standard output controls. See the [manifest and SDK example](docs/cross-workspace-example.md)
 for scope, authorization, pagination, refusal remedies and limits.
+
+## Event-sparse projection receipts
+
+`pm pm-graph refresh projection.json` admits a certified SDK source once, then
+point-reads changed items from `listMutationEvents` catch-up pages. Compact JSON or
+TOON receipts identify exact evaluated nodes/edges, source reads and disclosed
+rebuilds/refusals. `--receipt --offset N` recovers committed work pages;
+`--rebuild` explicitly re-admits after cursor gaps. Optional `--neo4j` applies
+revision-checked sparse updates in one transaction using an owned namespace.
+A durable recovery record is saved before sink writes; the marker commits native
+source-history coordinates with its revision. Recovery adopts a verified committed
+result before processing newer events. `--rebuild --neo4j` reconciles the current
+owned target even when its local checkpoint is stale.
+
+See the [SDK and CLI example](docs/event-projection-example.md) for guarantees,
+bounds, recovery and cached materialization costs. See the
+[measured validation](docs/event-projection-validation.md) for public-data evidence.

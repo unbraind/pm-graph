@@ -1,26 +1,13 @@
 /** Read-only public-corpus validation; invoke with a non-git copy of the tracker root. */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { listAllComplete } from "@unbrained/pm-cli/sdk";
 import { compareGraphSnapshots, graphFromItems } from "../src/index.ts";
 import type { Graph } from "../src/index.ts";
-
-/** Fingerprint every copied file to independently verify that validation was observational. */
-function digest(root: string): string {
-  const hash = createHash("sha256");
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(join(root, dir), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const name = join(dir, entry.name);
-      if (entry.isDirectory()) walk(name);
-      else { hash.update(name); hash.update(readFileSync(join(root, name))); }
-    }
-  };
-  walk("");
-  return hash.digest("hex");
-}
+import { fingerprint as digest } from "../scripts/tracker-fingerprint.ts";
 
 const tracker = resolve(process.argv[2]);
 assert.equal(existsSync(join(dirname(dirname(tracker)), ".git")), false, "use a non-git copy");

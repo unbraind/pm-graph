@@ -1,27 +1,13 @@
 /** Replay every goal in a public tracker copy, emitting aggregate receipts only. */
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { listAllComplete, readSettings, resolveRuntimeStatusRegistry } from "@unbrained/pm-cli/sdk";
 import { graphFromItems, minimalBlockerCuts } from "../src/index.ts";
 import type { BlockerCutOptions } from "../src/index.ts";
 import { isMainInvocation } from "./main-invocation.ts";
 
-/** Fingerprint input records and settings without including mutable SDK caches. */
-export function fingerprint(root: string): string {
-  const hash = createHash("sha256");
-  const walk = (relative: string): void => {
-    for (const entry of readdirSync(join(root, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const name = join(relative, entry.name);
-      if (entry.isDirectory() && !["runtime", "locks", "transactions", "search", "extensions"].includes(entry.name)) walk(name);
-      else if (entry.isFile() && /\.(?:toon|jsonl|json)$/.test(name)) hash.update(name).update(readFileSync(join(root, name)));
-    }
-  };
-  walk("");
-  return hash.digest("hex");
-}
+import { fingerprint } from "./tracker-fingerprint.ts";
+export { fingerprint } from "./tracker-fingerprint.ts";
 
 /** Validate source immutability, result budgets and complete source receipts for every item. */
 export async function validateBlockerCuts(root: string): Promise<Record<string, unknown>> {

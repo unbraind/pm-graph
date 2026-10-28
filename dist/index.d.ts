@@ -1,3 +1,6 @@
+export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.ts";
+export type { EventProjectionPhase, EventProjectionOptions, EventProjectionState, EventProjectionReceipt, EventProjectionRefusalCode, ProjectionDelta, ProjectionSink, ProjectionSinkPosition, ProjectionSourceHead, ProjectionWork } from "./event-projection.ts";
+import type { ProjectionSink } from "./event-projection.ts";
 export { contractGraph, contractionInputFromGraph } from "./contraction.ts";
 export type { ContractionInput, ContractionRow, ContractionResult, ContractionReceipt, ContractionRefusalCode } from "./contraction.ts";
 export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.ts";
@@ -403,6 +406,8 @@ export declare function explainItem(graph: Graph, id: string): ExplainReport | n
  * All analytics operate on structural edges between item nodes only.
  */
 export declare function analyzeGraph(graph: Graph, topN?: number): AnalyzeReport;
+/** Construct the built-in lazy Neo4j sink for SDK callers and the CLI using identical recovery semantics. */
+export declare function createNeo4jProjectionSink(): ProjectionSink;
 /**
  * Register every pm-graph command, exporter, and service override with the
  * pm CLI host. Called once at extension load time.

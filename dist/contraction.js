@@ -1,7 +1,7 @@
 import { analyzeKnowledgeGraph, RelationshipGraph, RelationshipKindRegistry } from "@unbrained/pm-cli/sdk/graph";
 /** Adapt the existing SDK-backed package projection without copying tracker metadata into output. */
 export function contractionInputFromGraph(graph, boundary, edgeTypes) {
-    return { nodes: graph.nodes.map((node) => ({ id: node.id, unknown: node.labels.includes("ExternalPmItem") })),
+    return { nodes: graph.nodes.map((node) => ({ id: node.id, unknown: !node.labels.includes("PmItem") && node.labels.includes("ExternalPmItem") })),
         edges: graph.relationships.map(({ from, to, type }) => ({ from, to, type })), boundary, edgeTypes };
 }
 /** Produce a path-free structured refusal usable by SDK and CLI callers. */
