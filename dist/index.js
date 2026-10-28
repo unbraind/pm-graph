@@ -3,6 +3,8 @@ import { registerEventProjection } from "./event-projection-command.js";
 import { eventProjectionRefusal, parseProjectionSourceHead } from "./event-projection.js";
 export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.js";
 import { registerContraction } from "./contraction-command.js";
+import { registerEvidencePath } from "./evidence-path-command.js";
+export { explainEvidencePath, evidencePathInputFromGraph } from "./evidence-path.js";
 export { contractGraph, contractionInputFromGraph } from "./contraction.js";
 import { registerCrossWorkspace } from "./cross-workspace-command.js";
 export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.js";
@@ -2447,6 +2449,7 @@ export function activate(api) {
     registerEventProjection(api, resolvePmRootForContext, createNeo4jProjectionSink());
     registerSnapshotImpact(api);
     registerContraction(api, resolvePmRootForContext);
+    registerEvidencePath(api, resolvePmRootForContext);
     registerBlockerCuts(api, resolvePmRootForContext, (items, root) => graphFromItems(items, workspaceFromPmRoot(root), new Map()));
     // The `pm-graph export --format <fmt>` handler renders the graph into a
     // raw offline format (cypher | mermaid | dot | json | graphml | plantuml)

@@ -54,7 +54,8 @@
     "docs/cross-workspace-example.md",
     "CHANGELOG.md",
     "docs/event-projection-example.md",
-    "docs/event-projection-validation.md"
+    "docs/event-projection-validation.md",
+    "docs/evidence-path-example.md"
   ],
   "repository": {
     "type": "git",
@@ -114,14 +115,16 @@
       "CHANGELOG.md",
       "docs/cross-workspace-example.md",
       "docs/event-projection-example.md",
-      "docs/event-projection-validation.md"
+      "docs/event-projection-validation.md",
+      "docs/evidence-path-example.md"
     ],
     "examples": [
       "README.md",
       "docs/blocker-cuts-example.md",
       "docs/contraction-example.md",
       "docs/cross-workspace-example.md",
-      "docs/event-projection-example.md"
+      "docs/event-projection-example.md",
+      "docs/evidence-path-example.md"
     ]
   },
   "publishConfig": {

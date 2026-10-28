@@ -317,12 +317,64 @@ Example output:
 
 ## Without git
 
-All offline graph commands, including `refresh`, `contract` and `blocker-cuts`, and the graph exporter
+All offline graph commands, including `evidence-path`, `refresh`, `contract` and `blocker-cuts`, and the graph exporter
 work in plain initialized trackers without Git. Neo4j commands need their
 documented database configuration and connectivity; they also do not need a
 Git repository.
 
 ## Offline Analytics
+
+### `pm pm-graph evidence-path <from> <to>`
+
+Return a directed relationship witness minimizing **caller-declared item-read
+cost**, alongside the ordinary SDK shortest-hop path. This is a read-only
+explanation over the current projection; it reads no evidence files and performs
+no context packing. Both endpoints count toward cost. Use one common unit (for
+example estimated tokens) for every cost in a query.
+
+```bash
+pm pm-graph evidence-path goal-id prerequisite-id \
+  --edges BLOCKED_BY,CHILD_OF --costs costs.json --json
+```
+
+`costs.json` is a dense array: `[{"id":"goal-id","cost":12},
+{"id":"prerequisite-id","cost":null}]`. Every supplied id must exist in the
+projection. Costs are integer units from 0 through 1,000,000,000. Missing rows
+and `null` remain unknown: a witness has `cost: null`, `knownCost`, and exact
+`unknown` item ids. A longer fully costed witness can beat a short expensive one.
+If no fully costed witness is found, the shortest-hop witness remains available.
+
+Read `optimality` before using the result:
+
+| Value | Meaning |
+| --- | --- |
+| `proved` | The known-cost witness meets a global lower bound with every unknown read assigned zero; no cheaper valid path can exist under nonnegative costs. |
+| `unknown-costs` | Search finished, but missing estimates could change the answer. |
+| `search-limited` | The work/settlement bounds stopped a cost search before a proof; the returned incumbent remains a valid witness. |
+| `no-path` | The SDK shortest-path query proved disconnection in the selected directed topology. |
+
+Each of two cost searches has `--max-settled` (default/hard cap 10000) and
+`--max-work` (default 100000, hard cap 1000000) budgets. Work counts queue pops
+and distinct neighbor visits. An early stop may still prove optimality if its
+conservative lower bound meets the incumbent. Source projection and the SDK
+shortest-hop comparison are separately bounded by 10000 nodes and 50000 edges;
+these budgets do not estimate tracker I/O or CPU instructions. No status filter
+or status-name heuristic applies. Stored arrows are traversed exactly as selected
+by `--edges`; this does not assert causal support or evidence freshness.
+
+Output has two compact rows with original item ids, connecting edge types, hops
+and cost receipts; no titles or bodies. JSON and default TOON use host output
+controls with explicit omission receipts. `--max-path-nodes` defaults to 128
+(hard cap 1000) per witness; longer witnesses refuse atomically with
+`OUTPUT_LIMIT`, never a clipped path. Invalid/oversized inputs, missing endpoints,
+unavailable topology and unreadable files return typed refusals with remedies and
+exit 2. Cost files must be stable regular JSON files of at most 4 MiB.
+
+SDK: `explainEvidencePath(input: EvidencePathInput): EvidencePathResult` and
+`evidencePathInputFromGraph(graph, options)` adapt existing package projections.
+The same strict schema validates SDK and CLI inputs. Exact identities, legacy
+spellings, whitespace and Unicode are preserved. See the
+[SDK and CLI example](docs/evidence-path-example.md).
 
 ### `pm pm-graph contract <boundary...>`
 
