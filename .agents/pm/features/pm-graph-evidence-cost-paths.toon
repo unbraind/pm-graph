@@ -1,0 +1,35 @@
+id: pm-graph-evidence-cost-paths
+title: Explain relationship paths with minimum declared evidence cost
+description: "Acceptance: a shortest-hop path with higher declared evidence cost selects a cheaper valid witness; unavailable costs remain unknown; bounded search claims optimality only with proof. Typed SDK and CLI with compact JSON/TOON, strict input/output bounds and remedies; real public tracker copy validation; packed npm/Bun acceptance; exact-head CI release gates."
+type: Feature
+pm_format_version: 2
+status: in_progress
+priority: 2
+tags: []
+created_at: "2026-10-28T22:28:25.578Z"
+updated_at: "2026-10-28T23:05:40.206Z"
+author: codex-agent
+comments[6]{created_at,author,text}:
+  "2026-10-28T22:29:11.214Z",codex-agent,"Overlap rechecked against pinned SDK relationships.d.ts and graph/traversal.d.ts, package path/blocker-cuts/contraction, pm-context next-evidence/evidence-packing and pm-evidence affected. Core supplies shortestPath, neighborEdges and certified listAllComplete; no weighted path signature. Package composes declared integer per-item read costs with stored directed projections. pm-context retains final packing. Read-only feature adds no import, sync, journal, target revision, lease or mutation path; legacy paths remain unchanged. Use optimistic zero bounds for unavailable costs, a known-cost incumbent, and explicit work/settlement/output ceilings. Acceptance and deployment evidence will be linked before release of the claim."
+  "2026-10-28T22:35:39.033Z",codex-agent,"Implementation: explainEvidencePath and evidence-path CLI reuse certified listAllComplete, package graphFromItems, SDK RelationshipGraph adjacency and shortestPath. Strict schema bounds dense inputs, exact integer costs and work/output. Missing costs remain null with item ids; zero-cost optimistic search supplies only a lower bound, and a known incumbent is certified only when it meets that bound. Exhaustive simple-path oracle covers 1000 seeded graphs plus bounded variants and JSON/CRLF replay. No new mutation or persistent store means no new journals, CAS or idempotency keys."
+  "2026-10-28T22:39:07.389Z",codex-agent,"Behavioral revert proof in disposable non-git copy: replacing only known-cost witness selection with prior shortest-hop behavior fails the cheaper-valid-witness assertion (exit 1). Replacing only the optimality guard with unconditional approval for known costs fails the bounded-search assertion (exit 1). Restored pure suite passes 7/7. Public origin/main tracker copy: 111 items, 13 edges, 256 questions; 37 reachable/proved, 37 unknown-cost receipts, 5 limited-search receipts, max search work 5. Median/max JSON 344/656 bytes versus 44456-byte graph; 1268.18 ms including SDK acquisition. No alternate cheaper witnesses exist in this sparse real source; synthetic fixture proves 4-unit three-hop vs 102-unit two-hop behavior. Authoritative records were read-only and their fingerprints unchanged."
+  "2026-10-28T22:58:10.368Z",codex-agent,"Validation: linked test runner passes 11/11 (500 seeded native SDK state sequences, 1000 exhaustive-oracle graphs, real CLI JSON/TOON and no-git). Initial runner default 120-second timeout was resolved by storing a 600-second test budget; no assertion failure in that timeout. Native SDK locateItem/readLocatedItem read-back reuses the existing authoritative test helper. Contraction regressions pass 7/7 after extracting unchanged strict input helpers. Typecheck, build:test, lint, duplication (0%), docstrings and changelog checks pass. Strict tracker health passes with zero warnings after installing the existing CI-pinned project extension; the initial local host-version skew is resolved without tracked configuration changes. Preliminary captured artifact passed all six npm/Bun global, ephemeral and project-local modes. Final numeric guards now verify each emitted count/cost against its own declared domain, and the final captured artifact matrix additionally typechecks shipped declarations."
+  "2026-10-28T23:04:20.830Z",codex-agent,"Final artifact acceptance: 6/6 hosts pass (npm global, Bun global, npx, bunx, npm local, Bun local), each with JSON and TOON, unknown-cost receipts, source completeness, and strict TypeScript consumer checks including a negative type assertion. Exact archive: 62 files, SHA-256 621f5336b1a38860c50b5698f1de970be6ca83cfe6bf9cd3206d9aac6299041a; one captured archive was used for all hosts. Command: node test/event-projection-packed.validation.ts --evidence-path-only. Final public-copy replay with per-field numeric guards repeats all 256 oracle comparisons and unchanged fingerprints; identical counts/bytes, elapsed 1691.41 ms. Final CLI guard regressions pass 2/2, including a real Infinity flag refusal. Full npm and Bun release gates are delegated to CI per the shared-host constraint; the PR will report the exact-head run and counts. No native import/sync path was added or altered."
+  "2026-10-28T23:05:38.885Z",codex-agent,"Current-host overlap confirmation: inspected all 379 public SDK declaration files from the published pm CLI 2026.10.28 artifact as well as the development pin. No weighted-path or evidence-cost API signature is present; SDK graph shortestPath/adjacency and certified source reads remain the reused primitives. Sibling pm-context next-evidence optimizes criterion coverage/packing, and pm-evidence tracks freshness; neither ranks relationship witnesses by declared per-item read cost. The development dependency pin remains unchanged. Functional acceptance is met; final full-gate evidence will be attached to the review-ready PR, with no merge or release."
+files[9]{path,scope}:
+  scripts/validate-evidence-path.ts,project
+  src/contraction.ts,project
+  src/evidence-path-command.ts,project
+  src/evidence-path.ts,project
+  src/index.ts,project
+  src/strict-input.ts,project
+  test/event-projection-packed.validation.ts,project
+  test/evidence-path-command.test.ts,project
+  test/evidence-path.test.ts,project
+tests[1]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref},updated_by,updated_at}:
+  node --test --test-concurrency=2 test/evidence-path.test.ts test/evidence-path-command.test.ts,project,600,codex-agent,"2026-10-28T22:37:45.625Z",local_mutation,feat/evidence-cost-path-explanations,codex-agent,"2026-10-28T22:40:50.064Z"
+docs[3]{path,scope}:
+  docs/evidence-path-example.md,project
+  docs/evidence-path-validation.md,project
+  README.md,project
+body: ""

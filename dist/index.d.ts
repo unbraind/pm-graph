@@ -1,6 +1,8 @@
 export { refreshEventProjection, readEventProjection, readEventProjectionReceipt, validateEventProjection, EVENT_PROJECTION_PHASES } from "./event-projection.ts";
 export type { EventProjectionPhase, EventProjectionOptions, EventProjectionState, EventProjectionReceipt, EventProjectionRefusalCode, ProjectionDelta, ProjectionSink, ProjectionSinkPosition, ProjectionSourceHead, ProjectionWork } from "./event-projection.ts";
 import type { ProjectionSink } from "./event-projection.ts";
+export { explainEvidencePath, evidencePathInputFromGraph } from "./evidence-path.ts";
+export type { EvidencePathInput, EvidencePathWitness, EvidencePathSearch, EvidencePathResult, EvidencePathRefusalCode } from "./evidence-path.ts";
 export { contractGraph, contractionInputFromGraph } from "./contraction.ts";
 export type { ContractionInput, ContractionRow, ContractionResult, ContractionReceipt, ContractionRefusalCode } from "./contraction.ts";
 export { projectWorkspaces, qualifyProjectionId } from "./cross-workspace.ts";

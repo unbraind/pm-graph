@@ -10,8 +10,10 @@ import neo4j from "neo4j-driver";
 import { publicChildEnv } from "./fixtures/public-child-env.ts";
 import { FOREIGN_CHECKPOINTS, clearProjectionHistory } from "./event-projection-recovery-corpus.ts";
 
-const fixtureUri = process.argv[2];
-assert.ok(process.argv.length <= 3 && (fixtureUri === undefined || /^bolt:\/\/127\.0\.0\.1:\d+$/.test(fixtureUri)), "Supply only an explicit isolated loopback fixture URI");
+const evidenceOnly = process.argv.includes("--evidence-path-only");
+const fixtureArgs = process.argv.slice(2).filter((arg) => arg !== "--evidence-path-only");
+const fixtureUri = fixtureArgs[0];
+assert.ok(fixtureArgs.length <= 1 && (fixtureUri === undefined || /^bolt:\/\/127\.0\.0\.1:\d+$/.test(fixtureUri)), "Supply only an explicit isolated loopback fixture URI");
 const root = resolve(import.meta.dirname, "..");
 const scratch = mkdtempSync(join(tmpdir(), "graph-packed-"));
 const sdkVersion = (JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { devDependencies: { "@unbrained/pm-cli": string } }).devDependencies["@unbrained/pm-cli"];
@@ -43,6 +45,35 @@ async function acceptance(name: string, bin: string, prefix: string[], extension
   const id = String(created.id ?? (created.item as { id: string })?.id);
   const referencing = invoke(["create", "Task", "Packed reference", "--id", "b", "--create-mode", "progressive", "--parent", id, "--blocked-by", id, "--dep", `id=${id},kind=related_to`, "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_reason"]);
   const referenceId = String(referencing.id ?? (referencing.item as { id: string })?.id);
+  writeFileSync(join(ws, "costs.json"), JSON.stringify([{ id: referenceId, cost: 3 }, { id, cost: 7 }]));
+  const evidenceArgs = ["pm-graph", "evidence-path", referenceId, id, "--edges", "CHILD_OF,BLOCKED_BY", "--costs", "costs.json"];
+  for (const json of [true, false]) {
+    const explained = output(evidenceArgs, 0, json);
+    if (json) {
+      const receipt = JSON.parse(explained);
+      assert.equal(receipt.optimality, "proved"); assert.equal(receipt.rows[0].cost, 10);
+      assert.equal(receipt.source.source_complete, true);
+    } else assert.match(explained, /declared-item-read-cost-v1/);
+  }
+  writeFileSync(join(ws, "costs.json"), "[]");
+  const unknownCost = invoke(evidenceArgs);
+  assert.equal(unknownCost.optimality, "unknown-costs");
+  assert.equal((unknownCost.rows as { cost: number | null }[])[0].cost, null);
+  const consumer = join(ws, "consumer.mts");
+  writeFileSync(consumer, [
+    `import { explainEvidencePath } from ${JSON.stringify(join(extension, "dist/index.js"))};`,
+    `import type { EvidencePathInput } from ${JSON.stringify(join(extension, "dist/index.js"))};`,
+    'const input: EvidencePathInput = { nodes: [{id:"a"}], edges: [], from:"a", to:"a", edgeTypes:["E"], costs:[{id:"a",cost:0}] };',
+    'const result = explainEvidencePath(input);',
+    'if (result.ok) { const value: number | null = result.rows[0].cost; void value; }',
+    '// @ts-expect-error costs require a number or null',
+    'const invalid: EvidencePathInput["costs"][number] = {id:"a",cost:"1"}; void invalid;',
+  ].join("\n"));
+  run(join(root, "node_modules/.bin/tsc"), ["--noEmit", "--strict", "--skipLibCheck", "--module", "NodeNext", "--target", "ES2022", "--types", "node", "--typeRoots", join(root, "node_modules/@types"), consumer], ws);
+  if (evidenceOnly) {
+    console.log(JSON.stringify({ host: name, evidencePathFormats: 2, unknownCost: true, certified: true, shippedTypes: true }));
+    return;
+  }
   const initial = invoke(["pm-graph", "refresh", "projection.json"]);
   assert.equal(initial.fullScans, 1);
   invoke(["update", id, "--title", "Packed update", "--unset", "parent", "--unset", "assignee", "--unset", "reviewer", "--unset", "sprint", "--unset", "release", "--unset", "blocked_by", "--unset", "blocked_reason", "--clear-deps"]);
@@ -133,7 +164,7 @@ async function acceptance(name: string, bin: string, prefix: string[], extension
     assert.deepEqual(state.versions, {});
     assert.equal(invoke(["pm-graph", "refresh", "projection.json"]).fullScans, 0);
   }
-  console.log(JSON.stringify({ host: name, admission: true, sparseReads: 1, fullScans: 0, authoritativeTypeCollision: true, contractionFormats: 2, foreignPayloads: FOREIGN_CHECKPOINTS.length, rebuildFormats: 2 }));
+  console.log(JSON.stringify({ host: name, admission: true, sparseReads: 1, fullScans: 0, authoritativeTypeCollision: true, contractionFormats: 2, evidencePathFormats: 2, unknownCost: true, foreignPayloads: FOREIGN_CHECKPOINTS.length, rebuildFormats: 2 }));
 }
 try {
   const packed = JSON.parse(run("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", scratch], root)) as { filename: string; integrity: string; files: { path: string }[] }[];
@@ -141,7 +172,7 @@ try {
   const archive = join(scratch, packed[0].filename);
   const bytes = readFileSync(archive);
   assert.equal(packed[0].integrity, `sha512-${createHash("sha512").update(bytes).digest("base64")}`);
-  for (const file of ["dist/index.js", "dist/index.d.ts", "dist/event-projection.js", "dist/neo4j-ownership.js", "README.md"]) assert.ok(packed[0].files.some((entry) => entry.path === file));
+  for (const file of ["dist/index.js", "dist/index.d.ts", "dist/event-projection.js", "dist/neo4j-ownership.js", "dist/evidence-path.js", "dist/evidence-path.d.ts", "docs/evidence-path-example.md", "README.md"]) assert.ok(packed[0].files.some((entry) => entry.path === file));
   const artifactSha256 = createHash("sha256").update(bytes).digest("hex");
   console.log(JSON.stringify({ packedSha256: artifactSha256, files: packed[0].files.length }));
   const npmPrefix = join(scratch, "npm-global-prefix");

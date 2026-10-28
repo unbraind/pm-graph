@@ -1,3 +1,4 @@
+import { record, dense, identity } from "./strict-input.ts";
 import type { Graph } from "./index.ts";
 import { analyzeKnowledgeGraph, RelationshipGraph, RelationshipKindRegistry } from "@unbrained/pm-cli/sdk/graph";
 
@@ -42,21 +43,6 @@ export function contractionRefusal(code: ContractionRefusalCode, remedy: string)
   return { ok: false, exit_code: 2, rows: [], refusal: { code, remedy } };
 }
 
-/** Require ordinary strict records, rejecting unknown keys at the input boundary. */
-function record(value: unknown, keys: string[]): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    && Object.getPrototypeOf(value) === Object.prototype && Object.keys(value).every((key) => keys.includes(key));
-}
-/** Dense bounded arrays reject holes, including holes that Array.every would skip. */
-function dense(value: unknown, max: number, check: (entry: unknown) => boolean): value is unknown[] {
-  if (!Array.isArray(value) || value.length > max) return false;
-  for (let i = 0; i < value.length; i++) if (!Object.hasOwn(value, i) || !check(value[i])) return false;
-  return true;
-}
-/** Identities are exact: whitespace is never normalized or treated as an alias. */
-function identity(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= 256 && value.trim().length > 0;
-}
 /** The single strict input schema covers SDK calls and parsed CLI input alike. */
 function validInput(value: unknown): value is ContractionInput {
   if (!record(value, ["nodes", "edges", "boundary", "edgeTypes", "limit", "offset", "expand"])) return false;
