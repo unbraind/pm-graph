@@ -76,3 +76,11 @@ Both runs have zero failures, cancellations, skips and TODOs. The validator is
 lines uncovered would yield 99.6968%, below the 99.7% floor; this is a calculated
 counterfactual, not a claimed historical full-run reproduction. Distribution
 output was rebuilt and matches the committed files; dependency pins are unchanged.
+
+At the CI waiting cutoff, [run 41098819654](https://github.com/unbraind/pm-graph/actions/runs/41098819654)
+on implementation head `79e8519` has passing Node 22 and Windows jobs, with Node
+26 still running. [CodeQL run 41098819653](https://github.com/unbraind/pm-graph/actions/runs/41098819653)
+is queued. Semgrep, DeepScan and Hound pass; CodeRabbit explicitly skipped review.
+An additional local Node 22 focused suite passes 26/26. PR 187 remains draft.
+This handoff-only metadata update needs fresh CI on its resulting head;
+implementation-head checks are not evidence for that newer head.
