@@ -3,12 +3,18 @@ title: Refresh projections from mutation events with sparse work receipts
 description: "Acceptance: after initial admission, one update among 10000 items avoids a complete successful refresh scan; cursor gaps force a disclosed rebuild or refusal; incremental and full projections are equal. Deliver typed SDK and CLI, compact receipts and remedies, seeded state and concurrency tests, non-git public-corpus validation, and npm plus Bun CI release gates."
 type: Feature
 pm_format_version: 2
-status: in_progress
+status: closed
 priority: 2
 tags[1]: "gh:unbraind/pm-graph#175"
 created_at: "2026-10-27T07:16:00.488Z"
-updated_at: "2026-10-27T19:23:18.110Z"
+updated_at: "2026-10-30T20:14:03.165Z"
+closed_at: "2026-10-30T20:14:01.139Z"
+completed_at: "2026-10-27T19:48:01.000Z"
 author: codex-agent
+release: 2026.10.28
+resolution: "Delivered by PR #175 (e556987): Refresh projections sparsely and recover interrupted Neo4j updates"
+expected_result: Refresh projections from mutation events with sparse work receipts
+actual_result: "PR #175 merged at 2026-10-27T19:48:01Z as e556987; required CI passed on the merged head."
 comments[42]{created_at,author,text}:
   "2026-10-27T07:16:04.720Z",codex-agent,"Overlap rechecked against current CLI and sibling sources: SDK mutation-events owns cursors and history reads; graph snapshot impact compares complete graphs; syncNeo4j in src/index.ts still upserts every input node and relationship. pm-web consumes event pages for resume and history delivery, and pm-rust complete-projection receipts certify reads rather than update a persisted graph. This feature owns only derived projection state, sparse work receipts and sink reconciliation. No upstream or sibling changes planned."
   "2026-10-27T07:24:18.943Z",codex-agent,"Implementation now uses lazy supported SDK package exports, certified complete admission, opaque mutation cursors, SDK point reads, anchor/stream continuity checks, owned checkpoint locking, finite/dense boundary validation, and exact recoverable receipt pages. Explicit rebuild is required after continuity or workspace-schema changes. Cached graph materialization and checkpoint encoding still visit cached rows; receipts separately disclose full source scans and SDK event-page source. Neo4j reconciliation uses a revision CAS inside one write transaction and a separate owned namespace. Seeded model and real-host regressions are being validated."
@@ -155,4 +161,5 @@ docs[3]{path,scope}:
   docs/event-projection-example.md,project
   docs/event-projection-validation.md,project
   README.md,project
+close_reason: "Delivered by PR #175 (e556987): Refresh projections sparsely and recover interrupted Neo4j updates"
 body: ""
