@@ -2,13 +2,17 @@ id: pm-graph-main-ci-coverage
 title: Restore main CI after evidence-path coverage falls below the exact floor
 description: "Main run 40788717831 and release PR 183 runs fail at the exact LCOV line threshold: 99.6965% is below 99.7%, although the native report rounds it to 99.70%. All parent tests pass; the intentional nested fixture failure is expected. Add deterministic coverage for the new validator witness branches and make nested fixture diagnostics unambiguous without changing thresholds."
 type: Issue
-status: in_progress
+status: closed
 priority: 1
 tags[4]: ci,coverage,"gh:unbraind/pm-graph#187",regression
 created_at: "2026-10-30T13:54:27.237Z"
-updated_at: "2026-10-30T17:56:43.704Z"
+updated_at: "2026-10-30T20:14:19.811Z"
+closed_at: "2026-10-30T20:14:18.271Z"
+completed_at: "2026-10-30T18:55:26.000Z"
 author: codex-agent
 resolution: Add deterministic real no-git witness coverage and clearer nested-runner diagnostics; enforce uncached measurement. Full npm and Bun gates pass 453 tests each at unchanged thresholds. Preserve the documented historical reproduction limit.
+expected_result: Restore main CI after evidence-path coverage falls below the exact floor
+actual_result: "PR #187 merged at 2026-10-30T18:55:26Z as d95a315; required CI passed on the merged head."
 comments[14]{created_at,author,text}:
   "2026-10-30T13:54:30.750Z",codex-agent,"Full job logs inspected for main Node 26 job 123168292149 and release PR 183 Node 22/26 jobs 123507257346 and 123507256951. Every parent test passes; assertThresholds rejects exact 99.6965% lines against 99.7%. Newly introduced scripts/validate-evidence-path.ts lines 48-50 (cheaper and longer witnesses) are uncovered. Reproduce the unchanged CI release command first, then cover deterministic real no-git tracker scenarios and label expected fixture diagnostics."
   "2026-10-30T13:57:25.866Z",codex-agent,"The existing validator test uses the same tracker after 500 mutation sequences, so its graph does not guarantee a cheaper longer path. Add an independent five-item tracker with explicit relationships and costs implied by sorted IDs, asserting all 25 queries, 13 reachable proofs, and exactly one cheaper/longer witness. Run without git on PATH and verify source bytes remain unchanged."
@@ -35,4 +39,5 @@ tests[3]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,
   "bun run release:check",project,3600,codex-agent,"2026-10-30T14:24:32.306Z",local_mutation,fix/main-ci-red-1029
 docs[1]{path,scope,note}:
   docs/main-ci-coverage.md,project,Full CI root cause and deterministic regression design
+close_reason: "Delivered by PR #187 (d95a315): fix(ci): cover evidence witnesses and clarify coverage failures"
 body: ""

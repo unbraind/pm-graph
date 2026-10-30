@@ -1,14 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Explain relationship paths with minimum declared evidence cost ([pm-graph-evidence-cost-paths](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-evidence-cost-paths.toon))
+
+### Fixed
+
+- Restore main CI after evidence-path coverage falls below the exact floor ([pm-graph-main-ci-coverage](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-main-ci-coverage.toon))
+
+### Other
+
+- Align the Dependabot sync caller with its pinned workflow release ([pm-graph-a8qp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-a8qp.toon))
+
 ## 2026.10.28 - 2026-10-28
 
 ### Added
 
+- Refresh projections from mutation events with sparse work receipts ([pm-graph-event-sparse](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-event-sparse.toon))
 - Collapse equivalent graph nodes while preserving boundary explanations ([pm-graph-cif6](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-cif6.toon))
 
 ### Other
 
 - Stop Hound from linting generated dist/ output ([pm-graph-hound-generated-dist](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-hound-generated-dist.toon))
+
+## 2026.10.26 - 2026-10-26
+
+### Other
+
+- Point the npm homepage at the package catalog and link the author ([pm-graph-yx81](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-yx81.toon))
 
 ## 2026.10.25 - 2026-10-25
 
