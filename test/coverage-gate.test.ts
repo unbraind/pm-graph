@@ -1,9 +1,11 @@
 /** Exercise the actual gate with small on-disk suites, including deliberate defeat attempts. */
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import type { TestEvent } from "node:test/reporters";
 import completionReporter from "../scripts/completion-reporter.ts";
 import { assertCompleteRun, assertReported, assertThresholds, collectSources, hasRuntime, readPolicy, runCoverageGate, testPathKey } from "../scripts/coverage-gate.ts";
@@ -83,6 +85,58 @@ test("coverage gate propagates real test and coverage threshold failures", () =>
   writeFileSync(join(root, "src/value.ts"), "export function untouched() { return 1; }\n");
   writeFileSync(join(root, "test/value.test.ts"), 'import test from "node:test";\nimport "../src/value.ts";\ntest("loads only", () => {});\n');
   assert.throws(() => runCoverageGate(root), /runner failed/);
+}));
+
+test("expected nested failures stay captured while errors retain the failing test diagnostics", () => withFixture((root) => {
+  writeFileSync(join(root, "test/value.test.ts"), 'import test from "node:test";\nimport "../src/value.ts";\ntest("deliberate fixture failure", () => { throw new Error("intentional"); });\n');
+  const source = `import { runCoverageGate } from ${JSON.stringify(new URL("../scripts/coverage-gate.ts", import.meta.url).href)};
+    try { runCoverageGate(${JSON.stringify(root)}); process.exitCode = 1; }
+    catch (error) { console.log(JSON.stringify({ message: error.message })); }`;
+  const result = spawnSync(process.execPath, ["--input-type=module", "--eval", source], {
+    encoding: "utf8", env: { ...process.env, NODE_TEST_CONTEXT: "coverage-fixture" },
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  // Exactly one JSON document: inherited child output would corrupt this parse.
+  const error = JSON.parse(result.stdout) as { message: string };
+  assert.match(error.message, /coverage-gate: runner failed/);
+  assert.match(error.message, /deliberate fixture failure/);
+  assert.match(error.message, /Error: intentional/);
+}));
+
+test("coverage disables warm inherited compile caches and programmatic cache activation", () => withFixture((root) => {
+  const previousCache = process.env.NODE_COMPILE_CACHE;
+  const previousDisable = process.env.NODE_DISABLE_COMPILE_CACHE;
+  try {
+    process.env.NODE_COMPILE_CACHE = join(root, "compile-cache");
+    delete process.env.NODE_DISABLE_COMPILE_CACHE;
+    const warmEnv = { ...process.env };
+    delete warmEnv.NODE_TEST_CONTEXT;
+    delete warmEnv.NODE_V8_COVERAGE;
+    const warmup = spawnSync(process.execPath, ["--input-type=module", "--eval",
+      `import assert from "node:assert/strict";
+       import { constants, enableCompileCache } from "node:module";
+       import { value } from ${JSON.stringify(pathToFileURL(join(root, "src/value.ts")).href)};
+       assert.equal(enableCompileCache().status, constants.compileCacheStatus.ALREADY_ENABLED);
+       assert.equal(value, 42);`], {
+      encoding: "utf8", env: warmEnv,
+    });
+    assert.equal(warmup.status, 0, warmup.stderr || warmup.stdout);
+    writeFileSync(join(root, "test/value.test.ts"), [
+      'import test from "node:test";',
+      'import assert from "node:assert/strict";',
+      'import { constants, enableCompileCache, getCompileCacheDir } from "node:module";',
+      'import { value } from "../src/value.ts";',
+      'test("uncached measurement", () => {',
+      '  assert.equal(getCompileCacheDir(), undefined);',
+      '  assert.equal(enableCompileCache().status, constants.compileCacheStatus.DISABLED);',
+      '  assert.equal(value, 42);',
+      '});',
+    ].join("\n"));
+    assert.doesNotThrow(() => runCoverageGate(root));
+  } finally {
+    if (previousCache === undefined) delete process.env.NODE_COMPILE_CACHE; else process.env.NODE_COMPILE_CACHE = previousCache;
+    if (previousDisable === undefined) delete process.env.NODE_DISABLE_COMPILE_CACHE; else process.env.NODE_DISABLE_COMPILE_CACHE = previousDisable;
+  }
 }));
 
 test("coverage policy refuses empty, ignored and nonnumeric scopes", () => withFixture((root) => {
@@ -211,6 +265,9 @@ test("LCOV floors reject incomplete or impossible counters and retain fractional
   const report = "SF:source.ts\nLF:1000\nLH:997\nBRF:100\nBRH:95\nFNF:0\nFNH:0\nend_of_record\n";
   assert.throws(() => assertThresholds("", { lines: 0, branches: 0, functions: 0 }), /empty LCOV/);
   assert.doesNotThrow(() => assertThresholds(report, { lines: 99.7, branches: 95, functions: 100 }));
+  const roundedPass = report.replace("LF:1000", "LF:1000000").replace("LH:997", "LH:996965");
+  assert.throws(() => assertThresholds(roundedPass, { lines: 99.7, branches: 95, functions: 100 }),
+    /lines coverage 99\.6965% is below 99\.7%/);
   assert.throws(() => assertThresholds(report, { lines: 99.71, branches: 95, functions: 100 }), /lines coverage/);
   assert.throws(() => assertThresholds(report, { lines: 99.7, branches: 95.1, functions: 100 }), /branches coverage/);
   assert.throws(() => assertThresholds(report.replace("FNF:0", "FNF:1"), { lines: 99.7, branches: 95, functions: 100 }), /functions coverage/);

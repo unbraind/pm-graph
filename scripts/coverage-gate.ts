@@ -177,7 +177,9 @@ export function runCoverageGate(root: string): void {
   mkdirSync(join(root, "coverage"), { recursive: true });
   rmSync(reportPath, { force: true });
   rmSync(receiptPath, { force: true });
-  const env: NodeJS.ProcessEnv = { ...process.env, TZ: "UTC" };
+  const nested = process.env.NODE_TEST_CONTEXT !== undefined;
+  // Cached functions can lose precise V8 block counters, including in CLI children.
+  const env: NodeJS.ProcessEnv = { ...process.env, TZ: "UTC", NODE_DISABLE_COMPILE_CACHE: "1" };
   // This is a new runner, including when a regression test invokes the gate.
   delete env.NODE_TEST_CONTEXT;
   const result = spawnSync(process.execPath, [
@@ -191,9 +193,15 @@ export function runCoverageGate(root: string): void {
     `--test-reporter-destination=${receiptPath}`,
     "--test-reporter=lcov", `--test-reporter-destination=${reportPath}`,
     ...new Set(tests),
-  ], { cwd: root, stdio: "inherit", env });
+  ], { cwd: root, stdio: nested ? "pipe" : "inherit", encoding: "utf8", env });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`coverage-gate: runner failed (${result.status})`);
+  if (result.status !== 0) {
+    // Expected fixture failures stay quiet; unexpected failures retain diagnostics
+    // in the error reported under the parent test's name.
+    const diagnostics = nested ? `\n${result.stdout ?? ""}${result.stderr ?? ""}` : "";
+    throw new Error(`coverage-gate: runner failed (${result.status})${diagnostics}`);
+  }
+  console.log("coverage-gate: runner passed; verifying completion, source inventory and exact LCOV thresholds.");
   assertCompleteRun(readFileSync(receiptPath, "utf8"), root, tests);
   const report = readFileSync(reportPath, "utf8");
   assertReported(root, report, required);
