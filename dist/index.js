@@ -20,7 +20,7 @@ import { createPmCliExpectedError, isPmCliExpectedError, EXIT_CODE, listAllItemM
 import { runGraph } from "@unbrained/pm-cli/sdk/graph";
 import { registerBlockerCuts } from "./blocker-cuts-command.js";
 export { minimalBlockerCuts } from "./blocker-cuts.js";
-const EXTENSION_VERSION = "2026.10.28";
+const EXTENSION_VERSION = "2026.10.30";
 // ---------------------------------------------------------------------------
 // Error contract
 // ---------------------------------------------------------------------------
