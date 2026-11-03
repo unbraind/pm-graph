@@ -18,7 +18,6 @@ jobs:
   gated-closeout:
     uses: unbraind/pm-github/.github/workflows/pm-github-closeout.yml@549f8d26656d124c93b7ef8d09a005e7cae6f4f7 # pm-github 2026.10.30
     with:
-      pm-github-version: "2026.10.16"
       npm-project-dir: "." # Use tools/oracle or another contained npm project when needed.
       post-closeout-script: "changelog:full" # Missing script skips; "" disables it.
       ci-workflows: "ci.yml" # Whitespace-separated workflow filenames; "" disables dispatch.
