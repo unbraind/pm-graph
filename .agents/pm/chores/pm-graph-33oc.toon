@@ -1,0 +1,19 @@
+id: pm-graph-33oc
+title: Drop the deprecated pm-github-version input so Dependabot workflow bumps pass
+description: "The install-pm-github test required the deprecated pm-github-version input to equal the pinned release comment on the sync caller. Dependabot rewrites only the commit SHA and its release comment, so every pm-github workflow repin failed the test and the input could only be fixed by hand. The pinned release commit is now the only version source: both caller workflows pin their reusable workflows without the input, and the test asserts the input stays absent while keeping every other assertion (pin SHA with release annotation, schedule, dispatch, permissions, no inline steps). Mirrors the same change made in pm-web."
+type: Chore
+status: open
+priority: 2
+tags[4]: ci,dependencies,"gh:unbraind/pm-graph#190",pm-github
+created_at: "2026-11-03T10:48:27.822Z"
+updated_at: "2026-11-03T10:49:14.109Z"
+author: pi-toolchain-glm-1103
+comments[1]{created_at,author,text}:
+  "2026-11-03T10:48:42.991Z",pi-toolchain-glm-1103,"Removed pm-github-version from both caller workflows (.github/workflows/pm-github-sync.yml and pm-github-closeout.yml; the closeout keeps its other inputs). The test now asserts the input is absent on both callers and that the closeout caller keeps a full-commit pin annotated with its release, replacing the old assertion that the input matched the sync pin's release comment. Classification: test pinned old CI wiring that no Dependabot bump could satisfy. Evidence: node --test test/install-pm-github.test.ts passes 5/5; the full suite npm test passes 453/453; typecheck and lint pass."
+files[3]{path,scope}:
+  .github/workflows/pm-github-closeout.yml,project
+  .github/workflows/pm-github-sync.yml,project
+  test/install-pm-github.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test test/install-pm-github.test.ts,project,pi-toolchain-glm-1103,"2026-11-03T10:48:51.815Z",local_mutation,dependabot/github_actions/unbraind/pm-github/dot-github/workflows/pm-github-sync.yml-2026.10.30
+body: ""
