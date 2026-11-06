@@ -104,7 +104,7 @@ test("directory and SQLite scopes preserve qualified identities, consent and opa
     symlinkSync(join(root, "node_modules"), join(extensionRoot, "node_modules"), "dir");
     writeFileSync(join(ws, "projection.json"), JSON.stringify({ scopes: [{ key: "delivery", pmRoot: ".agents/pm" }], consent: ["delivery"] }));
     const run = (args: string[]) => spawnSync(process.execPath, [cli, "pm-graph", "project", ...args], { cwd: ws, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024 });
-    const direct = await collectHandlers().get("pm-graph project")!({ cwd: ws, args: ["projection.json"] }) as ProjectionResult;
+    const direct = await (await collectHandlers()).get("pm-graph project")!({ cwd: ws, args: ["projection.json"] }) as ProjectionResult;
     assert.equal(direct.ok, true);
     const json = run(["projection.json", "--json"]);
     assert.equal(json.status, 0, json.stderr || json.stdout);
@@ -139,7 +139,7 @@ test("invalid SDK requests refuse before any source read", async () => {
 
 test("command validates bounded manifests and flag syntax without reading sources", async () => {
   const ws = mkdtempSync(join(tmpdir(), "pmg-project-input-"));
-  const command = collectHandlers().get("pm-graph project")!;
+  const command = (await collectHandlers()).get("pm-graph project")!;
   try {
     writeFileSync(join(ws, "bad.json"), "{");
     writeFileSync(join(ws, "large.json"), "");

@@ -26,7 +26,7 @@ async function assertCycleFormatThrows(run: Handler, ws: string, format: string)
 // analytics.test.ts; here we confirm the command surface.
 
 test("critical-path --format mermaid prints a diagram and keeps the result object", { skip: !pmAvailable }, async () => {
-  const { ws, a, b, c, run } = setupChainWorkspace("pmg-cp-", "pm-graph critical-path");
+  const { ws, a, b, c, run } = await setupChainWorkspace("pmg-cp-", "pm-graph critical-path");
   try {
     // text default: byte-identical to the no-flag result, no stdout diagram.
     const baseline = await captureStdout(() => run({ cwd: ws, args: [] }));
@@ -50,7 +50,7 @@ test("critical-path --format mermaid prints a diagram and keeps the result objec
 });
 
 test("cycles --format graphml prints the cycle subgraph then exits non-zero", { skip: !pmAvailable }, async () => {
-  const { ws, x, y, run } = setupCycleWorkspace("pmg-cy-");
+  const { ws, x, y, run } = await setupCycleWorkspace("pmg-cy-");
   try {
     const captured = await assertCycleFormatThrows(run, ws, "graphml");
     assert.ok(captured.startsWith('<?xml version="1.0"'), "GraphML diagram printed before throwing");
@@ -63,7 +63,7 @@ test("cycles --format graphml prints the cycle subgraph then exits non-zero", { 
 });
 
 test("critical-path rejects an invalid --format value cleanly", { skip: !pmAvailable }, async () => {
-  const { ws, run } = setupBareWorkspace("pmg-bad-", "pm-graph critical-path");
+  const { ws, run } = await setupBareWorkspace("pmg-bad-", "pm-graph critical-path");
   try {
     await assert.rejects(
       () => run({ cwd: ws, args: ["--format", "svg"] }),
@@ -76,7 +76,7 @@ test("critical-path rejects an invalid --format value cleanly", { skip: !pmAvail
 });
 
 test("critical-path --format dot prints a Graphviz digraph and keeps the result object", { skip: !pmAvailable }, async () => {
-  const { ws, a, b, c, run } = setupChainWorkspace("pmg-dot-", "pm-graph critical-path");
+  const { ws, a, b, c, run } = await setupChainWorkspace("pmg-dot-", "pm-graph critical-path");
   try {
     const chain = (await run({ cwd: ws, args: [] }) as { path: string[] }).path;
     assert.deepStrictEqual(chain, [c, b, a], "baseline chain is the full dependency chain");
@@ -96,7 +96,7 @@ test("critical-path --format dot prints a Graphviz digraph and keeps the result 
 });
 
 test("cycles --format dot prints the cycle subgraph then exits non-zero", { skip: !pmAvailable }, async () => {
-  const { ws, x, y, run } = setupCycleWorkspace("pmg-cydot-");
+  const { ws, x, y, run } = await setupCycleWorkspace("pmg-cydot-");
   try {
     const captured = await assertCycleFormatThrows(run, ws, "dot");
     assert.ok(captured.startsWith("digraph pm_graph {"), "Graphviz digraph printed before throwing");
@@ -115,7 +115,7 @@ test("analyze --filter type=... scopes the report to matching item types", { ski
     const t1 = createItem(ws, "Task One");
     createItem(ws, "Task Two", t1);
     pm(ws, ["create", "Epic", "Epic One", "--json"]); // an Epic, not a Task
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph analyze")!;
 
     const all = (await run({ cwd: ws, args: [] })) as { ok: boolean; itemCount: number };
@@ -136,7 +136,7 @@ test("analyze --filter status=... scopes the report and AND-combines with type",
     const b = createItem(ws, "Beta", a);
     // close Beta so it is excluded by default but retained with --include-closed.
     pm(ws, ["close", b, "done"]);
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph analyze")!;
 
     // default: closed Beta dropped, only Alpha remains.
@@ -160,7 +160,7 @@ test("analyze --filter status=... scopes the report and AND-combines with type",
 });
 
 test("critical-path --filter rejects a malformed filter with a USAGE error", { skip: !pmAvailable }, async () => {
-  const { ws, run } = setupBareWorkspace("pmg-badfilt-", "pm-graph critical-path");
+  const { ws, run } = await setupBareWorkspace("pmg-badfilt-", "pm-graph critical-path");
   try {
     await assert.rejects(
       () => run({ cwd: ws, args: ["--filter", "priority=high"] }),

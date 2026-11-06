@@ -160,7 +160,7 @@ test("real command host preserves compact JSON/TOON and refuses invalid argument
   try {
     await seed(f.client, "cli");
     await seed(f.client, "cli-second");
-    const run = collectHandlers().get("pm-graph refresh")!;
+    const run = (await collectHandlers()).get("pm-graph refresh")!;
     const ctx = { pm_root: f.pmRoot, cwd: f.ws };
     assert.ok(await run({ ...ctx, args: ["--help"] }));
     for (const args of [[], ["--wat"], ["one", "two"], ["one", "--limit"], ["one", "--limit", "oops"], ["one", "--offset", "-1"]]) {

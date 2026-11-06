@@ -20,7 +20,7 @@ const client = new PmClient({ pmRoot, noExtensions: true, author: "evidence-path
 const cli = join(root, "node_modules/@unbrained/pm-cli/dist/cli.js");
 const emptyBin = join(workspace, "empty-bin");
 const costsFile = join(workspace, "costs.json");
-const handler = collectHandlers().get("pm-graph evidence-path")!;
+const handler = (await collectHandlers()).get("pm-graph evidence-path")!;
 const unset = ["parent", "assignee", "reviewer", "sprint", "release", "blocked_by", "blocked_reason"];
 const ids: string[] = [];
 

@@ -26,7 +26,7 @@ test("explain command returns blockers, dependents, and chain from one item", { 
     const b = createItem(ws, "Beta", a);
     const c = createItem(ws, "Gamma", b);
 
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph explain");
     assert.ok(run, "explain command should be registered");
 
@@ -51,7 +51,7 @@ test("explain command errors on missing id with suggestions", { skip: !pmAvailab
     pm(ws, ["init"]);
     const existing = createItem(ws, "Target");
 
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph explain");
     assert.ok(run, "explain command should be registered");
 
@@ -69,7 +69,7 @@ test("explain command validates missing positional id", { skip: !pmAvailable }, 
   const ws = mkdtempSync(path.join(tmpdir(), "pmg-explain-usage-"));
   try {
     pm(ws, ["init"]);
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph explain");
     assert.ok(run, "explain command should be registered");
 

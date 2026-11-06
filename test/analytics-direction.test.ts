@@ -21,7 +21,7 @@ function inverseChain(): Graph {
 }
 
 test("README filter support matches the seven analytics command help contracts", async () => {
-  const handlers = collectHandlers();
+  const handlers = await collectHandlers();
   const supported = ["analyze", "cycles", "critical-path", "topo-sort", "path", "impact", "explain"];
   for (const name of supported) {
     const help = await handlers.get(`pm-graph ${name}`)!({ args: ["--help"] }) as { flags: Record<string, string> };
@@ -97,7 +97,7 @@ test("real non-git tracker BLOCKS commands agree on prerequisite order, paths an
     const a = (await client.create({ type: "Task", title: "Waiting goal" })).item.id;
     const b = (await client.create({ type: "Task", title: "Intermediate", dep: [`id=${a},kind=blocks`] })).item.id;
     const c = (await client.create({ type: "Task", title: "Prerequisite", dep: [`id=${b},kind=blocks`] })).item.id;
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = (name: string, args: string[] = []) => handlers.get(`pm-graph ${name}`)!({ pm_root: pmRoot, args });
     assert.deepEqual((await run("topo-sort") as { order: string[] }).order, [c, b, a]);
     assert.deepEqual((await run("path", [a, c]) as { path: string[] }).path, [a, b, c]);

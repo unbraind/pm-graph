@@ -17,7 +17,7 @@ const client = new PmClient({ pmRoot, noExtensions: true, author: "contraction-t
 const cliPackage = JSON.parse(readFileSync(join(root, "node_modules/@unbrained/pm-cli/package.json"), "utf8")) as { bin: { pm: string } };
 const cli = join(root, "node_modules/@unbrained/pm-cli", cliPackage.bin.pm);
 const emptyBin = join(workspace, "empty-bin");
-const handler = collectHandlers().get("pm-graph contract")!;
+const handler = (await collectHandlers()).get("pm-graph contract")!;
 let a = ""; let b = "";
 
 /** Invoke the real pinned host with no git executable and discovery stopped above the fixture. */
