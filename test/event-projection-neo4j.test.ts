@@ -19,7 +19,7 @@ test("Neo4j sparse transaction locks before revision read, replaces properties, 
     await f.client.update(a, { blockedBy: b });
     await f.client.update(b, { blockedBy: a });
     resetFakeNeo4j();
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const legacy = await handlers.get("pm-graph sync")!({ cwd: f.ws, pm_root: f.pmRoot, args: [] }) as { ok: boolean };
     assert.equal(legacy.ok, true);
     const legacyWrite = getFakeNeo4jCalls().find((call) => call.query.includes("SET n += $properties") && call.params?.id === a);

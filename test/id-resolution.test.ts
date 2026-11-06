@@ -96,7 +96,7 @@ function createChainWithUniquePrefix(
 test("path resolves source/target by unique prefix and case-insensitive id", { skip: !pmAvailable }, async () => {
   const { ws, a, b, c, prefix: fromPrefix } = createChainWithUniquePrefix("newest", "pmg-id-path-");
   try {
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph path");
     assert.ok(run, "path command should be registered");
 
@@ -124,7 +124,7 @@ test("path reports an ambiguous source id prefix", { skip: !pmAvailable }, async
     const a = createItem(ws, "Alpha");
     createItem(ws, "Beta");
 
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph path");
     assert.ok(run, "path command should be registered");
 
@@ -143,7 +143,7 @@ test("impact resolves id by unique prefix", { skip: !pmAvailable }, async () => 
   // under test must resolve to `a`, not to the chain's newest item.
   const { ws, a, b, c, prefix: idPrefix } = createChainWithUniquePrefix("oldest", "pmg-id-impact-");
   try {
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph impact");
     assert.ok(run, "impact command should be registered");
 
@@ -168,7 +168,7 @@ test("analytics --root not-found includes item suggestions", { skip: !pmAvailabl
     pm(ws, ["init"]);
     const a = createItem(ws, "Alpha");
 
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph analyze");
     assert.ok(run, "analyze command should be registered");
 

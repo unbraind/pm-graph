@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { runRegisteredServiceOverrideForTest } from "@unbrained/pm-cli/sdk/testing";
 
-import { activateWithRecording, freshWorkspace, makeHarness } from "./helpers.ts";
+import { freshWorkspace, makeHarness } from "./helpers.ts";
 
 // Resolve this file's directory without relying on the CommonJS `__dirname`,
 // which is undefined in ES modules (referencing it throws on Node versions
@@ -96,10 +96,10 @@ function assertNeo4jNotConfigured(res: { status: number; stdout: string; stderr:
 
 // Smoke-check the module still registers the expected handlers + the service
 // override (so the test harness catches a regression in activate() wiring).
-test("activate registers the export handler and the output_format service override", () => {
-  const { commands, services } = activateWithRecording();
-  assert.ok(commands.has("pm-graph export"), "export command registered");
-  assert.ok(services.includes("output_format"), "output_format service override registered");
+test("activate registers the export handler and the output_format service override", async () => {
+  const harness = await makeHarness();
+  harness.assertCommandContract({ command: "pm-graph export" });
+  harness.assertServiceOverride({ service: "output_format" });
 });
 
 test("export --format json writes valid JSON to stdout (G2)", { skip: !pmAvailable }, () => {
@@ -237,10 +237,10 @@ test("path/impact still accept positionals through the contract layer (G1 siblin
 // pm-cli 2026.7.18 core `pm graph` collision + pm_root fixes
 // ---------------------------------------------------------------------------
 
-test("exporter adapter is registered as graph-export (core `pm graph` collision guard)", () => {
-  const { exporters } = activateWithRecording();
-  assert.ok(exporters.includes("graph-export"), "graph-export adapter registered");
-  assert.ok(!exporters.includes("graph"), 'legacy "graph" adapter no longer registered (pm-cli 2026.7.18 owns `pm graph`)');
+test("exporter adapter is registered as graph-export (core `pm graph` collision guard)", async () => {
+  const harness = await makeHarness();
+  harness.assertExporter({ exporter: "graph-export" });
+  assert.throws(() => harness.assertExporter({ exporter: "graph" }), /graph/);
 });
 
 test("export shaping: --edges deps drops facet edges on the canonical command", { skip: !pmAvailable }, () => {

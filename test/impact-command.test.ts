@@ -28,7 +28,7 @@ type ImpactResult = {
 
 /** Invoke the real registered impact handler with explicit presentation flags. */
 async function runImpact(cwd: string, id: string, flags: readonly string[]): Promise<ImpactResult> {
-  const run = collectHandlers().get("pm-graph impact")!;
+  const run = (await collectHandlers()).get("pm-graph impact")!;
   return await run({ cwd, args: [id, ...flags] }) as ImpactResult;
 }
 
@@ -43,7 +43,7 @@ if (pmAvailable) {
 }
 
 test("impact returns downstream dependents with affected distance/path rows (canonical engine)", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
-  const { ws, a, b, c, run } = setupChainWorkspace("pmg-impact-", "pm-graph impact");
+  const { ws, a, b, c, run } = await setupChainWorkspace("pmg-impact-", "pm-graph impact");
   try {
     const result = (await run({ cwd: ws, args: [a, "--json"] })) as {
       ok: boolean;
@@ -76,7 +76,7 @@ test("impact returns downstream dependents with affected distance/path rows (can
 });
 
 test("impact back-compat shape is preserved for --format json --direction downstream", { skip: !pmAvailable }, async () => {
-  const { ws, a, run } = setupChainWorkspace("pmg-impact-bc-", "pm-graph impact");
+  const { ws, a, run } = await setupChainWorkspace("pmg-impact-bc-", "pm-graph impact");
   try {
     const result = (await run({ cwd: ws, args: [a, "--direction", "downstream", "--format", "json"] })) as ImpactResult;
     // Core back-compat fields keep their shape and meaning.
@@ -152,7 +152,7 @@ test("impact --include-closed routes to the shaped-graph fallback and rejects no
     const a = createItem(ws, "Alpha");
     createItem(ws, "Beta", a);
 
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph impact")!;
 
     // --include-closed cannot be honored by the canonical engine (active-only,
@@ -174,7 +174,7 @@ test("impact --include-closed routes to the shaped-graph fallback and rejects no
 });
 
 test("impact --format mermaid prints a diagram containing the root and affected node ids", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
-  const { ws, a, b, c, run } = setupChainWorkspace("pmg-impact-mermaid-", "pm-graph impact");
+  const { ws, a, b, c, run } = await setupChainWorkspace("pmg-impact-mermaid-", "pm-graph impact");
   try {
     const { result, stdout } = await captureStdout(() => run({ cwd: ws, args: [a, "--format", "mermaid"] }));
     assert.ok(/^%%\{init:[^\n]+\}%%\ngraph TD\n/u.test(stdout), "mermaid diagram printed on stdout");
@@ -190,7 +190,7 @@ test("impact --format mermaid prints a diagram containing the root and affected 
 });
 
 test("impact --direction upstream reaches prerequisites (canonical engine)", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
-  const { ws, a, b, c, run } = setupChainWorkspace("pmg-impact-up-", "pm-graph impact");
+  const { ws, a, b, c, run } = await setupChainWorkspace("pmg-impact-up-", "pm-graph impact");
   try {
     const result = (await run({ cwd: ws, args: [c, "--direction", "upstream", "--json"] })) as ImpactResult;
     assert.strictEqual(result.direction, "upstream");
@@ -203,7 +203,7 @@ test("impact --direction upstream reaches prerequisites (canonical engine)", { s
 });
 
 test("impact --depth caps the traversal depth", { skip: !pmAvailable || !pmGraphImpactAvailable }, async () => {
-  const { ws, a, b, run } = setupChainWorkspace("pmg-impact-depth-", "pm-graph impact");
+  const { ws, a, b, run } = await setupChainWorkspace("pmg-impact-depth-", "pm-graph impact");
   try {
     const result = (await run({ cwd: ws, args: [a, "--depth", "1", "--json"] })) as ImpactResult;
     // depth 1 from A: only the immediate dependent B (not the depth-2 C).
@@ -215,7 +215,7 @@ test("impact --depth caps the traversal depth", { skip: !pmAvailable || !pmGraph
 });
 
 test("impact validates missing positional id", { skip: !pmAvailable }, async () => {
-  const { ws, run } = setupBareWorkspace("pmg-impact-usage-", "pm-graph impact");
+  const { ws, run } = await setupBareWorkspace("pmg-impact-usage-", "pm-graph impact");
   try {
     await assert.rejects(
       () => run({ cwd: ws, args: [] }),
@@ -232,7 +232,7 @@ test("impact rejects an invalid --direction value", { skip: !pmAvailable }, asyn
   try {
     pm(ws, ["init"]);
     const a = createItem(ws, "Alpha");
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     const run = handlers.get("pm-graph impact")!;
     await assert.rejects(
       () => run({ cwd: ws, args: [a, "--direction", "sideways"] }),

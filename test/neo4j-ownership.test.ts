@@ -46,7 +46,7 @@ test("every missing, nonfinite or conflicting Neo4j guard aborts dependent write
     const a = await seed(f.client, "guard-a"); const b = await seed(f.client, "guard-b");
     await f.client.update(a, { blockedBy: b, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_reason"], clearDeps: true });
     const source = (await f.client.listAllComplete({ includeBody: true })).items;
-    const run = collectHandlers().get("pm-graph refresh")!;
+    const run = (await collectHandlers()).get("pm-graph refresh")!;
     const invoke = async (file: string): Promise<EventProjectionReceipt> => await run({ pm_root: f.pmRoot, cwd: f.ws, args: [file, "--neo4j"] }) as EventProjectionReceipt;
     resetFakeNeo4j();
     setFakeNeo4jWrite((query) => ({ records: [fakeRecord(query.includes("RETURN m.revision") ? { revision: null } : { foreign: 0, written: 1 })] }));
@@ -80,7 +80,7 @@ test("both sync paths disclose concurrency/deletion conflicts and retain unrelat
   const savedEnv = applyEnv({ NEO4J_URI: "bolt://fixture.invalid", NEO4J_USER: "fixture", NEO4J_PASSWORD: "synthetic" });
   try {
     await seed(f.client, "native-errors");
-    const handlers = collectHandlers();
+    const handlers = await collectHandlers();
     for (const code of ["Neo.ClientError.Schema.ConstraintValidationFailed", "Neo.TransientError.Transaction.DeadlockDetected", "Neo.ClientError.Statement.EntityNotFound", "Neo.ClientError.Statement.TypeError"]) {
       setFakeNeo4jFail(Object.assign(new Error("Synthetic concurrency conflict"), { code }));
       for (const name of ["pm-graph sync", "pm-graph refresh"]) {

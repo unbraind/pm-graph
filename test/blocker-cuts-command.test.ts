@@ -8,7 +8,10 @@ import { PmClient, type ContractsResult } from "@unbrained/pm-cli/sdk";
 import { registerBlockerCuts } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutCommandRefusal } from "../src/blocker-cuts-command.ts";
 import type { BlockerCutResult } from "../src/blocker-cuts.ts";
+import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 import type { ExtensionApi } from "../src/index.ts";
+import type { ExtensionModule } from "@unbrained/pm-cli/sdk";
+import type { Handler } from "./helpers.ts";
 import { installBuiltGraphExtension, captureStdout, collectHandlers } from "./helpers.ts";
 import { main as replayMain, validateBlockerCuts } from "../scripts/validate-blocker-cuts.ts";
 
@@ -20,7 +23,7 @@ const host = JSON.parse(readFileSync(join(root, "node_modules/@unbrained/pm-cli/
 const cli = join(root, "node_modules/@unbrained/pm-cli", host.bin.pm);
 const env = { ...process.env, PM_AUTHOR: "contract-test", GIT_CEILING_DIRECTORIES: dirname(workspace) };
 const client = new PmClient({ pmRoot, noExtensions: true, author: "contract-test" });
-const handler = collectHandlers().get("pm-graph blocker-cuts")!;
+const handler = (await collectHandlers()).get("pm-graph blocker-cuts")!;
 let goal = "";
 let blocker = "";
 let upstream = "";
@@ -32,16 +35,13 @@ function run(args: string[], noGit = false) {
   });
 }
 
-/** Register injected command boundaries while retaining the real tracker SDK reads. */
-function customHandler(resolveRoot: Parameters<typeof registerBlockerCuts>[1], project: Parameters<typeof registerBlockerCuts>[2]): typeof handler {
-  let registered: typeof handler = handler;
-  const api = {
-    registerCommand: (command) => { registered = command.run; },
-    registerExporter: () => {},
-    registerService: () => {},
-  } satisfies ExtensionApi;
-  registerBlockerCuts(api, resolveRoot, project);
-  return registered;
+/** Use SDK registration with direct callbacks to preserve injected defect identity. */
+async function customHandler(resolveRoot: Parameters<typeof registerBlockerCuts>[1], project: Parameters<typeof registerBlockerCuts>[2]): Promise<Handler> {
+  const harness = await createExtensionTestHarness({
+    activate(api) { registerBlockerCuts(api as unknown as ExtensionApi, resolveRoot, project); },
+  } satisfies ExtensionModule, { name: "pm-graph", capabilities: ["commands", "schema"] });
+  after(async () => { await harness.deactivate(); });
+  return harness.activation.commands.handlers.find((entry) => entry.command === "pm-graph blocker-cuts")!.run as Handler;
 }
 
 before(async () => {
@@ -59,7 +59,7 @@ after(() => rmSync(workspace, { recursive: true, force: true }));
 test("projection defects propagate instead of becoming source refusals", async () => {
   const failure = new Error("projection defect");
   let projectCalls = 0;
-  const projectedHandler = customHandler((context) => context.pm_root!, (items, root) => {
+  const projectedHandler = await customHandler((context) => context.pm_root!, (items, root) => {
     projectCalls++;
     assert.equal(root, pmRoot);
     assert.equal(items.length, 3);
@@ -77,7 +77,7 @@ for (const [label, cause, message] of [
   ["non-Error", "tracker lookup refused", "tracker lookup refused"],
 ] as const) {
   test(`source refusals preserve ${label} causes`, async () => {
-    const sourceHandler = customHandler(() => { throw cause; }, () => { throw new Error("projection must not run"); });
+    const sourceHandler = await customHandler(() => { throw cause; }, () => { throw new Error("projection must not run"); });
     const result = await sourceHandler({ pm_root: pmRoot, args: [goal] }) as BlockerCutCommandRefusal;
     assert.equal(result.ok, false);
     assert.equal(result.code, "SOURCE_INCOMPLETE");

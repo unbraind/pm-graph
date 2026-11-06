@@ -96,7 +96,7 @@ test("documented CLI exports compare real SDK snapshots in a non-git tracker wit
 
 test("command refuses malformed files and flags without consulting a live tracker", async () => {
   const ws = mkdtempSync(join(tmpdir(), "pmg-snapshot-input-"));
-  const command = collectHandlers().get("pm-graph snapshot-impact")!;
+  const command = (await collectHandlers()).get("pm-graph snapshot-impact")!;
   try {
     const graph = { nodes: [{ id: "goal", labels: ["PmItem"], properties: { status: "ready" } }], relationships: [] };
     writeFileSync(join(ws, "graph.json"), JSON.stringify(graph));

@@ -1,0 +1,24 @@
+id: pm-graph-sdk-extension-harness
+title: Replace residual extension test host with the public SDK harness
+description: "Adopt the SDK test harness for residual graph registration and command tests. Preserve graph domain assertions and explicit fault injection. Companion audit: pm-cli-website-28c9 (G9)."
+type: Chore
+status: in_progress
+priority: 2
+tags[2]: sdk-adoption,testing
+created_at: "2026-11-06T15:47:30.819Z"
+updated_at: "2026-11-06T16:06:12.027Z"
+author: codex-sol
+comments[4]{created_at,author,text}:
+  "2026-11-06T15:48:31.316Z",codex-sol,"Scope: companion pm-cli-website-28c9 (G9), graph only. Read the audit and acceptance criteria. Replace the handwritten positive registration host with createExtensionTestHarness and SDK dispatch; retain graph assertions and file-input registered callbacks because the public runner has no cwd override. Keep fault injection focused. SDK pin remains unchanged."
+  "2026-11-06T15:54:47.752Z",codex-sol,"Migration removes activateWithRecording and smoke/blocker-cut host doubles. All shared positive command calls now use SDK dispatch, except file-input legacy cwd tests which use SDK-registered callbacks. Source build, lint and typecheck passed. Pinned SDK 2026.11.2 default test client does not forward global.author; mutation attribution fixture supplies PM_AUTHOR explicitly. Per task instructions, full release gates run in CI; local gates are targeted tests, lint and typecheck."
+  "2026-11-06T16:04:22.419Z",codex-sol,"Behavioral revert proofs in a disposable package copy: node --test --test-concurrency=2 test/extension-harness.test.ts failed 1/1 with the original activateWithRecording/collectHandlers implementation restored (expected mutation author was undefined). Replacing only collectHandlers SDK dispatch with registered raw callbacks also failed 1/1 at the injected tracker-bound SDK assertion. Both implementations were restored in finally; the package worktree was never mutated by the proofs. File-input commands project, snapshot-impact, refresh and evidence-path intentionally use SDK-registered callbacks to retain cwd semantics. Full CI remains required."
+  "2026-11-06T16:06:00.774Z",codex-sol,"Final local validation: linked focused suite passed 9 tests, 0 failed, 0 skipped via pm test pm-graph-sdk-extension-harness --run --progress --timeout 900. npm run lint, npm run typecheck, npm run build:test, npm run build, npm run duplication and npm run docstring passed (0% duplication; 220 documented declarations). Both behavioral revert probes failed 1/1 as required, and the restored implementation passed the focused suite. Native test-result tracking is disabled, so this comment records the receipt. Full npm/Bun release gates and real Neo4j acceptance run in CI per the task. Ready for the requested PR and queued current-head review. Keep the item open for orchestrator verification."
+files[3]{path,scope}:
+  test/blocker-cuts-command.test.ts,project
+  test/extension-harness.test.ts,project
+  test/helpers.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test --test-concurrency=2 '--test-name-pattern=shared command adapter|extension has required shape|extension registers|activate registers|exporter adapter|projection defects|source refusals|real non-git tracker BLOCKS' test/extension-harness.test.ts test/smoke.test.ts test/export-and-contract.test.ts test/blocker-cuts-command.test.ts test/analytics-direction.test.ts,project,codex-sol,"2026-11-06T15:59:48.268Z",local_mutation,graph-sdk-extension-test-harness
+docs[1]{path,scope}:
+  docs/sdk-test-harness.md,project
+body: ""

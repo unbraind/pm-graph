@@ -26,7 +26,7 @@ console.log(JSON.stringify({ fixtureReady: true, maxProcessors: 2, maxHeapMiB: 5
 const actual = neo4j.driver(server.uri, neo4j.auth.basic("fixture", "synthetic"), { maxTransactionRetryTime: 0 });
 const originalEnv = applyEnv({ NEO4J_URI: server.uri, NEO4J_USER: "fixture", NEO4J_PASSWORD: "synthetic", NEO4J_DATABASE: "neo4j", NEO4J_MAX_RETRY_MS: "0" });
 const f = fixture();
-const handlers = collectHandlers();
+const handlers = await collectHandlers();
 const a = await seed(f.client, "victim");
 const b = await seed(f.client, "retained");
 await f.client.update(a, { blockedBy: b, unset: ["parent", "assignee", "reviewer", "sprint", "release", "blocked_reason"], clearDeps: true });

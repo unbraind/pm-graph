@@ -7,6 +7,7 @@
  */
 
 import assert from "node:assert/strict";
+import { after } from "node:test";
 import { execFileSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,7 +18,6 @@ import type { ExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
 
 import extension, {
   type CommandContext,
-  type ExtensionApi,
   type Graph,
   type GraphNode,
   type GraphRelationship,
@@ -159,47 +159,37 @@ export async function captureStdoutThrow(fn: () => Promise<unknown>): Promise<{ 
 }
 
 /**
- * Activate the extension with a recording API double that captures all
- * command, exporter, and service registrations. Used by tests that need to
- * inspect what was registered (not just dispatch handlers).
+ * Expose commands registered by the real SDK host, dispatching normal calls
+ * through its runner so they receive the host-bound SDK and global defaults.
+ * File-input commands retain registered callbacks because runCommand has no
+ * cwd override; their relative-file and omitted-context behavior is domain policy.
  */
-export function activateWithRecording(): {
-  commands: Map<string, Handler>;
-  services: string[];
-  exporters: string[];
-} {
-  const commands = new Map<string, Handler>();
-  const services: string[] = [];
-  const exporters: string[] = [];
-  const api = {
-    registerCommand: (cmd: { name: string; run: Handler }) => commands.set(cmd.name, cmd.run),
-    registerExporter: (name: string) => exporters.push(name),
-    registerImporter: () => {},
-    registerHook: () => {},
-    registerSchema: () => {},
-    registerRenderer: () => {},
-    registerSearchProvider: () => {},
-    registerPreflight: () => {},
-    registerService: (name: string) => services.push(name),
-  };
-  extension.activate(api as ExtensionApi);
-  return { commands, services, exporters };
+export async function collectHandlers(host?: ExtensionTestHarness): Promise<Map<string, Handler>> {
+  const harness = host ?? await makeHarness();
+  return new Map(harness.activation.commands.handlers.map((entry) => [entry.command, async (context: CommandContext) => {
+    if (["pm-graph project", "pm-graph snapshot-impact", "pm-graph refresh", "pm-graph evidence-path"].includes(entry.command)) {
+      return (entry.run as Handler)(context);
+    }
+    const result = await harness.runCommand({
+      command: entry.command,
+      args: context.args,
+      options: context.options,
+      global: context.global as Parameters<typeof harness.runCommand>[0]["global"],
+      pmRoot: context.pm_root ?? path.join(context.workspaceRoot ?? context.cwd ?? process.cwd(), ".agents", "pm"),
+    });
+    assert.equal(result.handled, true, result.errorMessage ?? "SDK command must be handled");
+    return result.result;
+  }]));
 }
 
-/**
- * Register the pm-graph extension with a hand-rolled API double that records
- * command handlers, so tests can dispatch them directly.
- */
-export function collectHandlers(): Map<string, Handler> {
-  return activateWithRecording().commands;
-}
-
-/** Create the SDK test harness bound to the pm-graph extension. */
+/** Create the real SDK host for pm-graph and release it at test teardown. */
 export async function makeHarness(): Promise<ExtensionTestHarness> {
-  return createExtensionTestHarness(extension, {
+  const harness = await createExtensionTestHarness(extension, {
     name: "pm-graph",
     capabilities: ["commands", "importers", "services", "schema"],
   });
+  after(async () => { await harness.deactivate(); });
+  return harness;
 }
 
 /** Restore process.env to a snapshot after mutating it in a test. */
@@ -230,19 +220,19 @@ export function fakeNpmDir(mode: number | "signal", prefix: string = "pm-graph-n
  * Set up a workspace with a 3-item blocked-by chain (Alpha <- Beta <- Gamma)
  * and return the workspace, ids, and the requested command handler.
  */
-export function setupChainWorkspace(prefix: string, handlerName: string): {
+export async function setupChainWorkspace(prefix: string, handlerName: string): Promise<{
   ws: string;
   a: string;
   b: string;
   c: string;
   run: Handler;
-} {
+}> {
   const ws = freshWorkspace(prefix);
   pm(ws, ["init"]);
   const a = createItem(ws, "Alpha");
   const b = createItem(ws, "Beta", a);
   const c = createItem(ws, "Gamma", b);
-  const run = collectHandlers().get(handlerName)!;
+  const run = (await collectHandlers()).get(handlerName)!;
   return { ws, a, b, c, run };
 }
 
@@ -250,18 +240,18 @@ export function setupChainWorkspace(prefix: string, handlerName: string): {
  * Set up a workspace with a 2-node dependency cycle (X <-> Y) and return the
  * workspace, ids, and the `pm-graph cycles` handler.
  */
-export function setupCycleWorkspace(prefix: string): {
+export async function setupCycleWorkspace(prefix: string): Promise<{
   ws: string;
   x: string;
   y: string;
   run: Handler;
-} {
+}> {
   const ws = freshWorkspace(prefix);
   pm(ws, ["init"]);
   const x = createItem(ws, "X");
   const y = createItem(ws, "Y", x);
   pm(ws, ["update", x, "--blocked-by", y]);
-  const run = collectHandlers().get("pm-graph cycles")!;
+  const run = (await collectHandlers()).get("pm-graph cycles")!;
   return { ws, x, y, run };
 }
 
@@ -270,13 +260,13 @@ export function setupCycleWorkspace(prefix: string): {
  * requested command handler. Used by tests that only need a handler without
  * any items.
  */
-export function setupBareWorkspace(prefix: string, handlerName: string): {
+export async function setupBareWorkspace(prefix: string, handlerName: string): Promise<{
   ws: string;
   run: Handler;
-} {
+}> {
   const ws = freshWorkspace(prefix);
   pm(ws, ["init"]);
-  const run = collectHandlers().get(handlerName)!;
+  const run = (await collectHandlers()).get(handlerName)!;
   return { ws, run };
 }
 
