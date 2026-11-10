@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026.11.10 - 2026-11-10
+
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#204](https://github.com/unbraind/pm-graph/pull/204))
+- Bump the codeql-action group with 2 updates ([#201](https://github.com/unbraind/pm-graph/pull/201))
+- Bump the pm-toolchain group with 2 updates ([#200](https://github.com/unbraind/pm-graph/pull/200))
+- Bump @unbrained/pm-cli ([#198](https://github.com/unbraind/pm-graph/pull/198))
+- Bump @unbrained/pm-cli ([#197](https://github.com/unbraind/pm-graph/pull/197))
+- Bump the pm-toolchain group with 3 updates ([#196](https://github.com/unbraind/pm-graph/pull/196))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml from 2026.10.23 to 2026.10.30 ([#190](https://github.com/unbraind/pm-graph/pull/190))
+- Bump the dependencies group across 1 directory with 3 updates ([#193](https://github.com/unbraind/pm-graph/pull/193))
+- Bump the pm-toolchain group with 3 updates ([#192](https://github.com/unbraind/pm-graph/pull/192))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#191](https://github.com/unbraind/pm-graph/pull/191))
+
 ## 2026.10.31 - 2026-10-31
 
 ### Added
