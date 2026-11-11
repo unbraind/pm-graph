@@ -1,6 +1,6 @@
 {
   "name": "pm-graph",
-  "version": "2026.10.31",
+  "version": "2026.11.10",
   "description": "Knowledge graph and dependency graph extension for pm CLI workspaces, with optional Neo4j sync.",
   "type": "module",
   "scripts": {
@@ -36,13 +36,13 @@
     "@babel/eslint-parser": "8.0.7",
     "@babel/plugin-syntax-typescript": "8.0.3",
     "@types/node": "26.6.6",
-    "@unbrained/pm-cli": "2026.11.3",
+    "@unbrained/pm-cli": "2026.11.6",
     "@viz-js/viz": "3.31.0",
     "eslint": "10.14.0",
     "jscpd": "5.4.2",
     "pm-brand": "github:unbraind/pm-brand#7ad0970d96a20c24b8dbd9e0dcd1efeb8b4d5cc1",
-    "pm-changelog": "2026.10.31",
-    "pm-ops": "2026.11.2",
+    "pm-changelog": "2026.11.6",
+    "pm-ops": "2026.11.6",
     "typescript": "7.0.2"
   },
   "files": [
