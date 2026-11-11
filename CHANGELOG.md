@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.11 - 2026-11-11
+
+### Dependencies
+
+- Bump the pm-toolchain group across 1 directory with 2 updates ([#206](https://github.com/unbraind/pm-graph/pull/206))
+
 ## 2026.11.10 - 2026-11-10
 
 ### Dependencies
