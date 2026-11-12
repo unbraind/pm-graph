@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.11.12 - 2026-11-12
+
+### Dependencies
+
+- Bump jscpd ([#209](https://github.com/unbraind/pm-graph/pull/209))
+- Bump the pm-toolchain group across 1 directory with 2 updates ([#206](https://github.com/unbraind/pm-graph/pull/206))
+
 ## 2026.11.10 - 2026-11-10
 
 ### Dependencies
