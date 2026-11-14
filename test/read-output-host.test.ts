@@ -6,9 +6,10 @@ import { join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 
 import { PmClient } from "@unbrained/pm-cli/sdk";
-import { createExtensionTestHarness } from "@unbrained/pm-cli/sdk/testing";
+import { createExtensionTestHarness, decodeToon } from "@unbrained/pm-cli/sdk/testing";
 import extension from "../src/index.ts";
 import { publicChildEnv } from "./fixtures/public-child-env.ts";
+import { fingerprint } from "../scripts/tracker-fingerprint.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { name: string; version: string; devDependencies: Record<string, string> };
@@ -167,15 +168,27 @@ test("sync rejects read controls before any provider write", () => {
 });
 
 test("raw exports remain documents; universal controls select structured rows", () => {
-  const ordinary = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "export", "--format", "mermaid"]);
-  assert.equal(ordinary.status, 0, ordinary.stderr);
+  const before = fingerprint(join(workspace, ".agents/pm"));
+  // GH-1678 measures rendered bytes: keep the raw document within the unchanged default ceiling.
+  const ordinary = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "export", "--format", "mermaid", "--root", ids[0]!, "--depth", "0"]);
+  assert.equal(ordinary.status, 0, ordinary.stderr || ordinary.stdout);
   assert.match(ordinary.stdout, /^%%\{init:[^\n]+\}%%\ngraph TD\n/u);
+  const oversizedRun = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "export", "--format", "mermaid"]);
+  assert.equal(oversizedRun.status, 2, oversizedRun.stderr || oversizedRun.stdout);
+  const oversized = decodeToon(oversizedRun.stdout) as Record<string, unknown>;
+  const refusal = oversized.output_budget_exceeded as { omitted_result: boolean; reason: string };
+  const receipt = oversized.read_output as { budget_source: string; budget_tokens: number; within_budget: boolean; omitted_result_estimated_tokens: number };
+  assert.equal(refusal.omitted_result, true);
+  assert.equal(refusal.reason, "requested_budget_infeasible");
+  assert.equal(receipt.budget_source, "default"); assert.equal(receipt.budget_tokens, 4000);
+  assert.equal(receipt.within_budget, false); assert.ok(receipt.omitted_result_estimated_tokens > receipt.budget_tokens);
   const structured = pm(["pm-graph", "export", "--format", "mermaid", "--output-include", "graph.nodes.id", "--output-budget", "unbounded"]);
   assert.equal(rows(structured, "graph.nodes").filter((row) => ids.includes((row as { id: string }).id)).length, ids.length);
   const path = join(workspace, "must-not-exist.mmd");
   const file = run(process.execPath, [cli, "--pm-path", ".agents/pm", "pm-graph", "export", "--format", "mermaid", "--output", path, "--output-budget", "1000"]);
   assert.equal(file.status, 2);
   assert.equal(existsSync(path), false);
+  assert.equal(fingerprint(join(workspace, ".agents/pm")), before);
 });
 
 /** The caller selected a file, so the host must not render exported graph rows on stdout. */

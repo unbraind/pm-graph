@@ -1,0 +1,20 @@
+id: pm-graph-option-contract-1114
+title: Adopt pm-cli option contract and current pm-toolchain
+description: "Supersede Dependabot PR 211 while preserving raw graph documents, structured controls and before-write refusals."
+type: Chore
+status: in_progress
+priority: 2
+tags[2]: dependencies,"gh:unbraind/pm-graph#211"
+created_at: "2026-11-14T10:53:55.653Z"
+updated_at: "2026-11-14T10:57:52.209Z"
+author: codex-toolchain-1114a
+comments[2]{created_at,author,text}:
+  "2026-11-14T10:55:53.603Z",codex-toolchain-1114a,"Failure -> cause -> fix: raw Mermaid export of 36 long-identity fixture nodes now exits 2 -> GH-1678 (pm-cli CHANGELOG 2026.11.8) enforces the custom renderer byte budget, correctly measuring 7736 tokens against the unchanged 4000-token default -> exercise the existing root/depth shaping for a valid small raw document, and retain the entire large fixture as an explicit output_budget_exceeded refusal (requested_budget_infeasible, exit 2, default budget 4000, measured tokens above budget). Full structured export with an explicit unbounded control must still return every fixture row. Keep the before-write file/control refusal and add an authoritative tracker fingerprint check. No production code, thresholds or row-count requirements changed."
+  "2026-11-14T10:57:50.249Z",codex-toolchain-1114a,"Final linked focused run passes 3/3 tests with zero failures, cancellations or skips: bounded raw document plus oversized default-budget refusal and complete structured export, compact file receipts, and diagram/control behavior. The oversized refusal is checked in TOON, retaining its 4000-token ceiling; JSON has a distinct 6000-token default, so the test does not compare those format-specific defaults. Authoritative tracker bytes remain unchanged. npm/Bun typecheck, build:test, lint, zero-duplication gate (0%, unchanged 0% threshold), and docstrings (220 declarations) pass. Original current-pin raw case fails exit 2 before adaptation, providing migration revert proof. Full npm/Bun release checks remain queued serially at unchanged coverage thresholds."
+files[3]{path,scope}:
+  package-lock.json,project
+  package.json,project
+  test/read-output-host.test.ts,project
+tests[1]{command,scope,timeout_seconds,provenance{author,created_at,source_kind,source_ref}}:
+  "node --test --test-concurrency=2 --test-name-pattern=\"raw exports remain documents|file export receipts|diagram variants|writer controls|ordinary graph\" test/read-output-host.test.ts",project,600,codex-toolchain-1114a,"2026-11-14T10:55:58.626Z",local_mutation,chore/adopt-pm-cli-option-contract
+body: ""
