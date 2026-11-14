@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.11.12 - 2026-11-12
+
+### Dependencies
+
+- Bump jscpd ([#209](https://github.com/unbraind/pm-graph/pull/209))
+- Bump the pm-toolchain group across 1 directory with 2 updates ([#206](https://github.com/unbraind/pm-graph/pull/206))
+
 ## 2026.11.10 - 2026-11-10
 
 ### Dependencies
@@ -164,9 +171,9 @@
 
 ### Fixed
 
-- A failed provenance publish silently falls back to an unattested one ([pm-graph-1fe4](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fe4.toon))
 - Unblock PR 70 suffixed CalVer changelog gate ([pm-graph-gjpd](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-gjpd.toon))
 - Close PR 79 scalar escape review findings ([pm-graph-ewxc](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ewxc.toon))
+- A failed provenance publish silently falls back to an unattested one ([pm-graph-1fe4](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fe4.toon))
 
 ### Other
 
@@ -380,17 +387,17 @@
 
 ### Added
 
-- Deepen pm-graph with offline analytics + new export formats ([pm-graph-1dpk](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-1dpk.toon))
 - Unit tests for analytics + new renderers ([pm-graph-f9c3](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-f9c3.toon))
 - graph exporter: add graphml + plantuml formats ([pm-graph-79f2](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-79f2.toon))
+- Deepen pm-graph with offline analytics + new export formats ([pm-graph-1dpk](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-1dpk.toon))
 
 ### Other
 
+- Decision: analytics operate on STRUCTURAL edges only ([pm-graph-89nw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-89nw.toon))
 - pm-graph critical-path: longest blocking chain ([pm-graph-f1k9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-f1k9.toon))
 - pm-graph path: shortest dependency path (BFS) ([pm-graph-vtlu](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-vtlu.toon))
 - pm-graph cycles: detect dependency cycles, CI exit code ([pm-graph-h0xs](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-h0xs.toon))
 - pm-graph analyze: offline graph-health report ([pm-graph-d9tz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-d9tz.toon))
-- Decision: analytics operate on STRUCTURAL edges only ([pm-graph-89nw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-89nw.toon))
 
 ## 2026.6.2 - 2026-06-02
 
