@@ -103,17 +103,45 @@
 
 - Closed: Committed CHANGELOG.md drifts from deterministic regeneration after the pm-graph-3svp type classification change, breaking changelog:check on every PR ([pm-graph-brgk](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-brgk.toon))
 
+## 2026.10.20 - 2026-10-20
+
+No changes.
+
+## 2026.10.18 - 2026-10-18
+
+No changes.
+
+## 2026.10.17 - 2026-10-17
+
+No changes.
+
+## 2026.10.16 - 2026-10-16
+
+No changes.
+
 ## 2026.10.14 - 2026-10-14
 
 ### Added
 
 - Adopt SDK read_output contracts on pm-graph read commands ([pm-graph-by2t](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-by2t.toon))
 
+## 2026.10.10 - 2026-10-10
+
+No changes.
+
+## 2026.10.9 - 2026-10-09
+
+No changes.
+
 ## 2026.10.5 - 2026-10-05
 
 ### Other
 
 - Auto-merge green Dependabot updates and group the pm toolchain into one daily PR ([pm-graph-088p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-088p.toon))
+
+## 2026.10.4 - 2026-10-04
+
+No changes.
 
 ## 2026.9.26 - 2026-09-26
 
@@ -124,6 +152,14 @@
 ### Other
 
 - Certify pm CLI 2026.9.23 and adopt the guarded pm-ops merge-driver launcher ([pm-graph-at6i](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-at6i.toon))
+
+## 2026.9.23 - 2026-09-23
+
+No changes.
+
+## 2026.9.19 - 2026-09-19
+
+No changes.
 
 ## 2026.9.18 - 2026-09-18
 
@@ -142,6 +178,10 @@
 ### Other
 
 - Certify pm CLI 2026.9.10 and pick up the canonical auditor fixes the lockfile was holding back ([pm-graph-upz4](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-upz4.toon))
+
+## 2026.9.9 - 2026-09-09
+
+No changes.
 
 ## 2026.9.8 - 2026-09-08
 
@@ -302,6 +342,18 @@
 
 - Closed: Recommend pm merge reconcile (2026.7.22) over raw history-repair in Multi-agent merge safety docs ([pm-graph-10e8](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-10e8.toon))
 
+## 2026.7.22 - 2026-07-22
+
+No changes.
+
+## 2026.7.21 - 2026-07-21
+
+No changes.
+
+## 2026.7.19 - 2026-07-19
+
+No changes.
+
 ## 2026.7.18 - 2026-07-18
 
 ### Added
@@ -324,6 +376,14 @@
 ### Closed
 
 - Closed: pm-graph export --format json emits TOON; neighbors/query reject positional args at contract layer ([pm-graph-1fr9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-1fr9.toon))
+
+## 2026.7.14 - 2026-07-14
+
+No changes.
+
+## 2026.7.11 - 2026-07-11
+
+No changes.
 
 ## 2026.7.10-1 - 2026-07-10
 
@@ -349,6 +409,10 @@
 
 - Ecosystem release readiness pass 2026-07-06 ([pm-graph-qqsg](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-qqsg.toon))
 
+## 2026.7.7 - 2026-07-07
+
+No changes.
+
 ## 2026.7.6 - 2026-07-06
 
 ### Fixed
@@ -360,11 +424,31 @@
 - Align Node engine with pm CLI runtime ([pm-graph-yrkr](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-yrkr.toon))
 - Regenerate CHANGELOG after pm close item ([pm-graph-ozh8](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-ozh8.toon))
 
+## 2026.6.14 - 2026-06-14
+
+No changes.
+
+## 2026.6.13 - 2026-06-13
+
+No changes.
+
+## 2026.6.10-1 - 2026-06-10
+
+No changes.
+
+## 2026.6.10 - 2026-06-09
+
+No changes.
+
 ## 2026.6.9-1 - 2026-06-09
 
 ### Added
 
 - Add --format mermaid/graphml to graph cycles and critical-path ([pm-graph-jqiv](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-jqiv.toon))
+
+## 2026.6.9 - 2026-06-09
+
+No changes.
 
 ## 2026.6.7 - 2026-06-07
 
@@ -404,6 +488,10 @@
 ### Added
 
 - Add multi-format graph exporter (pm graph export): cypher, mermaid, dot, json-graph ([pm-graph-xii9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-xii9.toon))
+
+## 2026.5.31 - 2026-05-31
+
+No changes.
 
 ## 2026.5.30 - 2026-05-30
 
