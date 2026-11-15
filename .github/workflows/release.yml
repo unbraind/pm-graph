@@ -27,3 +27,4 @@ jobs:
       retire-unpublished: ${{ github.event_name == 'workflow_dispatch' &&
         inputs.retire-unpublished == true }}
       release-enabled: ${{ github.ref == 'refs/heads/main' }}
+      prepare-script: release:prepare
