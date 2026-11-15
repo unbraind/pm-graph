@@ -78,6 +78,7 @@ runs as success.
 
 The contraction model checks transition totals against generated sequences times
 twelve, rather than a fixed full-depth total. Linked integration runs use
-`--pm-context none --override-linked-pm-context --env-clear PM_PATH` because
+`--pm-context none --override-linked-pm-context --workspace-context snapshot
+--override-linked-workspace-context` because
 their CLI fixtures already own isolated trackers. The retained project extension
 installer also prevents local host-version cache skew before strict health.
