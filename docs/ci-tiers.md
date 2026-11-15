@@ -82,3 +82,11 @@ twelve, rather than a fixed full-depth total. Linked integration runs use
 --override-linked-workspace-context` because
 their CLI fixtures already own isolated trackers. The retained project extension
 installer also prevents local host-version cache skew before strict health.
+
+Local quick coverage passed 453 tests with zero skips in 828.63 seconds
+(13m49s), including complete-suite receipts and all 33 runtime source files:
+99.74% lines, 95.59% branches, 100% functions. The snapshot-linked touched
+suite passed 127/127 in 293.121 seconds. No late-seed coverage gap reproduced.
+For PR head `01c02d2`, Windows lifecycle passed in 195 seconds queue-inclusive
+wall time (161 seconds execution); Ubuntu required checks remained queued.
+Hosted full and overloaded-local quick timings are not directly comparable.
