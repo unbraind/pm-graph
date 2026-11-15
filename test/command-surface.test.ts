@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 /**
  * Command-surface and error-path coverage for the pm-graph extension, driven
  * through the real SDK test harness (`createExtensionTestHarness`) against
@@ -418,21 +419,18 @@ test("status with Neo4j not configured returns the local item count", { skip: !p
 // and fails, hitting neo4jFriendlyError
 // ---------------------------------------------------------------------------
 
-test("query with Neo4j env vars set reaches the connection-error path", { skip: !pmAvailable }, async () => {
+test("query with Neo4j env vars set reaches the connection-error path", { skip: !pmAvailable, timeout: testTime(5_000) }, async () => {
   await withCommandWorkspace("pmg-cmd-", async ({ harness, pmRoot }) => {
     // Point the driver at a closed local port and cap its connect/retry budgets
     // so the connection attempt fails in well under a second instead of waiting
     // out the driver's 30s transaction-retry default against an absent host.
     const originalEnv = applyEnv(NEO4J_FAIL_ENV);
     try {
-      const start = Date.now();
       const res = await harness.runCommand({
         command: "pm-graph query",
         args: ["MATCH (n) RETURN n LIMIT 1"],
         pmRoot,
       }) as CmdResult;
-      const elapsed = Date.now() - start;
-      assert.ok(elapsed < 5000, `connection error reached quickly (took ${elapsed}ms)`);
       assert.ok(res.errorMessage || !res.handled, "connection failure surfaces an error");
       if (res.errorMessage) {
         // The friendly error mentions reachability or authentication.

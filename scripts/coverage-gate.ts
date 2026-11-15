@@ -1,3 +1,4 @@
+import { testTime } from "../test/support/time.ts";
 /** Fail closed over every authored runtime module and a complete, unskipped test run. */
 import { spawnSync } from "node:child_process";
 import { globSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
@@ -193,7 +194,7 @@ export function runCoverageGate(root: string): void {
     `--test-reporter-destination=${receiptPath}`,
     "--test-reporter=lcov", `--test-reporter-destination=${reportPath}`,
     ...new Set(tests),
-  ], { cwd: root, stdio: nested ? "pipe" : "inherit", encoding: "utf8", env });
+  ], { cwd: root, stdio: nested ? "pipe" : "inherit", encoding: "utf8", env, timeout: testTime(20 * 60_000) });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     // Expected fixture failures stay quiet; unexpected failures retain diagnostics

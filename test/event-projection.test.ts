@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
@@ -80,7 +81,7 @@ test("seeded model: 500 operation sequences read SDK state, replay older inputs,
     } };
     const modelOptions = { pmRoot: f.pmRoot, stateFile: f.stateFile, sink };
     const first = await refreshEventProjection(modelOptions); assert.equal(first.ok, true, JSON.stringify(first));
-    for (let sequence = 0; sequence < 500; sequence++) {
+    for (let sequence = 0; sequence < testDepth(500); sequence++) {
       for (let op = 0; op < 2 + random(3); op++) {
         const id = ids[random(ids.length)];
         const target = ids[(ids.indexOf(id) + 1 + random(ids.length - 1)) % ids.length];

@@ -1,3 +1,5 @@
+import { testTime } from "./support/time.ts";
+import { testDepth } from "./support/depth.ts";
 /** Adversarial storage-presence and event-generation recovery across every projection transport. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -18,7 +20,7 @@ test("storage presence is independent of all foreign JSON payloads and only a mi
     await seed(f.client, "presence");
     let randomState = 0x175225;
     const payloads = [...FOREIGN_CHECKPOINTS];
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < testDepth(100); i++) {
       randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
       payloads.push(JSON.stringify([randomState, null, false, `\r\n ${randomState} `]));
     }
@@ -106,7 +108,7 @@ test("non-git real CLI JSON and TOON preserve foreign payloads and recover empty
     installBuiltGraphExtension(f.pmRoot);
     const emptyPath = join(f.ws, "no-git"); mkdirSync(emptyPath);
     const run = (args: string[], json: boolean) => spawnSync(process.execPath, [cli, "pm-graph", "refresh", ...args, ...(json ? ["--json"] : [])], {
-      cwd: f.ws, encoding: "utf8", timeout: 30000,
+      cwd: f.ws, encoding: "utf8", timeout: testTime(30000),
       env: { ...process.env, PM_PATH: "", PATH: emptyPath, GIT_CEILING_DIRECTORIES: tmpdir() },
     });
     for (const json of [true, false]) {

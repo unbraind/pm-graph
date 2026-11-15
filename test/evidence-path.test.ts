@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { explainEvidencePath } from "../src/index.ts";
@@ -113,7 +114,7 @@ function paths(input: EvidencePathInput): string[][] {
 test("1000 seeded graphs compare known and optimistic exact oracles, bounds, serialization and extreme domains", () => {
   let seed = 0x51c057;
   const random = (max: number): number => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) % max; };
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < testDepth(1000); i++) {
     const ids = Array.from({ length: 2 + random(6) }, (_, n) => String(n));
     const input: EvidencePathInput = { nodes: ids.map((id) => ({ id })), from: ids[0], to: ids.at(-1)!, edgeTypes: ["E"],
       edges: ids.flatMap((from) => ids.filter(() => random(4) === 0).map((to) => ({ from, to, type: "E" }))),

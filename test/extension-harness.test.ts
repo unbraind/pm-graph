@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
@@ -54,7 +55,7 @@ test("shared command adapter preserves SDK flags, schema, tracker binding and mu
   assert.equal(snapshot.items[0].title, "Harness mutation");
   assert.equal(snapshot.items[0].author, "harness-agent");
   installBuiltGraphExtension(f.pmRoot);
-  const output = spawnSync(process.execPath, [cli, "--pm-path", f.pmRoot, "pm-graph", "export", "--json", "--output-include", "graph.nodes.id", "--output-budget", "unbounded"], { cwd: f.ws, encoding: "utf8", timeout: 30_000 });
+  const output = spawnSync(process.execPath, [cli, "--pm-path", f.pmRoot, "pm-graph", "export", "--json", "--output-include", "graph.nodes.id", "--output-budget", "unbounded"], { cwd: f.ws, encoding: "utf8", timeout: testTime(30_000) });
   assert.equal(output.status, 0, output.stderr);
   const receipt = JSON.parse(output.stdout) as { read_output: { command: string }; graph: { nodes: Array<{ id: string }> } };
   assert.equal(receipt.read_output.command, "extension:pm-graph export");

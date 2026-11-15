@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 /** Manual packed acceptance across actual global, ephemeral and project package-manager hosts. */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -23,7 +24,7 @@ const baseEnv = { ...publicChildEnv(), NPM_CONFIG_USERCONFIG: "/dev/null", npm_c
 function run(bin: string, args: string[], cwd: string, extra: Record<string, string> = {}, expected = 0): string {
   const install = ["install", "add"].includes(args[0]);
   const argv = bin === "npm" && args[0] === "install" ? [...args, "--no-audit", "--no-fund"] : args;
-  const result = spawnSync(bin, argv, { cwd, env: { ...baseEnv, ...extra }, encoding: "utf8", timeout: install ? 600000 : 240000, maxBuffer: 4 * 1024 * 1024 });
+  const result = spawnSync(bin, argv, { cwd, env: { ...baseEnv, ...extra }, encoding: "utf8", timeout: testTime(install ? 600000 : 240000), maxBuffer: 4 * 1024 * 1024 });
   assert.equal(result.status, expected, `${bin} ${args[0]}: ${result.stderr || result.stdout || result.error}`);
   return result.stdout;
 }

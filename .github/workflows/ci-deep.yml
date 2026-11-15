@@ -1,0 +1,133 @@
+name: CI Deep
+
+# Exhaustive validation is observational after merge; never a required PR check.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily off-peak run, separate from release (03:23 and hourly :41) and CodeQL (Monday 05:05).
+    - cron: "33 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-deep-${{ github.ref }}
+  cancel-in-progress: true
+
+# Distinct check names prevent a manual branch run from matching required PR checks.
+jobs:
+  deep:
+    # Busy local slots must queue. Only the fleet controller disables this pool
+    # after all local hosts have been unreachable for ten minutes.
+    runs-on: ${{ vars.PM_LOCAL_DEEP != 'off' && fromJSON('["self-hosted","pm-local"]') || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 26]
+    env:
+      PM_TEST_DEPTH: full
+      # Acceptance watchdogs allow slower local installs without becoming unbounded.
+      PM_TEST_TIME_SCALE: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+
+      - name: Setup Bun
+        if: runner.environment == 'github-hosted'
+        uses: oven-sh/setup-bun@v2.2.0
+
+      - name: Report Bun version
+        run: bun --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install project pm-github extension
+        shell: bash
+        run: bash scripts/install-pm-github.sh
+
+      - name: Verify tracked pm project health
+        run: timeout --signal=TERM --kill-after=10s 360s ./node_modules/.bin/pm health --strict-exit --require-merge-drivers
+
+      - name: Build and verify committed output is current
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Every flag below is load-bearing. Do not simplify any of them without
+          # reading why it is here; each one was a way this gate silently passed.
+          #
+          #   'dist/' with the trailing slash — cosmetic, not corrective. A bare
+          #     `dist` pathspec does NOT match dist-test/; git pathspecs match whole
+          #     path components, so `dist` matches the dist directory and nothing
+          #     else. An earlier revision of this comment claimed otherwise and was
+          #     wrong (caught in review on pm-web#76). The slash is kept only
+          #     because it states the intent at a glance.
+          #   --error-unmatch + exit 1 — an untracked dist/ used to skip the gate.
+          #     This package is installed by copying the repository, so untracked
+          #     build output is the defect, not an exemption from checking for it.
+          #   rm -rf dist — tsc never removes output for a deleted source, so an
+          #     orphaned artifact survived every rebuild and every comparison.
+          #   git status, not git diff — `git diff --quiet` cannot see a NEW file at
+          #     all, so a newly generated artifact was invisible to it.
+          #   --untracked-files=all — without it a new file inside a tracked
+          #     directory is reported as the directory, not the file.
+          #   --ignored=matching — some packages gitignore a dist/ whose contents
+          #     git tracks; there a new artifact is invisible to plain git status
+          #     too, so one .gitignore line would have disabled this gate forever.
+          #     'matching' rather than plain --ignored keeps the report scoped to the
+          #     pathspec instead of listing node_modules.
+          if ! git ls-files --error-unmatch 'dist/' > /dev/null 2>&1; then
+            echo "::error::dist/ is not tracked. This package is installed by copying the repository, so the build output has to be in git."
+            exit 1
+          fi
+          rm -rf dist
+          npm run build
+          drift=$(git status --porcelain=v1 --untracked-files=all --ignored=matching -- 'dist/')
+          if [ -n "$drift" ]; then
+            echo "::error::Committed dist/ does not match a fresh build. Run 'npm run build' and commit the result."
+            printf '%s\n' "$drift"
+            exit 1
+          fi
+          echo "Committed dist/ matches a fresh build."
+
+      - name: Full npm release gate
+        run: npm run release:check
+
+      - name: Full Bun release gate
+        run: bun run release:check
+
+      - name: Verify Bun can install the package graph
+        run: bun install --no-save
+
+      - name: Set up Java for isolated Neo4j concurrency fixtures
+        if: matrix.node-version == 26
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Preserve foreign graph records across real Neo4j session interleavings
+        if: matrix.node-version == 26
+        shell: bash
+        run: |
+          graph_fixture="$(mktemp -d)"
+          trap 'rm -rf "$graph_fixture"' EXIT
+          mkdir "$graph_fixture/server"
+          curl --fail --silent --show-error --location --retry 3 https://dist.neo4j.org/neo4j-community-5.26.27-unix.tar.gz --output "$graph_fixture/archive.tgz"
+          printf '%s  %s\n' 5e752081e2863febf3d2f11fab31e1a3185e1ea7bb5e0bcf7d8e516ddbec5349 "$graph_fixture/archive.tgz" | sha256sum --check --status
+          tar -xzf "$graph_fixture/archive.tgz" --strip-components=1 -C "$graph_fixture/server"
+          printf '%s\n' '{"owner":"pm-graph/isolated-neo4j-fixture","version":1}' > "$graph_fixture/server/pm-graph-fixture.json"
+          node test/event-projection-neo4j-live.validation.ts "$graph_fixture/server"
+

@@ -1,3 +1,5 @@
+import { testTime } from "./support/time.ts";
+import { testDepth } from "./support/depth.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -23,7 +25,7 @@ let a = ""; let b = "";
 /** Invoke the real pinned host with no git executable and discovery stopped above the fixture. */
 function run(args: string[]) {
   return spawnSync(process.execPath, [cli, "--pm-path", pmRoot, ...args], { cwd: workspace,
-    env: { ...process.env, PATH: emptyBin, PM_AUTHOR: "contraction-test", GIT_CEILING_DIRECTORIES: dirname(workspace) }, encoding: "utf8", timeout: 120000 });
+    env: { ...process.env, PATH: emptyBin, PM_AUTHOR: "contraction-test", GIT_CEILING_DIRECTORIES: dirname(workspace) }, encoding: "utf8", timeout: testTime(120000) });
 }
 
 before(async () => {
@@ -76,7 +78,7 @@ test("500 seeded read-only export/replay sequences compare state read back throu
   const reference = structuredClone(initial.items);
   const inputs: ContractionInput[] = [];
   let seed = 0x51a7e;
-  for (let sequence = 0; sequence < 500; sequence++) {
+  for (let sequence = 0; sequence < testDepth(500); sequence++) {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     const current = await client.listAllComplete({ includeBody: true });
     assert.deepEqual(current.items, reference, `SDK state before sequence ${sequence}`);

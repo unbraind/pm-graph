@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Crash/source-update state machine uses real SDK items and an independent transactional sink model. */
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -96,7 +97,7 @@ test("500 post-action crash sequences converge after 0-3 source updates through 
       oldInputs.push(input);
       reference.set(a, await authoritative(f.pmRoot, a));
     };
-    for (let sequence = 0; sequence < 500; sequence++) {
+    for (let sequence = 0; sequence < testDepth(500); sequence++) {
       const phase = (["afterSink", "checkpoint", "receipt"] as const)[sequence < 48 ? sequence % 3 : random(3)];
       const updates = sequence < 48 ? Math.floor(sequence / 3) % 4 : random(4);
       const rebuild = (sequence < 48 ? Math.floor(sequence / 12) % 2 : random(2)) === 1;

@@ -1,17 +1,25 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Cancel superseded PR runs; manual runs stay independent.
+concurrency:
+  group: ci-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
+    # Required checks stay on fast GitHub-hosted hardware.
     runs-on: ubuntu-latest
+    # Bound quick-tier work and hung subprocesses on hosted slots.
+    timeout-minutes: 25
+    env:
+      PM_TEST_DEPTH: quick
     strategy:
       fail-fast: false
       matrix:
@@ -25,6 +33,32 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      # Checkout must precede this first decision. NUL delimiters handle unusual
+      # filenames; compare the actual PR endpoints, not the synthetic merge commit.
+      # Disable rename folding so moving source into docs still counts its deletion.
+      - name: Detect code changes
+        id: changes
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          code=true
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            code=false
+            git diff --name-only --no-renames -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/ci-changed-paths"
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                # Executable sources and committed artifacts need all source gates.
+                dist/*|*.mjs|*.cjs|*.js|*.ts|*.tsx|*.mts|*.cts) code=true ;;
+                .agents/pm/*|*.md|docs/*|CHANGELOG.md|LICENSE) ;;
+                *) code=true ;;
+              esac
+            done < "$RUNNER_TEMP/ci-changed-paths"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -32,6 +66,7 @@ jobs:
           cache: npm
 
       - name: Setup Bun
+        if: steps.changes.outputs.code == 'true'
         uses: oven-sh/setup-bun@v2.2.0
 
       - name: Install dependencies
@@ -42,6 +77,7 @@ jobs:
         run: bash scripts/install-pm-github.sh
 
       - name: Verify tracked pm project health
+        if: steps.changes.outputs.code != 'true' || matrix.node-version == 26
         shell: bash
         run: |
           set -euo pipefail
@@ -59,19 +95,21 @@ jobs:
           # still exiting successfully.
           timeout --signal=TERM --kill-after=10s 120s ./node_modules/.bin/pm health --strict-exit --require-merge-drivers
 
-      - name: Verify baked brand values before building
-        run: npm run brand:check
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Lint with the canonical fleet policy
-        run: npm run lint
-
-      - name: Duplication gate
-        run: npm run duplication
+      # No standalone markdown linter exists. These small suites enforce the
+      # existing README/example, package metadata and public commit contracts.
+      - name: Check documentation and tracker changes
+        if: steps.changes.outputs.code != 'true'
+        run: |
+          export PATH="$PWD/node_modules/.bin:$PATH"
+          npm run changelog:check
+          npm run verify:release-publish-attestation
+          npm run build
+          node --test test/package-metadata.test.ts test/manifest-vocabulary.test.ts test/identity-audit.test.ts
+          node --test --test-concurrency=2 test/analytics-direction.test.ts test/snapshot-impact.test.ts test/snapshot-impact-command.test.ts test/export-and-contract.test.ts test/read-output-host.test.ts
+          npm pack --dry-run --ignore-scripts
 
       - name: Build and verify committed output is current
+        if: steps.changes.outputs.code == 'true' && matrix.node-version == 26
         shell: bash
         run: |
           set -euo pipefail
@@ -112,61 +150,27 @@ jobs:
           fi
           echo "Committed dist/ matches a fresh build."
 
-      - name: Verify complete docstring coverage
-        run: npm run docstring
+      - name: Engines floor tests
+        if: steps.changes.outputs.code == 'true' && matrix.node-version == 22
+        run: npm test
 
-      - name: Test with coverage gate
-        # Node 26 runs this complete suite in both full release gates below.
-        if: matrix.node-version != 26
-        run: npm run coverage
+      - name: Quick npm release gate
+        if: steps.changes.outputs.code == 'true' && matrix.node-version == 26
+        run: npm run release:check
 
-      - name: Production dependency audit
-        run: npm run audit:prod
-
-      - name: Verify npm package contents
-        run: npm run pack:dry-run
-
-      - name: Verify generated changelog
-        run: npm run changelog:check
-
-      - name: Verify every publish invocation is attested
-        run: npm run verify:release-publish-attestation
-
-      - name: Verify the changelog date is derived from the version
-        run: npm run verify:release-changelog-date
-
+      # Packed acceptance is a separate manual script here, not part of release:check.
       - name: Verify Bun can install the package graph
-        run: bun install --no-save
-
-      - name: Verify full npm and Bun release gates
-        if: matrix.node-version == 26
-        shell: bash
+        if: steps.changes.outputs.code == 'true' && matrix.node-version == 26
         run: |
-          npm run release:check
-          bun run release:check
-
-      - name: Set up Java for isolated Neo4j concurrency fixtures
-        if: matrix.node-version == 26
-        uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Preserve foreign graph records across real Neo4j session interleavings
-        if: matrix.node-version == 26
-        shell: bash
-        run: |
-          graph_fixture="$(mktemp -d)"
-          trap 'rm -rf "$graph_fixture"' EXIT
-          mkdir "$graph_fixture/server"
-          curl --fail --silent --show-error --location --retry 3 https://dist.neo4j.org/neo4j-community-5.26.27-unix.tar.gz --output "$graph_fixture/archive.tgz"
-          printf '%s  %s\n' 5e752081e2863febf3d2f11fab31e1a3185e1ea7bb5e0bcf7d8e516ddbec5349 "$graph_fixture/archive.tgz" | sha256sum --check --status
-          tar -xzf "$graph_fixture/archive.tgz" --strip-components=1 -C "$graph_fixture/server"
-          printf '%s\n' '{"owner":"pm-graph/isolated-neo4j-fixture","version":1}' > "$graph_fixture/server/pm-graph-fixture.json"
-          node test/event-projection-neo4j-live.validation.ts "$graph_fixture/server"
+          bun install --no-save
+          bun --eval "await import('./dist/index.js')"
+          bunx --no-install pm --version
 
   windows-prepare-lifecycle:
     runs-on: windows-latest
+    timeout-minutes: 8
+    env:
+      PM_TEST_DEPTH: quick
     steps:
       - name: Checkout
         uses: actions/checkout@v7

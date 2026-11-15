@@ -1,3 +1,5 @@
+import { testTime } from "./support/time.ts";
+import { testDepth } from "./support/depth.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -26,7 +28,7 @@ const ids: string[] = [];
 
 /** Invoke the pinned real CLI with no git executable and no possible enclosing repository. */
 function run(args: string[]) {
-  return spawnSync(process.execPath, [cli, "--pm-path", pmRoot, ...args], { cwd: workspace, encoding: "utf8", timeout: 120000,
+  return spawnSync(process.execPath, [cli, "--pm-path", pmRoot, ...args], { cwd: workspace, encoding: "utf8", timeout: testTime(120000),
     env: { ...process.env, PATH: emptyBin, PM_AUTHOR: "evidence-path-test", GIT_CEILING_DIRECTORIES: dirname(workspace) } });
 }
 
@@ -94,7 +96,7 @@ test("500 seeded operation sequences replay older inputs and JSON/CRLF without c
   const reference = new Map<string, ItemMetadata>();
   for (const id of ids) reference.set(id, await authoritative(pmRoot, id));
   const old: EvidencePathInput[] = [];
-  for (let sequence = 0; sequence < 500; sequence++) {
+  for (let sequence = 0; sequence < testDepth(500); sequence++) {
     await client.focus(ids[random(ids.length)]);
     const i = 1 + random(ids.length - 1); const id = ids[i]; const linked = random(2) === 0;
     // The SDK itself performs every normalization; reference entries are native

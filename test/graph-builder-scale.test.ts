@@ -1,6 +1,5 @@
 /** Contract and scale checks for the pure graph projection used by exports. */
 import assert from "node:assert/strict";
-import { performance } from "node:perf_hooks";
 import test from "node:test";
 import type { ItemMetadata } from "@unbrained/pm-cli/sdk";
 
@@ -30,10 +29,11 @@ test("graph projection retains the first dependency edge and external targets", 
   assert.deepEqual(graph.nodes.find((node) => node.id === "external-1")?.labels, ["ExternalPmItem"]);
 });
 
-test("a multi-thousand-item graph with dense facet and dependency edges builds within the export budget", () => {
+test("a multi-thousand-item graph with dense facet and dependency edges uses bounded identity lookup work", () => {
   const count = 3_000;
+  let idReads = 0;
   const items = Array.from({ length: count }, (_, index) => ({
-    id: `item-${index}`,
+    get id() { idReads++; return `item-${index}`; },
     title: `Item ${index}`,
     description: "",
     type: "Task" as const,
@@ -48,11 +48,9 @@ test("a multi-thousand-item graph with dense facet and dependency edges builds w
       dependencies: [{ id: `item-${index - 1}`, kind: "blocked_by" as const, created_at: "2026-09-29T00:00:00.000Z" }],
     } : {}),
   })) satisfies ItemMetadata[];
-  const start = performance.now();
   const graph = graphFromItems(items, "/tmp/pm-graph-scale", new Map());
-  const elapsedMs = performance.now() - start;
   assert.equal(graph.nodes.filter((node) => node.labels.includes("PmItem")).length, count);
   assert.equal(graph.relationships.filter((edge) => edge.type === "BLOCKED_BY").length, count - 1);
   assert.equal(graph.relationships.filter((edge) => edge.type === "CHILD_OF").length, count - 1);
-  assert.ok(elapsedMs < 5_000, `3,000-item graph projection took ${elapsedMs.toFixed(0)} ms`);
+  assert.ok(idReads <= count * 32, `identity reads must stay linear: ${idReads}`);
 });
