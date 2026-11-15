@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
@@ -103,7 +104,7 @@ test("directory and SQLite scopes preserve qualified identities, consent and opa
     artifacts.forEach((artifact) => cpSync(resolve(root, artifact), resolve(extensionRoot, artifact), { recursive: true }));
     symlinkSync(join(root, "node_modules"), join(extensionRoot, "node_modules"), "dir");
     writeFileSync(join(ws, "projection.json"), JSON.stringify({ scopes: [{ key: "delivery", pmRoot: ".agents/pm" }], consent: ["delivery"] }));
-    const run = (args: string[]) => spawnSync(process.execPath, [cli, "pm-graph", "project", ...args], { cwd: ws, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024 });
+    const run = (args: string[]) => spawnSync(process.execPath, [cli, "pm-graph", "project", ...args], { cwd: ws, encoding: "utf8", timeout: testTime(30000), maxBuffer: 4 * 1024 * 1024 });
     const direct = await (await collectHandlers()).get("pm-graph project")!({ cwd: ws, args: ["projection.json"] }) as ProjectionResult;
     assert.equal(direct.ok, true);
     const json = run(["projection.json", "--json"]);

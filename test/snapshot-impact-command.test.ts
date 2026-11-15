@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
@@ -21,7 +22,7 @@ test("documented CLI exports compare real SDK snapshots in a non-git tracker wit
     mkdirSync(bin);
     symlinkSync(process.execPath, join(bin, process.platform === "win32" ? "node.exe" : "node"));
     const env = { ...process.env, HOME: join(ws, "isolated-home"), PATH: bin, GIT_CEILING_DIRECTORIES: dirname(ws), PM_AUTHOR: "snapshot-test", PM_PATH: join(ws, ".agents/pm") };
-    const run = (args: string[]) => spawnSync(process.execPath, [cli, ...args], { cwd: ws, env, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 });
+    const run = (args: string[]) => spawnSync(process.execPath, [cli, ...args], { cwd: ws, env, encoding: "utf8", timeout: testTime(30_000), maxBuffer: 4 * 1024 * 1024 });
     const example = readFileSync(join(root, "docs/snapshot-impact-example.md"), "utf8");
     const exports = [...example.matchAll(/^pm (.+) > (before|after)\.json$/gm)];
     assert.equal(exports.length, 2, "document both snapshot exports");

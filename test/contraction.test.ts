@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { contractGraph } from "../src/index.ts";
@@ -139,8 +140,8 @@ function random(seed: number): () => number {
 
 test("500 seeded model-based operation sequences include old-input replays, CRLF variants, relationships and output fuzz", () => {
   const next = random(0xc017ac7);
-  let transitions = 0;
-  for (let sequence = 0; sequence < 500; sequence++) {
+  let transitions = 0; let generated = 0;
+  for (let sequence = 0; sequence < testDepth(500); sequence++) {
     const ids = ["a", "b", " c ", "d\r\ne", "雪", "g0", "unknown"];
     let input: ContractionInput = { nodes: ids.slice(0, -1).map((id) => ({ id })), edges: [], boundary: ["a", "b"], edgeTypes: ["E", "F"], limit: 1000 };
     const history: ContractionInput[] = [];
@@ -158,6 +159,8 @@ test("500 seeded model-based operation sequences include old-input replays, CRLF
       assert.deepEqual(JSON.parse(JSON.stringify(result)) as unknown, result);
       transitions++;
     }
+    generated++;
   }
-  assert.equal(transitions, 6000);
+  assert.ok(generated > 0);
+  assert.equal(transitions, generated * 12);
 });

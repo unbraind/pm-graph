@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 /** User type labels never confer synthetic-node provenance on authoritative SDK items. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -72,7 +73,7 @@ test("custom ExternalPmItem survives real no-git refresh, export and contraction
     const hostEnv = { ...process.env, PM_PATH: "", PATH: emptyPath, GIT_CEILING_DIRECTORIES: tmpdir() };
     const run = (args: string[], json: boolean): string => {
       const result = spawnSync(process.execPath, [cli, "pm-graph", ...args, ...(json ? ["--json"] : [])], {
-        cwd: f.ws, env: hostEnv, encoding: "utf8", timeout: 30000,
+        cwd: f.ws, env: hostEnv, encoding: "utf8", timeout: testTime(30000),
       });
       assert.equal(result.status, 0, result.stdout + result.stderr);
       return result.stdout;

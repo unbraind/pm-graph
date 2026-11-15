@@ -1,3 +1,4 @@
+import { testDepth } from "./support/depth.ts";
 /** Every validator uses one source identity, including schemas and every native document format. */
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -35,7 +36,7 @@ test("all validation fingerprints include authoritative schemas, native formats,
     }
     let state = 0x175003;
     const random = (): number => (state = (Math.imul(state, 1664525) + 1013904223) >>> 0);
-    for (let sequence = 0; sequence < 500; sequence++) {
+    for (let sequence = 0; sequence < testDepth(500); sequence++) {
       const folder = ["schema", "tasks", "custom-types", ".authoritative", "transactions"][random() % 5];
       const extension = ["json", "toon", "jsonl", "md", "yaml", "bin"][random() % 6];
       const file = join(f.pmRoot, folder, "runtime", `case-${sequence}.${extension}`);

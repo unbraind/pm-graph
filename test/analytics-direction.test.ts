@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -89,7 +90,7 @@ test("real non-git tracker BLOCKS commands agree on prerequisite order, paths an
   const cli = resolve(import.meta.dirname, "../node_modules/@unbrained/pm-cli/dist/cli.js");
   try {
     const initialized = spawnSync(process.execPath, [cli, "--pm-path", pmRoot, "--no-extensions", "init", "--defaults", "--agent-guidance", "skip", "--prefix", "direction"], {
-      cwd: workspace, encoding: "utf8", timeout: 120_000,
+      cwd: workspace, encoding: "utf8", timeout: testTime(120_000),
     });
     assert.equal(initialized.status, 0, initialized.stderr);
     assert.equal(existsSync(join(workspace, ".git")), false);

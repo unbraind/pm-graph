@@ -1,3 +1,4 @@
+import { testTime } from "./support/time.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -31,7 +32,7 @@ let upstream = "";
 /** Execute the installed host, optionally removing git and every other executable from PATH. */
 function run(args: string[], noGit = false) {
   return spawnSync(process.execPath, [cli, "--pm-path", pmRoot, ...args], {
-    cwd: workspace, env: { ...env, ...(noGit ? { PATH: emptyPath } : {}) }, encoding: "utf8", timeout: 120_000,
+    cwd: workspace, env: { ...env, ...(noGit ? { PATH: emptyPath } : {}) }, encoding: "utf8", timeout: testTime(120_000),
   });
 }
 

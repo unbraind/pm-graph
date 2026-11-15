@@ -2,13 +2,13 @@ id: pm-graph-r58m
 title: Investigate isolated package installation timeout with runtime dependencies
 description: "The packaged-host regression setup repeatedly exceeded its 180-second timeout during pm package install, including offline mode. Determine whether dependency installation, archive staging or runtime verification is responsible; retain synthetic fixtures and report the exact cause without weakening read-output tests."
 type: Task
-status: open
+status: in_progress
 priority: 2
-tags: []
+tags[2]: ci,performance
 created_at: "2026-10-13T13:36:32.154Z"
-updated_at: "2026-10-27T18:35:42.677Z"
+updated_at: "2026-11-15T17:16:11.161Z"
 author: codex-agent
-comments[7]{created_at,author,text}:
+comments[14]{created_at,author,text}:
   "2026-10-13T18:51:46.257Z",codex-agent,The adoption release gates now pass their existing packed-extension installer tests under both npm and Bun launchers. The output-contract regression isolates its purpose by extracting the actual archive and reusing the pinned dependency graph. The earlier 180-second setup timeout has not been independently explained; retain this separate investigation.
   "2026-10-13T22:23:11.477Z",claude-hub,"Reopened: this item was linked in the merged PR body as an open follow-up or risk, not as delivered work. The automated close-out closed it in error; it remains open."
   "2026-10-16T06:41:53.166Z",codex-agent,"Current-main reproduction with the pinned PM CLI 2026.10.13 and an actual npm pack archive, clean HOME, shared registry cache and npm offline mode: pack 2.00s, init 1.96s, pm package install --project 29.77s, all exit 0. Installer reports activation ok, 15 commands, module_graph_verification=fresh_in_topology_snapshot and zero blocking health failures. A separate traced run also succeeds; tracing follows a detached flush helper and its elapsed wall time is not a reliable installer-only timing. The historical 180-second timeout is not reproduced and its original cause remains unproven; keep this investigation open rather than changing package behavior without a failing case."
@@ -16,9 +16,56 @@ comments[7]{created_at,author,text}:
   "2026-10-27T17:21:34.388Z",codex-agent,"Additional public packed-host evidence from PR 175: a global shared npx cache lost package metadata during concurrent fleet activity, so validation now uses owned per-run npm/Bun caches. With a cold isolated cache, a public npm global install exceeded the old four-minute test-process deadline. The acceptance harness retains every assertion, permits ten minutes only for install/add operations, and disables install-time audit/funding chatter; the independent production audit release gate remains unchanged. Runtime CLI commands keep their original bounded timeout. Recovery functional checks already passed on npm and Bun global hosts before the cache failure; full rerun is tracked by pm-graph-event-sparse."
   "2026-10-27T18:00:55.126Z",codex-agent,"The final event-projection archive now passes actual npm-global and Bun-global consumers on the repository-pinned SDK: sixteen native Neo4j foreign-data refusals and eight post-action recoveries total. The isolated-cache run continues through ephemeral and project-local hosts. Future acceptance runs also use a private Node compile cache so repeated SDK host launches avoid unnecessary cold compilation on the shared host. Installation/add timeout remains bounded at ten minutes, runtime CLI timeout remains four minutes, and the independent production audit remains a release gate."
   "2026-10-27T18:35:42.661Z",codex-agent,"All six actual isolated-cache installation hosts now pass on pinned SDK 2026.10.23: npm/Bun global, npx/bunx and npm/Bun local. One verified 52-file archive supports 48 native ownership refusals and 24 crash recoveries across formats/modes. Shared-cache ENOENT is avoided by per-run private caches; ten-minute installation timeout and four-minute runtime timeout remain bounded. No production gate or threshold was weakened."
-files[2]{path,scope}:
+  "2026-11-15T16:41:04.144Z",codex-sol,"Reuse this existing installation/flaky-gate Task for Fleet CI v2, companion pm-cli-website-dyhg. Historical installer root cause remains unproven; no production installer change is planned. Required checks test (22), test (26), windows-prepare-lifecycle stay exact; preserve tracked-dist freshness and all brand/lint/duplication gates. Move isolated live Neo4j setup/validation to deep. Keep unchanged 99.7/94.9/100 coverage thresholds. Baseline run 43679565402 shows post-action 500-case sequences reaching 106.357 seconds and native non-git CLI fixtures 118.042 seconds."
+  "2026-11-15T16:48:36.743Z",codex-sol,"Input audit preserves docs-sensitive tests: analytics README contracts, snapshot-impact docs/examples, packed export/installer acceptance and packed host-output recovery. Cheap jobs also build, enumerate package files, run identity/privacy, attestation, changelog and strict health. Any JS/TS source or committed dist artifact selects full code checks. Tracked dist remains unchanged after local build. Lint caught and corrected an overly broad numeric edit before test execution; the 10000-item boundary fixture remains full size. Projection scale now bounds identity reads instead of machine speed, and Neo4j connection failure uses a scaled runner timeout without changing driver budgets."
+  "2026-11-15T16:50:14.568Z",codex-sol,"Local typecheck, lint, build and test typecheck pass. Duplication passes at 0% across 115 scanned sources; docstrings pass across 33 files. Strict YAML/timeouts pass. Quick uses the same deterministic seed prefixes, keeping all 48 deterministic crash combinations and every fixed size/pagination boundary. The Windows lifecycle job has an 8-minute limit against its measured 2m26s execution; Neo4j live integration moves intact to deep. No runtime source, dist or release-owned file changes."
+  "2026-11-15T16:52:46.326Z",codex-sol,"First linked quick suite found a stale full-depth transition total (6000 vs generated 600) and test-context routing: default PM schema context redirected implicit CLI init away from fixture cwd, causing missing temporary trackers. Replace the total with actual generated cases times 12 and rerun the same suite with --pm-context none and PM_PATH cleared; these integration tests already create isolated trackers. No product code change. Local strict health initially found extension host-version cache skew; running the retained pinned project installer recertified it and strict health now passes."
+  "2026-11-15T16:56:30.191Z",codex-sol,"Use the supported linked-test combination --pm-context none --override-linked-pm-context --workspace-context snapshot --override-linked-workspace-context. The runner rejects none with a source workspace and reserves PM_PATH against --env-clear, so the earlier proposed clear flag is not used. Snapshot isolation permits each CLI fixture to own its tracker without routing to project PM state. Rerun is active; strict health passes after the retained pinned extension install."
+  "2026-11-15T16:59:59.376Z",codex-sol,"Supported snapshot rerun passed all 127 touched quick tests, zero skips, in 293.121 seconds (4m53s): pm test pm-graph-r58m --run --only-last --pm-context none --override-linked-pm-context --workspace-context snapshot --override-linked-workspace-context --progress, with PM_TEST_DEPTH=quick and PM_TEST_TIME_SCALE=3. This verifies the generated contraction total and confirms earlier missing-tracker failures were linked-run context routing, not product failures. Strict health, typecheck, lint, build/test typecheck, duplication and docstrings pass. One quick coverage run is active with a 20-minute cap. CI run https://github.com/unbraind/pm-graph/actions/runs/43738023641 is queued; no completed wall time is available."
+  "2026-11-15T17:16:10.465Z",codex-sol,"Final quick coverage passed 453 tests with zero skips in 828.63 seconds (13m49s), reporting all 33 runtime source files and complete-suite receipts at 99.74% lines, 95.59% branches and 100% functions, above unchanged 99.7/94.9/100 thresholds. Final strict health passes. No late-seed-only coverage gap reproduced. The supported snapshot-linked suite passed 127/127 in 293.121 seconds. Product source/dist and release-owned files remain unchanged. Jobs API on head 01c02d2, run https://github.com/unbraind/pm-graph/actions/runs/43738590802: windows-prepare-lifecycle passed, created 17:00:22Z to completed 17:03:37Z = 195 seconds wall (161 seconds execution); test (22) and test (26) remain queued with no completed wall time. Full depth, live Neo4j and final-head CI remain unverified; no CI wait is planned. Historical installation timeout root cause remains open and no installer fix is claimed."
+files[10]{path,scope}:
+  .github/workflows/ci-deep.yml,project
+  .github/workflows/ci.yml,project
+  .github/workflows/codeql.yml,project
+  scripts/coverage-gate.ts,project
+  test/command-surface.test.ts,project
   test/export-and-contract.test.ts,project
+  test/graph-builder-scale.test.ts,project
   test/read-output-host.test.ts,project
-tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
-  "node --test --test-name-pattern=\"export --format json writes valid JSON\" test/export-and-contract.test.ts",project,codex-agent,"2026-10-16T06:41:56.020Z",local_mutation,fix/gates-and-backlog
+  test/support/depth.ts,project
+  test/support/time.ts,project
+tests[4]:
+  - command: "node --test --test-name-pattern=\"export --format json writes valid JSON\" test/export-and-contract.test.ts"
+    scope: project
+    provenance:
+      author: codex-agent
+      created_at: "2026-10-16T06:41:56.020Z"
+      source_kind: local_mutation
+      source_ref: fix/gates-and-backlog
+  - command: npm run typecheck
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-15T16:46:06.891Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: npm run lint
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-15T16:46:07.680Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+  - command: node --test --test-concurrency=2 test/test-controls.test.ts test/graph-builder-scale.test.ts test/command-surface.test.ts test/analytics-direction.test.ts test/blocker-cuts-command.test.ts test/contraction-command.test.ts test/contraction.test.ts test/cross-workspace.test.ts test/event-projection-post-action.test.ts test/event-projection-provenance.test.ts test/event-projection-recovery.test.ts test/event-projection.test.ts test/evidence-path-command.test.ts test/evidence-path.test.ts test/extension-harness.test.ts test/read-output-host.test.ts test/snapshot-impact-command.test.ts test/tracker-fingerprint.test.ts
+    scope: project
+    timeout_seconds: 1200
+    provenance:
+      author: codex-sol
+      created_at: "2026-11-15T16:46:08.600Z"
+      source_kind: local_mutation
+      source_ref: ci/quick-pr-tier-deep-local-tier
+docs[1]{path,scope}:
+  docs/ci-tiers.md,project
 body: ""
