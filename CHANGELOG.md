@@ -1,12 +1,19 @@
 # Changelog
 
-## 2026.11.15 - 2026-11-15
+## Unreleased
 
 ### Other
 
 - Adopt the released reusable Daily Release caller ([pm-graph-release-caller-rollout](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-release-caller-rollout.toon))
 - Adopt pm-cli option contract and current pm-toolchain ([pm-graph-option-contract-1114](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-option-contract-1114.toon))
 - Replace residual extension test host with the public SDK harness ([pm-graph-sdk-extension-harness](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-sdk-extension-harness.toon))
+
+## 2026.11.15 - 2026-11-16
+
+### Dependencies
+
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#203](https://github.com/unbraind/pm-graph/pull/203))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#202](https://github.com/unbraind/pm-graph/pull/202))
 
 ## 2026.11.12 - 2026-11-12
 
