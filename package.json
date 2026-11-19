@@ -34,12 +34,12 @@
     "neo4j-driver": "^6.2.0"
   },
   "devDependencies": {
-    "@babel/eslint-parser": "8.0.7",
+    "@babel/eslint-parser": "8.1.2",
     "@babel/plugin-syntax-typescript": "8.0.3",
     "@types/node": "26.6.6",
     "@unbrained/pm-cli": "2026.11.14",
     "@viz-js/viz": "3.31.0",
-    "eslint": "10.14.0",
+    "eslint": "10.15.0",
     "jscpd": "5.4.3",
     "pm-brand": "github:unbraind/pm-brand#7ad0970d96a20c24b8dbd9e0dcd1efeb8b4d5cc1",
     "pm-changelog": "2026.11.13",
