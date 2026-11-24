@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Dependencies
+
+- Bump unbraind/pm-ops/.github/workflows/daily-release.yml ([#230](https://github.com/unbraind/pm-graph/pull/230))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#228](https://github.com/unbraind/pm-graph/pull/228))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#229](https://github.com/unbraind/pm-graph/pull/229))
+- Bump the codeql-action group with 2 updates ([#227](https://github.com/unbraind/pm-graph/pull/227))
+
 ## 2026.11.20 - 2026-11-20
 
 ### Other
@@ -7,6 +16,10 @@
 - Adopt the released reusable Daily Release caller ([pm-graph-release-caller-rollout](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-release-caller-rollout.toon))
 - Adopt pm-cli option contract and current pm-toolchain ([pm-graph-option-contract-1114](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-option-contract-1114.toon))
 - Replace residual extension test host with the public SDK harness ([pm-graph-sdk-extension-harness](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-sdk-extension-harness.toon))
+
+### Dependencies
+
+- Bump the dependencies group across 1 directory with 3 updates ([#223](https://github.com/unbraind/pm-graph/pull/223))
 
 ## 2026.11.15 - 2026-11-16
 
@@ -51,6 +64,13 @@
 
 - Align the Dependabot sync caller with its pinned workflow release ([pm-graph-a8qp](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-a8qp.toon))
 
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#186](https://github.com/unbraind/pm-graph/pull/186))
+- Bump the pm-toolchain group with 3 updates ([#184](https://github.com/unbraind/pm-graph/pull/184))
+- Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml from 2026.10.16 to 2026.10.23 ([#173](https://github.com/unbraind/pm-graph/pull/173))
+- Bump the pm-toolchain group with 3 updates ([#181](https://github.com/unbraind/pm-graph/pull/181))
+
 ## 2026.10.28 - 2026-10-28
 
 ### Added
@@ -61,6 +81,13 @@
 ### Other
 
 - Stop Hound from linting generated dist/ output ([pm-graph-hound-generated-dist](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-hound-generated-dist.toon))
+
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#179](https://github.com/unbraind/pm-graph/pull/179))
+- Bump the pm-toolchain group with 3 updates ([#170](https://github.com/unbraind/pm-graph/pull/170))
+- Bump the codeql-action group across 1 directory with 2 updates ([#171](https://github.com/unbraind/pm-graph/pull/171))
+- Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#172](https://github.com/unbraind/pm-graph/pull/172))
 
 ## 2026.10.26 - 2026-10-26
 
@@ -89,6 +116,11 @@
 ### Other
 
 - Correct review evidence in tracker reconciliation PR 155 ([pm-graph-review155](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-review155.toon))
+
+### Dependencies
+
+- Bump jscpd ([#160](https://github.com/unbraind/pm-graph/pull/160))
+- Bump the pm-toolchain group across 1 directory with 3 updates ([#153](https://github.com/unbraind/pm-graph/pull/153))
 
 ## 2026.10.23 - 2026-10-23
 
@@ -120,7 +152,11 @@
 
 ## 2026.10.20 - 2026-10-20
 
-No changes.
+### Dependencies
+
+- Bump the codeql-action group with 2 updates ([#150](https://github.com/unbraind/pm-graph/pull/150))
+- Bump the pm-toolchain group across 1 directory with 3 updates ([#148](https://github.com/unbraind/pm-graph/pull/148))
+- Bump eslint ([#149](https://github.com/unbraind/pm-graph/pull/149))
 
 ## 2026.10.18 - 2026-10-18
 
@@ -128,11 +164,15 @@ No changes.
 
 ## 2026.10.17 - 2026-10-17
 
-No changes.
+### Dependencies
+
+- Bump pm-changelog ([#143](https://github.com/unbraind/pm-graph/pull/143))
 
 ## 2026.10.16 - 2026-10-16
 
-No changes.
+### Dependencies
+
+- Bump pm-changelog ([#139](https://github.com/unbraind/pm-graph/pull/139))
 
 ## 2026.10.14 - 2026-10-14
 
@@ -140,19 +180,33 @@ No changes.
 
 - Adopt SDK read_output contracts on pm-graph read commands ([pm-graph-by2t](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/features/pm-graph-by2t.toon))
 
+### Dependencies
+
+- Bump the codeql-action group with 2 updates ([#135](https://github.com/unbraind/pm-graph/pull/135))
+- Bump the dependencies group across 1 directory with 3 updates ([#134](https://github.com/unbraind/pm-graph/pull/134))
+- Bump @unbrained/pm-cli ([#133](https://github.com/unbraind/pm-graph/pull/133))
+
 ## 2026.10.10 - 2026-10-10
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 3 updates ([#130](https://github.com/unbraind/pm-graph/pull/130))
 
 ## 2026.10.9 - 2026-10-09
 
-No changes.
+### Dependencies
+
+- Bump the pm-toolchain group with 2 updates ([#128](https://github.com/unbraind/pm-graph/pull/128))
 
 ## 2026.10.5 - 2026-10-05
 
 ### Other
 
 - Auto-merge green Dependabot updates and group the pm toolchain into one daily PR ([pm-graph-088p](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/tasks/pm-graph-088p.toon))
+
+### Dependencies
+
+- Bump @babel/eslint-parser ([#126](https://github.com/unbraind/pm-graph/pull/126))
 
 ## 2026.10.4 - 2026-10-04
 
@@ -170,7 +224,12 @@ No changes.
 
 ## 2026.9.23 - 2026-09-23
 
-No changes.
+### Dependencies
+
+- Bump @types/node from 26.5.1 to 26.6.2 ([#107](https://github.com/unbraind/pm-graph/pull/107))
+- Bump pm-ops from 2026.9.13 to 2026.9.18 ([#108](https://github.com/unbraind/pm-graph/pull/108))
+- Bump pm-changelog from 2026.9.16 to 2026.9.18 ([#109](https://github.com/unbraind/pm-graph/pull/109))
+- Bump the codeql-action group with 2 updates ([#111](https://github.com/unbraind/pm-graph/pull/111))
 
 ## 2026.9.19 - 2026-09-19
 
@@ -181,6 +240,12 @@ No changes.
 ### Other
 
 - Certify pm CLI 2026.9.17 ([pm-graph-zfdw](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-zfdw.toon))
+
+### Dependencies
+
+- Bump pm-changelog from 2026.9.6 to 2026.9.13 ([#100](https://github.com/unbraind/pm-graph/pull/100))
+- Bump @types/node from 26.5.0 to 26.5.1 ([#101](https://github.com/unbraind/pm-graph/pull/101))
+- Bump the codeql-action group with 2 updates ([#102](https://github.com/unbraind/pm-graph/pull/102))
 
 ## 2026.9.13 - 2026-09-13
 
@@ -215,6 +280,11 @@ No changes.
 - This repository has never produced a static analysis, because it runs no CodeQL workflow ([pm-graph-ke7d](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-ke7d.toon))
 - Group codeql-action bumps into one pull request to end the split-PR deadlock ([pm-graph-2fft](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-2fft.toon))
 
+### Dependencies
+
+- Bump pm-ops from 2026.8.17 to 2026.8.28 ([#86](https://github.com/unbraind/pm-graph/pull/86))
+- Bump @types/node from 26.2.0 to 26.4.0 ([#85](https://github.com/unbraind/pm-graph/pull/85))
+
 ## 2026.8.31 - 2026-08-31
 
 ### Closed
@@ -245,6 +315,12 @@ No changes.
 
 - Closed: The identity gate deadlocks the one remediation its own failure message prescribes ([pm-graph-m8f9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-m8f9.toon))
 - Closed: Remove private identities and host-specific paths from reachable Git history ([pm-graph-xc7g](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/issues/pm-graph-xc7g.toon))
+
+### Dependencies
+
+- Bump pm-ops from 2026.8.10 to 2026.8.17
+- Bump pm-changelog from 2026.8.12 to 2026.8.17 ([#72](https://github.com/unbraind/pm-graph/pull/72))
+- Bump pm-ops from 2026.8.8 to 2026.8.10 ([#65](https://github.com/unbraind/pm-graph/pull/65))
 
 ## 2026.8.17 - 2026-08-17
 
@@ -294,6 +370,10 @@ No changes.
 
 - Resolve pm-changelog to the release that derives release dates in UTC ([pm-graph-9gtz](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-9gtz.toon))
 
+### Dependencies
+
+- Bump @types/node from 26.1.1 to 26.1.2 ([#52](https://github.com/unbraind/pm-graph/pull/52))
+
 ## 2026.7.31 - 2026-07-31
 
 ### Fixed
@@ -322,6 +402,10 @@ No changes.
 
 - Adopt pm-cli 2026.7.28 ([pm-graph-gh22](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-gh22.toon))
 - Adopt pm-cli 2026.7.27 dependency ranges ([pm-graph-gzw9](https://github.com/unbraind/pm-graph/blob/main/.agents/pm/chores/pm-graph-gzw9.toon))
+
+### Dependencies
+
+- Bump pm-changelog from 2026.7.24 to 2026.7.27 ([#40](https://github.com/unbraind/pm-graph/pull/40))
 
 ## 2026.7.27 - 2026-07-27
 
@@ -363,7 +447,11 @@ No changes.
 
 ## 2026.7.21 - 2026-07-21
 
-No changes.
+### Dependencies
+
+- Bump pm-changelog from 2026.7.12 to 2026.7.18 ([#29](https://github.com/unbraind/pm-graph/pull/29))
+- Bump @unbrained/pm-cli from 2026.7.13 to 2026.7.20 ([#28](https://github.com/unbraind/pm-graph/pull/28))
+- Bump actions/setup-node from 6 to 7 ([#27](https://github.com/unbraind/pm-graph/pull/27))
 
 ## 2026.7.19 - 2026-07-19
 
@@ -394,11 +482,16 @@ No changes.
 
 ## 2026.7.14 - 2026-07-14
 
-No changes.
+### Dependencies
+
+- Bump pm-changelog from 2026.7.10 to 2026.7.12 ([#22](https://github.com/unbraind/pm-graph/pull/22))
+- Bump @unbrained/pm-cli from 2026.7.10 to 2026.7.13 ([#23](https://github.com/unbraind/pm-graph/pull/23))
 
 ## 2026.7.11 - 2026-07-11
 
-No changes.
+### Dependencies
+
+- Bump actions/checkout from 6 to 7
 
 ## 2026.7.10-1 - 2026-07-10
 

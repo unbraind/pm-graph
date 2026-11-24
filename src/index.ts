@@ -2901,6 +2901,7 @@ export function activate(api: ExtensionApi): void {
       }
       if (hasHelpFlag(context)) {
         return {
+          graph: { nodes: [], relationships: [] },
           usage:
             "pm pm-graph export [--format <cypher|mermaid|dot|json|graphml|plantuml>] [--output <file>] [--edges <deps|tags|all>] [--root <id> [--depth <n>]] [--filter key=value[,value]] [--include-closed] [--json]",
           description:
@@ -3060,6 +3061,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          prerequisites: [], statements: [],
           usage: "pm pm-graph cypher [--json]",
           description: "Render parameterized Cypher statements for importing the current workspace graph into Neo4j. Does not execute them.",
           flags: {
@@ -3256,6 +3258,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          records: [],
           usage: 'pm pm-graph query "<cypher-query>" [--json]',
           description: "Run a read-only Cypher query against Neo4j. Destructive keywords (CREATE, MERGE, DELETE, DETACH, DROP, REMOVE, SET) are blocked.",
           flags: {
@@ -3328,6 +3331,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          neighbors: [],
           usage: "pm pm-graph neighbors <node-id> [--json]",
           description: "Return all 1-hop neighbors and their relationships for a given node ID in Neo4j.",
           flags: {
@@ -3402,6 +3406,8 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          cycles: [], orphans: [], roots: [], leaves: [], longestChain: [], blockedItems: [],
+          topDegreeCentrality: [], depthByItem: [], articulationPoints: [], bridgeEdges: [],
           usage: "pm pm-graph analyze [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Build the workspace dependency graph offline (no Neo4j) and report its health: dependency cycle count, orphan/root/leaf items, longest dependency chain, top degree-centrality items, connected-component count, and blocked-item count. Operates on STRUCTURAL edges (BLOCKED_BY + CHILD_OF + dependency edges) only.",
@@ -3446,6 +3452,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          cycles: [],
           usage: "pm pm-graph cycles [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json] [--format <text|mermaid|graphml|dot>]",
           description:
             "Detect dependency cycles among STRUCTURAL edges (BLOCKED_BY + dependency edges, not facet/tag edges). Prints each cycle as an id path. Exits with code 1 when any cycle exists (so it can gate CI); exits 0 when there are none. With --format mermaid|graphml|dot, prints the cycle-participating subgraph (union of cycle nodes + their edges) as a diagram before exiting 1, for embedding in docs.",
@@ -3544,6 +3551,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          path: [],
           usage: "pm pm-graph critical-path [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json] [--format <text|mermaid|graphml|dot>]",
           description:
             "Compute the longest chain of structural (blocking) dependencies through the workspace — the critical path. Reports the ordered id list and its length. Cycle-safe. With --format mermaid|graphml|dot, prints the critical-path chain as a diagram subgraph (chain nodes + connecting edges) for embedding in docs.",
@@ -3581,6 +3589,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          order: [],
           usage: "pm pm-graph topo-sort [--root <id>] [--depth <n>] [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Emit a valid topological execution order of items over STRUCTURAL edges (BLOCKED_BY + dependency edges), so each item is listed only after the items it depends on. Uses Kahn's algorithm. Ties are broken by ascending id for deterministic output. Reports the resolvable prefix and the cycle members, and EXITS WITH CODE 1 when a dependency cycle prevents a complete ordering (CI-usable).",
@@ -3624,6 +3633,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          impacted: [],
           usage:
             "pm pm-graph impact <id> [--direction <downstream|upstream|both>] [--depth <n>] [--limit <n>] [--filter type=...|status=...] [--include-closed] [--json] [--format <text|json|mermaid|graphml|dot>]",
           description:
@@ -3764,6 +3774,7 @@ export function activate(api: ExtensionApi): void {
     run: async (context) => {
       if (hasHelpFlag(context)) {
         return {
+          cycles: [], blockers: [], dependents: [], transitiveDependents: [], criticalChainFromItem: [],
           usage: "pm pm-graph explain <id> [--filter type=...|status=...] [--include-closed] [--json]",
           description:
             "Build an offline item-centric dependency report for one id over STRUCTURAL edges. Item ids resolve by exact match, case-insensitive match, then unique prefix.",

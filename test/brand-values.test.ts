@@ -68,9 +68,18 @@ test('all actual text and status backgrounds meet WCAG AA in both themes; focus 
 });
 
 
-test('the Git brand kit is an exact build-time pin and published runtime source imports only baked values', () => {
+test('the published brand kit is integrity-locked at an exact build-time version', () => {
   const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as { devDependencies: Record<string,string>; dependencies?: Record<string,string> };
-  assert.match(manifest.devDependencies['pm-brand'], /^github:unbraind\/pm-brand#[a-f0-9]{40}$/u);
+  const lock = JSON.parse(readFileSync('package-lock.json', 'utf8')) as {
+    packages: Record<string, { version: string; resolved: string; integrity: string; dev?: boolean }>;
+  };
+  const version = manifest.devDependencies['pm-brand'];
+  assert.match(version, /^\d{4}\.\d{1,2}\.\d{1,2}$/u);
+  const brand = lock.packages['node_modules/pm-brand'];
+  assert.equal(brand.version, version);
+  assert.equal(brand.resolved, `https://registry.npmjs.org/pm-brand/-/pm-brand-${version}.tgz`);
+  assert.match(brand.integrity, /^sha512-[A-Za-z0-9+/]+=*$/u);
+  assert.equal(brand.dev, true);
   assert.equal(manifest.dependencies?.['pm-brand'], undefined);
   for (const spec of Object.values(manifest.dependencies ?? {})) assert.ok(!spec.startsWith('github:'));
   const runtime = readFileSync('src/brand.ts', 'utf8') + readFileSync('src/brand-values.ts', 'utf8');
