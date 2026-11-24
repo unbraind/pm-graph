@@ -67,17 +67,13 @@ Mermaid accepts the same optional theme argument. No renderer or font service is
 contacted by the package. Review rasterization runs Mermaid, Graphviz WASM and
 PlantUML locally.
 
-The Git devDependency is locked by its exact commit. Its npm lock entry omits the
-optional prepared-archive integrity field: Bun 1.4.3 imports that hash while
-fetching a different Git archive and rejects it. Registry package integrity
-values remain intact. A clean-cache installation reproduces the failure with
-the original Git entry and succeeds with commit-based identity. npm's Git fetcher
-also [ignores archive integrity for Git dependencies](https://github.com/npm/pacote/blob/main/lib/git.js).
+The npm lock file records the exact registry version and tarball integrity of
+the build-time kit. The build check compares the baked graph values with the
+installed tokens.
 
-The pinned kit's Git prepare script invokes an extensionless compiler shim and
-does not run on Windows. The Windows lifecycle job installs locked artifacts
-using tested npm 11.17 without dependency scripts, then runs this package's own prepare through npm
-and the real command parser. Its strict merge-driver health, adversarial parser
-and coverage-path checks remain in place. Linux CI retains normal dependency
-lifecycles and both full release gates. The remaining Windows development-install limitation is tracked as
-pm-graph-brand-windows.
+The Windows lifecycle job installs locked artifacts using npm 11.17 with
+dependency scripts disabled, then exercises this package's prepare script and
+the real command parser. It verifies strict merge-driver health, adversarial
+parsing, and coverage paths. Linux CI runs dependency lifecycles and both
+release gates. The `pm-graph-brand-windows` item tracks verification of normal
+Windows development installs.

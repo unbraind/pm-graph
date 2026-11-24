@@ -55,6 +55,13 @@ test('generation, checking and notes explicitly allow empty release sections bef
   for (const name of ['changelog:full', 'changelog:check', 'release:notes']) assert.ok(Object.hasOwn(manifest.scripts, name));
 });
 
+test('every changelog entry point retains published dependency updates', () => {
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> };
+  for (const name of ['changelog', 'changelog:full', 'changelog:check', 'release:notes']) {
+    assert.ok(manifest.scripts[name]?.split(/\s+/u).includes('--dependency-updates'), name);
+  }
+});
+
 test('package-owned approval and preparation inputs are preserved', () => {
   assert.deepEqual(caller.jobs.release.with, {
   "prepare-script": "release:prepare",

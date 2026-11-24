@@ -1,0 +1,28 @@
+id: pm-graph-sdk-1122
+title: Adopt pm-cli 2026.11.23 host-aligned SDK behaviour
+description: "Migrate the pinned Graph toolchain to the current SDK and retain published dependency entries in all changelog modes. Companion: pm-cli-website-spus."
+type: Chore
+status: in_progress
+priority: 2
+tags[3]: changelog,dependencies,sdk
+created_at: "2026-11-24T03:18:43.736Z"
+updated_at: "2026-11-24T05:20:14.505Z"
+author: codex-agent
+acceptance_criteria: "Preserve the seven analytics filter help contracts and unsupported filter refusals. Run the unchanged npm and Bun release gates, including coverage, identity and changelog verification."
+comments[1]{created_at,author,text}:
+  "2026-11-24T05:20:10.650Z",codex-agent,"The pinned SDK build and both TypeScript checks passed. The full-depth baseline was 452/455 with zero skips. First top-level failure names and fixes:\n- README filter support matches the seven analytics command help contracts: the old harness returned the help object directly. The host now validates declared row collections before rendering and refused help missing cycles. Include the declared empty collections in all affected analytics help responses. The real non-Git harness confirms all seven documented filters and the existing blocker-cuts refusal.\n- every command --help and -h returns usage text: the same host contract refused export help missing graph.nodes. Include both nested graph collections and the declared collections for Cypher, query, and neighbors. Keep both help spellings on the SDK route.\n- the Git brand kit is an exact build-time pin and published runtime source imports only baked values: the test now verifies the published npm pin, integrity, and runtime isolation.\n\nRevert proof: restoring only the original help responses failed both tests with missing cycles and graph.nodes, respectively. Removing each changelog flag independently failed four targeted runs. The three restored checks passed. Regeneration retained 14/14 previously published dependency bullets and restored 44 older entries from fetched tags.\n\nnpm run release:check and bun run release:check at the quick CI depth each passed 456/456, zero skips/failures/cancellations/todos. Lines/branches/functions: npm 99.81/95.67/100.00 and Bun 99.81/95.67/100.00 across 34 required runtime sources. Both passed typecheck, lint, zero duplication, production audit, pack, changelog/date, and publish-attestation checks. On the first Bun attempt, the local five-second Neo4j query fixture timed out and the following sync fixture also failed. Both passed the focused retry and the complete Bun rerun with the repository's existing PM_TEST_TIME_SCALE=3 setting. Linked pm test passed 16/16. Both npm and Bun installed the packed artifact and proved the native filter and unsupported-filter refusal in real non-Git trackers. Bun lock import passed from the npm lockfile.\n\nNative generated analytics help on the baseline publishes options=[] even when the command accepts --filter. Package-owned metadata follow-up: pm-graph-native-analytics-help."
+files[7]{path,scope}:
+  package-lock.json,project
+  package.json,project
+  src/index.ts,project
+  test/analytics-direction.test.ts,project
+  test/brand-values.test.ts,project
+  test/coverage-gaps.test.ts,project
+  test/release-workflow.test.ts,project
+tests[1]{command,scope,provenance{author,created_at,source_kind,source_ref}}:
+  node --test --test-concurrency=2 test/analytics-direction.test.ts test/brand-values.test.ts test/release-workflow.test.ts,project,codex-agent,"2026-11-24T04:27:19.776Z",local_mutation,deps/adopt-pm-cli-host-alignment-1122
+docs[3]{path,scope}:
+  CHANGELOG.md,project
+  docs/triplicate-visuals.md,project
+  README.md,project
+body: ""

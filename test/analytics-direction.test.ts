@@ -21,19 +21,37 @@ function inverseChain(): Graph {
     relationships: [synthRel("B", "A", "BLOCKS"), synthRel("C", "B", "BLOCKS")] };
 }
 
-test("README filter support matches the seven analytics command help contracts", async () => {
+test("README filter support matches the seven analytics command help contracts", async (t) => {
+  const workspace = mkdtempSync(join(tmpdir(), "graph-help-contract-"));
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  const pmRoot = join(workspace, ".agents", "pm");
+  await new PmClient({ cwd: workspace, pmRoot, noExtensions: true, author: "contract-test" })
+    .init("help-contract", { defaults: true, mergeFence: false, agentGuidance: "skip" });
+  assert.equal(existsSync(join(workspace, ".git")), false);
   const handlers = await collectHandlers();
-  const supported = ["analyze", "cycles", "critical-path", "topo-sort", "path", "impact", "explain"];
-  for (const name of supported) {
-    const help = await handlers.get(`pm-graph ${name}`)!({ args: ["--help"] }) as { flags: Record<string, string> };
+  const rowsByCommand = {
+    analyze: ["cycles", "orphans", "roots", "leaves", "longestChain", "blockedItems",
+      "topDegreeCentrality", "depthByItem", "articulationPoints", "bridgeEdges"],
+    cycles: ["cycles"],
+    "critical-path": ["path"],
+    "topo-sort": ["order"],
+    path: [],
+    impact: ["impacted"],
+    explain: ["cycles", "blockers", "dependents", "transitiveDependents", "criticalChainFromItem"],
+  };
+  for (const [name, rows] of Object.entries(rowsByCommand)) {
+    const help = await handlers.get(`pm-graph ${name}`)!({ pm_root: pmRoot, args: ["--help"] }) as Record<string, unknown> & {
+      flags: Record<string, string>;
+    };
     assert.ok(Object.keys(help.flags).some((flag) => flag.startsWith("--filter")), name);
+    for (const row of rows) assert.deepEqual(help[row], [], `${name} help: ${row}`);
   }
   const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
   const sentence = readme.split(". ").find((part) => part.includes("accept `--filter type=...|status=...`"));
   assert.ok(sentence, "README must state which commands accept --filter");
   const documented = [...sentence.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
-  assert.deepEqual(documented, [...supported, "--filter type=...|status=..."]);
-  const refused = await handlers.get("pm-graph blocker-cuts")!({ args: ["goal", "--filter", "status=open"] }) as { code: string };
+  assert.deepEqual(documented, [...Object.keys(rowsByCommand), "--filter type=...|status=..."]);
+  const refused = await handlers.get("pm-graph blocker-cuts")!({ pm_root: pmRoot, args: ["goal", "--filter", "status=open"] }) as { code: string };
   assert.equal(refused.code, "INVALID_OPTIONS");
 });
 

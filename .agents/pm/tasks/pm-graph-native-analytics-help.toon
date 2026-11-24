@@ -1,0 +1,12 @@
+id: pm-graph-native-analytics-help
+title: Expose analytics filter flags in native pm help
+description: "Follow-up from pm-graph-sdk-1122. In a non-Git tracker with the built package installed, pm --json pm-graph analyze --help succeeds with options=[], while pm --json pm-graph analyze --filter type=Task succeeds. The legacy handler publishes filter documentation in its help result. The native help renderer reads registered metadata."
+type: Task
+status: open
+priority: 2
+tags[2]: help,sdk
+created_at: "2026-11-24T03:38:31.305Z"
+updated_at: "2026-11-24T03:38:31.305Z"
+author: codex-agent
+acceptance_criteria: "Expose --filter in the native help for all seven documented analytics commands. Preserve repeated and comma-list filter semantics, other accepted analytics flags, and refusal for blocker-cuts."
+body: ""
