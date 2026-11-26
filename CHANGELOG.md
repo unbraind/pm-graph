@@ -4,7 +4,7 @@
 
 ### Dependencies
 
-- Bump unbraind/pm-ops/.github/workflows/daily-release.yml
+- Bump unbraind/pm-ops/.github/workflows/daily-release.yml from 2026.11.19 to 2026.11.22 ([#234](https://github.com/unbraind/pm-graph/pull/234))
 - Bump unbraind/pm-ops/.github/workflows/daily-release.yml ([#230](https://github.com/unbraind/pm-graph/pull/230))
 - Bump unbraind/pm-github/.github/workflows/pm-github-closeout.yml ([#228](https://github.com/unbraind/pm-graph/pull/228))
 - Bump unbraind/pm-github/.github/workflows/pm-github-sync.yml ([#229](https://github.com/unbraind/pm-graph/pull/229))
