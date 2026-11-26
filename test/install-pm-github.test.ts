@@ -64,7 +64,8 @@ test("CI owns its installer and issue sync delegates to the pinned gated workflo
   assert.match(sync, /workflow_dispatch:/);
   assert.match(sync, /contents: write/);
   assert.match(sync, /pull-requests: write/);
-  assert.match(sync, /issues: read/);
+  // The failure alert job of the reusable workflow needs issues: write from its caller.
+  assert.match(sync, /^  issues: write\b/m);
   assert.doesNotMatch(sync, /^\s+(?:run|steps|if):/m);
 });
 
