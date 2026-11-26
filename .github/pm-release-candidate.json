@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "repository": "unbraind/pm-graph",
-  "baseSha": "9e1878a07e53cdb6f546a7d3f46d21d5a0a8541f",
-  "version": "2026.11.20",
-  "runId": 44731337261,
+  "baseSha": "be9567e3475565b66efa6ab2ab693594896a4df4",
+  "version": "2026.11.26",
+  "runId": 45823549871,
   "runAttempt": 1,
   "configDigest": "cb53ecd22399018594ab8c438565eaaaf2a5043f05ea5ae1d33ac2c1588fd5b9"
 }
